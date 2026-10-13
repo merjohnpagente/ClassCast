@@ -14,29 +14,12 @@ class DocumentService {
 
   Future<SharedDocument?> pickSingle() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: allowedExtensions,
-        allowMultiple: false,
-        withData: false,
       );
-      if (result == null || result.files.isEmpty) return null;
-      final f = result.files.single;
-      final name = f.name;
-      final dot = name.lastIndexOf('.');
-      final base = dot <= 0 ? name : name.substring(0, dot);
-      final ext = dot <= 0 ? '' : name.substring(dot + 1).toLowerCase();
-      final kind = SupportedFiles.kindOf(ext);
-      return SharedDocument(
-        id: 'doc-${_uuid.v4().substring(0, 8)}',
-        name: base,
-        extension: ext,
-        kind: kind,
-        sizeBytes: f.size,
-        lastModified: DateTime.now(),
-        status: SupportedFiles.initialStatus(kind),
-        localPath: f.path,
-      );
+      if (file == null) return null;
+      return _toDoc(file);
     } catch (_) {
       return null;
     }
@@ -44,33 +27,32 @@ class DocumentService {
 
   Future<List<SharedDocument>> pickMultiple() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: allowedExtensions,
-        allowMultiple: true,
-        withData: false,
       );
-      if (result == null || result.files.isEmpty) return [];
-      return result.files.map((f) {
-        final name = f.name;
-        final dot = name.lastIndexOf('.');
-        final base = dot <= 0 ? name : name.substring(0, dot);
-        final ext = dot <= 0 ? '' : name.substring(dot + 1).toLowerCase();
-        final kind = SupportedFiles.kindOf(ext);
-        return SharedDocument(
-          id: 'doc-${_uuid.v4().substring(0, 8)}',
-          name: base,
-          extension: ext,
-          kind: kind,
-          sizeBytes: f.size,
-          lastModified: DateTime.now(),
-          status: SupportedFiles.initialStatus(kind),
-          localPath: f.path,
-        );
-      }).toList();
+      return files.map(_toDoc).toList();
     } catch (_) {
       return [];
     }
+  }
+
+  SharedDocument _toDoc(PlatformFile f) {
+    final name = f.name;
+    final dot = name.lastIndexOf('.');
+    final base = dot <= 0 ? name : name.substring(0, dot);
+    final ext = dot <= 0 ? '' : name.substring(dot + 1).toLowerCase();
+    final kind = SupportedFiles.kindOf(ext);
+    return SharedDocument(
+      id: 'doc-${_uuid.v4().substring(0, 8)}',
+      name: base,
+      extension: ext,
+      kind: kind,
+      sizeBytes: f.size,
+      lastModified: DateTime.now(),
+      status: SupportedFiles.initialStatus(kind),
+      localPath: f.path,
+    );
   }
 
   /// Short, honest guidance shown on the Share screen for Office files.
