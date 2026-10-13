@@ -1,0 +1,108 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:uuid/uuid.dart';
+
+import '../models/doc_types.dart';
+import '../models/shared_document.dart';
+
+/// Picks files and classifies them. Office files are preserved as-is and
+/// flagged [DocStatus.needsConversion] — conversion happens on a compatible
+/// laptop host (see `server/`), never silently on-device.
+class DocumentService {
+  static const _uuid = Uuid();
+
+  static List<String> get allowedExtensions => SupportedFiles.all;
+
+  Future<SharedDocument?> pickSingle() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: allowedExtensions,
+        allowMultiple: false,
+        withData: false,
+      );
+      if (result == null || result.files.isEmpty) return null;
+      final f = result.files.single;
+      final name = f.name;
+      final dot = name.lastIndexOf('.');
+      final base = dot <= 0 ? name : name.substring(0, dot);
+      final ext = dot <= 0 ? '' : name.substring(dot + 1).toLowerCase();
+      final kind = SupportedFiles.kindOf(ext);
+      return SharedDocument(
+        id: 'doc-${_uuid.v4().substring(0, 8)}',
+        name: base,
+        extension: ext,
+        kind: kind,
+        sizeBytes: f.size,
+        lastModified: DateTime.now(),
+        status: SupportedFiles.initialStatus(kind),
+        localPath: f.path,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<List<SharedDocument>> pickMultiple() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: allowedExtensions,
+        allowMultiple: true,
+        withData: false,
+      );
+      if (result == null || result.files.isEmpty) return [];
+      return result.files.map((f) {
+        final name = f.name;
+        final dot = name.lastIndexOf('.');
+        final base = dot <= 0 ? name : name.substring(0, dot);
+        final ext = dot <= 0 ? '' : name.substring(dot + 1).toLowerCase();
+        final kind = SupportedFiles.kindOf(ext);
+        return SharedDocument(
+          id: 'doc-${_uuid.v4().substring(0, 8)}',
+          name: base,
+          extension: ext,
+          kind: kind,
+          sizeBytes: f.size,
+          lastModified: DateTime.now(),
+          status: SupportedFiles.initialStatus(kind),
+          localPath: f.path,
+        );
+      }).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Short, honest guidance shown on the Share screen for Office files.
+  static String? conversionNotice(SharedDocument doc) {
+    switch (doc.status) {
+      case DocStatus.needsConversion:
+        return 'This ${_label(doc.kind)} file needs conversion to PDF on '
+            'a compatible laptop host before presenting. The original file '
+            'is preserved.';
+      case DocStatus.converting:
+        return 'Converting to PDF on the host… students will see it when ready.';
+      case DocStatus.conversionFailed:
+        return 'Conversion failed on this host. Try a laptop with LibreOffice '
+            'installed, or share a PDF instead.';
+      case DocStatus.unsupported:
+        return 'This format is not supported. Use PDF, PPT, DOC, XLS, JPG, '
+            'PNG, or TXT.';
+      case DocStatus.ready:
+        return null;
+    }
+  }
+
+  static String _label(DocKind kind) {
+    switch (kind) {
+      case DocKind.powerpoint:
+        return 'PowerPoint';
+      case DocKind.word:
+        return 'Word';
+      case DocKind.excel:
+        return 'Excel';
+      default:
+        return 'Office';
+    }
+  }
+}

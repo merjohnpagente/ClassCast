@@ -1,0 +1,55 @@
+name: classcast_offline
+description: ClassCast Offline — offline classroom document sharing and presentation casting (Flutter + Flutter Web).
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+  flutter: '>=3.22.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.1.2
+  google_fonts: ^6.2.1
+  intl: ^0.20.2
+  shared_preferences: ^2.3.3
+  http: ^1.2.2
+  web_socket_channel: ^3.0.2
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^5.2.3
+  file_picker: ^8.1.2
+  path_provider: ^2.1.4
+  network_info_plus: ^6.1.4
+  uuid: ^4.5.1
+  mime: ^2.0.0
+  share_plus: ^10.1.3
+  syncfusion_flutter_pdfviewer: ^27.1.50
+  shelf: ^1.4.2
+  shelf_router: ^1.1.4
+  shelf_static: ^1.1.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icon/
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/icon_1024.png"
+  remove_alpha_ios: true
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/icon_foreground_1024.png"
+  web:
+    generate: true
+    image_path: "assets/icon/icon_1024.png"
+    background_color: "#FFFFFF"
+    theme_color: "#3568F5"

@@ -1,0 +1,19 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+.idea/
+*.iml
+.DS_Store
+
+# Server local state
+server/shared/
+server/.dart_tool/
+server/build/
+
+# Secrets / local
+*.jks
+*.keystore
+local.properties

@@ -1,0 +1,193 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/doc_types.dart';
+import '../../providers/app_state.dart';
+import '../../providers/library_provider.dart';
+import '../../providers/session_provider.dart';
+import '../../utils/responsive.dart';
+import '../../widgets/document_card.dart';
+import '../../widgets/state_cards.dart';
+import '../teacher/share_document_screen.dart';
+
+/// Reusable document management: recent, search, filters,
+/// empty / loading / error states. Grid on desktop, list on phones.
+/// When [sharing] is true (teacher), each file gets Share + Open actions.
+class FilesScreen extends StatefulWidget {
+  final bool sharing;
+
+  const FilesScreen({super.key, this.sharing = false});
+
+  @override
+  State<FilesScreen> createState() => _FilesScreenState();
+}
+
+class _FilesScreenState extends State<FilesScreen> {
+  final _search = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final app = context.read<AppState>();
+      context.read<LibraryProvider>().load(demoMode: app.demoMode);
+    });
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryProvider>();
+    final visible = library.visible;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _search,
+                onChanged: (v) => library.setQuery(v),
+                textInputAction: TextInputAction.search,
+                decoration: const InputDecoration(
+                  hintText: 'Search files…',
+                  prefixIcon: Icon(Icons.search),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              tooltip: 'Add files',
+              icon: const Icon(Icons.add),
+              onPressed: () async {
+                final ok =
+                    await library.pickAndAdd();
+                if (!mounted) return;
+                if (!ok && library.error != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(library.error!)),
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        _filters(context, library),
+        const SizedBox(height: 8),
+        Expanded(child: _body(context, library, visible)),
+      ],
+    );
+  }
+
+  Widget _filters(BuildContext context, LibraryProvider library) {
+    final options = <(String, DocKind?)>[
+      ('All', null),
+      ('PDF', DocKind.pdf),
+      ('Slides', DocKind.powerpoint),
+      ('Docs', DocKind.word),
+      ('Sheets', DocKind.excel),
+      ('Images', DocKind.image),
+      ('Text', DocKind.text),
+    ];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final (label, kind) in options)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(label),
+                selected: library.filter == kind,
+                onSelected: (_) => library.setFilter(kind),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _body(BuildContext context, LibraryProvider library,
+      List visible) {
+    if (!library.isLoaded) {
+      return const LoadingState(message: 'Loading files…');
+    }
+    if (library.error != null && visible.isEmpty) {
+      return ErrorState(
+        title: 'Could not load files',
+        message: library.error!,
+        onRetry: () => context
+            .read<LibraryProvider>()
+            .load(demoMode: context.read<AppState>().demoMode),
+      );
+    }
+    if (visible.isEmpty) {
+      return EmptyState(
+        icon: Icons.folder_outlined,
+        title: library.query.isNotEmpty || library.filter != null
+            ? 'No matching files'
+            : 'No documents yet',
+        subtitle: library.query.isNotEmpty || library.filter != null
+            ? 'Try a different search or filter.'
+            : 'Add PDF, slides, docs, sheets, images, or text files.',
+        actionLabel: 'Add files',
+        onAction: () => library.pickAndAdd(),
+      );
+    }
+    if (context.isDesktop) {
+      return GridView.builder(
+        gridDelegate: docGridDelegate(mainExtent: 132),
+        itemCount: visible.length,
+        itemBuilder: (_, i) =>
+            _card(context, visible[i] as dynamic),
+      );
+    }
+    return ListView.builder(
+      itemCount: visible.length,
+      itemBuilder: (_, i) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: _card(context, visible[i] as dynamic),
+      ),
+    );
+  }
+
+  Widget _card(BuildContext context, doc) {
+    final sessions = context.read<SessionProvider>();
+    final sharingToActive = widget.sharing && sessions.active != null;
+    return DocumentCard(
+      doc: doc,
+      selected: context.watch<LibraryProvider>().selected?.id == doc.id,
+      onTap: () {
+        context.read<LibraryProvider>().select(doc);
+        if (widget.sharing) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+                builder: (_) =>
+                    ShareDocumentScreen(doc: doc)),
+          );
+        }
+      },
+      onOpen: () =>
+          context.read<LibraryProvider>().select(doc),
+      onShare: sharingToActive
+          ? () {
+              sessions.shareDocument(doc);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                    content: Text(
+                        'Sharing ${doc.name}.${doc.extension}')),
+              );
+            }
+          : null,
+      onRemove: () =>
+          context.read<LibraryProvider>().remove(doc.id),
+    );
+  }
+}

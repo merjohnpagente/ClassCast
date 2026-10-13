@@ -1,0 +1,327 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/classroom_session.dart';
+import '../../providers/app_state.dart';
+import '../../providers/session_provider.dart';
+import '../../services/network_service.dart';
+import '../../theme/app_colors.dart';
+import '../../utils/formatters.dart';
+import '../../widgets/session_card.dart';
+import '../../widgets/state_cards.dart';
+import '../../widgets/status_bits.dart';
+import '../common/network_help_screen.dart';
+import 'create_session_screen.dart';
+import 'presentation_screen.dart';
+import 'students_screen.dart';
+
+/// Teacher dashboard: welcome, create button, active session,
+/// recent sessions, students, documents, network + QR shortcuts.
+class TeacherDashboard extends StatefulWidget {
+  final VoidCallback onOpenSessions;
+  final VoidCallback onOpenFiles;
+  final VoidCallback onOpenSettings;
+
+  const TeacherDashboard({
+    super.key,
+    required this.onOpenSessions,
+    required this.onOpenFiles,
+    required this.onOpenSettings,
+  });
+
+  @override
+  State<TeacherDashboard> createState() => _TeacherDashboardState();
+}
+
+class _TeacherDashboardState extends State<TeacherDashboard> {
+  String _ip = '';
+  bool _probingIp = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadIp();
+  }
+
+  Future<void> _loadIp() async {
+    final ip = await NetworkService().localIp();
+    if (!mounted) return;
+    final sessions = context.read<SessionProvider>();
+    setState(() {
+      _ip = ip;
+      _probingIp = false;
+    });
+    if (ip.isNotEmpty && sessions.active != null) {
+      sessions.setNetwork(
+          hostIp: ip, port: context.read<AppState>().serverPort);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final sessions = context.watch<SessionProvider>();
+    final app = context.watch<AppState>();
+    final active = sessions.active;
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        await sessions.load(demoMode: app.demoMode);
+        await _loadIp();
+      },
+      child: ListView(
+        children: [
+          Text('Welcome back',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: AppColors.ink,
+              )),
+          Text(
+            app.demoMode
+                ? 'Demo mode · sample data labeled'
+                : 'Host an offline classroom',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.muted,
+            ),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                  builder: (_) => const CreateSessionScreen()),
+            ),
+            icon: const Icon(Icons.add),
+            label: const Text('Create New Session'),
+          ),
+          const SizedBox(height: 12),
+          _networkCard(theme),
+          const SectionHeader(title: 'Active session'),
+          if (active == null)
+            EmptyState(
+              icon: Icons.meeting_room_outlined,
+              title: 'No active session',
+              subtitle:
+                  'Create a session to get a QR code and joining address.',
+              actionLabel: 'Create session',
+              onAction: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                    builder: (_) => const CreateSessionScreen()),
+              ),
+            )
+          else
+            SessionCard(
+              session: active,
+              connectedCount: sessions.connectedCount,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                    builder: (_) =>
+                        const TeacherPresentationScreen()),
+              ),
+              onQr: () => _showQrSheet(context, active),
+              onEnd: () => sessions.endSession(),
+            ),
+          SectionHeader(
+            title: 'Quick actions',
+            action: TextButton(
+              onPressed: widget.onOpenSessions,
+              child: const Text('All sessions'),
+            ),
+          ),
+          GridView.count(
+            crossAxisCount:
+                MediaQuery.sizeOf(context).width >= 720 ? 4 : 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 1.6,
+            children: [
+              _quickAction(context,
+                  icon: Icons.people,
+                  label:
+                      '${sessions.connectedCount} Students',
+                  onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) =>
+                                const StudentsScreen()),
+                      )),
+              _quickAction(context,
+                  icon: Icons.folder,
+                  label: 'Documents',
+                  onTap: widget.onOpenFiles),
+              _quickAction(context,
+                  icon: Icons.qr_code_2,
+                  label: 'QR Code',
+                  onTap: active == null
+                      ? null
+                      : () => _showQrSheet(context, active)),
+              _quickAction(context,
+                  icon: Icons.settings,
+                  label: 'Settings',
+                  onTap: widget.onOpenSettings),
+            ],
+          ),
+          const SectionHeader(title: 'Recent sessions'),
+          const TeacherDashboardSessionList(),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _networkCard(ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.successBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.wifi,
+                  color: AppColors.success),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _probingIp
+                        ? 'Checking network…'
+                        : _ip.isEmpty
+                            ? 'No local network yet'
+                            : 'Hosting at $_ip:${context.read<AppState>().serverPort}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                  Text(
+                    'Students join over Wi-Fi or hotspot — no internet needed.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'Connection guide',
+              icon: const Icon(Icons.help_outline,
+                  color: AppColors.primary),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                    builder: (_) =>
+                        const NetworkHelpScreen(isTeacher: true)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _quickAction(BuildContext context,
+      {required IconData icon,
+      required String label,
+      VoidCallback? onTap}) {
+    final disabled = onTap == null;
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        onTap: onTap,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon,
+                color: disabled
+                    ? AppColors.muted
+                    : AppColors.primary),
+            const SizedBox(height: 6),
+            Text(label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: disabled
+                      ? AppColors.muted
+                      : AppColors.ink,
+                )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showQrSheet(BuildContext context, ClassroomSession active) {
+    final address = active.joinAddress;
+    final payload = NetworkService.qrPayload(
+        host: active.hostIp, port: active.port, sessionId: active.id);
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(active.name,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w700, fontSize: 16)),
+            const SizedBox(height: 4),
+            Text(address,
+                style: const TextStyle(color: AppColors.muted)),
+            const SizedBox(height: 12),
+            Text(payload,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12)),
+            const SizedBox(height: 8),
+            const StatusChip(
+                label: 'Students scan this in the app',
+                icon: Icons.qr_code_2,
+                color: AppColors.primary,
+                background: AppColors.primarySoft),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Recent session list shared by dashboard + sessions tab.
+class TeacherDashboardSessionList extends StatelessWidget {
+  const TeacherDashboardSessionList({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final sessions = context.watch<SessionProvider>();
+    if (!sessions.isLoaded) {
+      return const LoadingState(message: 'Loading sessions…');
+    }
+    final items =
+        sessions.recent.where((s) => s.id != sessions.active?.id).toList();
+    if (items.isEmpty) {
+      return const EmptyState(
+        icon: Icons.history,
+        title: 'No recent sessions',
+        subtitle: 'Your past classrooms will appear here.',
+      );
+    }
+    return Column(
+      children: [
+        for (final s in items.take(5))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SessionCard(session: s),
+          ),
+      ],
+    );
+  }
+}

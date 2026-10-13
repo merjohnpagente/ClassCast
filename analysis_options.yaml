@@ -1,0 +1,13 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - "server/**"
+    - "tool/**"
+    - "**/*.g.dart"
+
+linter:
+  rules:
+    - prefer_single_quotes
+    - prefer_const_constructors
+    - use_key_in_widget_constructors
