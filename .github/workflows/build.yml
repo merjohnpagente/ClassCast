@@ -1,5 +1,7 @@
 name: Build ClassCast (APK + Web)
 
+# JohnFood-style pipeline: TEST first, BUILD only when green.
+# Download outputs from the Actions run (Artifacts) or from Releases (tags).
 on:
   push:
     branches: [main]
@@ -10,7 +12,9 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  # ---- 1) TEST: analyze + unit tests. Build jobs wait for this. ----
+  test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,11 +34,9 @@ jobs:
           if [ ! -d android ]; then
             flutter create . --project-name classcast_offline --org com.classcast.offline
           fi
+          # flutter create drops a default counter test — ours is test/app_test.dart
+          rm -f test/widget_test.dart
           git checkout -- web/index.html web/manifest.json || true
-
-      - name: Set Android app label
-        run: |
-          sed -i 's/android:label="[^"]*"/android:label="ClassCast Offline"/' android/app/src/main/AndroidManifest.xml
 
       - run: flutter pub get
 
@@ -43,29 +45,87 @@ jobs:
 
       - name: Test
         run: flutter test
-        continue-on-error: true
+
+  # ---- 2) BUILD APK (only when Test is green) ----
+  apk:
+    name: APK
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Bootstrap platform folders if missing
+        run: |
+          if [ ! -d android ]; then
+            flutter create . --project-name classcast_offline --org com.classcast.offline
+          fi
+          rm -f test/widget_test.dart
+          git checkout -- web/index.html web/manifest.json || true
+
+      - name: Set Android app label
+        run: |
+          sed -i 's/android:label="[^"]*"/android:label="ClassCast Offline"/' android/app/src/main/AndroidManifest.xml
+
+      - run: flutter pub get
 
       - name: Build release APK
         run: flutter build apk --release
 
-      - name: Build web
-        run: flutter build web --release
-
-      - name: Upload APK
+      - name: Upload APK (download from this run)
         uses: actions/upload-artifact@v4
         with:
           name: classcast-apk
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Upload web build
+      - name: Attach APK to release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/app/outputs/flutter-apk/app-release.apk
+
+  # ---- 3) BUILD WEB (only when Test is green) ----
+  web:
+    name: Web
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Bootstrap platform folders if missing
+        run: |
+          if [ ! -d android ]; then
+            flutter create . --project-name classcast_offline --org com.classcast.offline
+          fi
+          rm -f test/widget_test.dart
+          git checkout -- web/index.html web/manifest.json || true
+
+      - run: flutter pub get
+
+      - name: Build web
+        run: flutter build web --release
+
+      - name: Upload web build (download from this run)
         uses: actions/upload-artifact@v4
         with:
           name: classcast-web
           path: build/web
-
-      - name: Attach builds to release (tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            build/app/outputs/flutter-apk/app-release.apk
