@@ -19,7 +19,7 @@ class DocumentService {
         allowedExtensions: allowedExtensions,
       );
       if (file == null) return null;
-      return _toDoc(file);
+      return await _toDoc(file);
     } catch (_) {
       return null;
     }
@@ -31,7 +31,7 @@ class DocumentService {
         type: FileType.custom,
         allowedExtensions: allowedExtensions,
       );
-      return Future.wait(files.map(_toDoc));
+      return await Future.wait(files.map(_toDoc));
     } catch (_) {
       return [];
     }
