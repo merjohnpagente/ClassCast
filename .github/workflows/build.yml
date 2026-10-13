@@ -84,6 +84,11 @@ jobs:
             grep -n "compileSdk" android/app/build.gradle
           fi
 
+      - name: Install Android SDK 36
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36"
+
       - run: flutter pub get
 
       - name: Generate launcher icons
