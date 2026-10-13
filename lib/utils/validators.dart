@@ -15,7 +15,7 @@ class Validators {
       return null;
     }
     final code = t.replaceAll(' ', '').toUpperCase();
-    if (!RegExp(r'^(CLASS-)?[A-Z0-9]{4,8}$').hasMatch(code)) {
+    if (!RegExp(r'^(CLASS-)?[A-Z0-9]{3,8}$').hasMatch(code)) {
       return 'Check the code, e.g. CLASS-101';
     }
     return null;
