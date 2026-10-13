@@ -31,24 +31,28 @@ class DocumentService {
         type: FileType.custom,
         allowedExtensions: allowedExtensions,
       );
-      return files.map(_toDoc).toList();
+      return Future.wait(files.map(_toDoc));
     } catch (_) {
       return [];
     }
   }
 
-  SharedDocument _toDoc(PlatformFile f) {
+  Future<SharedDocument> _toDoc(PlatformFile f) async {
     final name = f.name;
     final dot = name.lastIndexOf('.');
     final base = dot <= 0 ? name : name.substring(0, dot);
     final ext = dot <= 0 ? '' : name.substring(dot + 1).toLowerCase();
     final kind = SupportedFiles.kindOf(ext);
+    int size = 0;
+    try {
+      size = await f.xFile.length();
+    } catch (_) {/* size is best-effort */}
     return SharedDocument(
       id: 'doc-${_uuid.v4().substring(0, 8)}',
       name: base,
       extension: ext,
       kind: kind,
-      sizeBytes: f.size,
+      sizeBytes: size,
       lastModified: DateTime.now(),
       status: SupportedFiles.initialStatus(kind),
       localPath: f.path,
