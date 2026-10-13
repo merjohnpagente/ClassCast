@@ -1,10 +1,9 @@
-# Launcher icon source (1024x1024 PNG) goes here.
-#
-# Export the AppLogo (lib/widgets/app_logo.dart) on white at 1024x1024 as:
-#   assets/icon/icon_1024.png
-#   assets/icon/icon_foreground_1024.png  (blue logo on transparent)
-# Then run:
-#   flutter pub run flutter_launcher_icons
-#
-# The file is intentionally not committed — add your PNG before release.
-# Web PWA icons are generated into web/icons/ by the same command.
+# Launcher icon sources (committed).
+
+- `icon_1024.png` — blue ClassCast logo (screen + cast arcs) on white.
+- `icon_foreground_1024.png` — same logo on transparent (adaptive icon).
+
+Generated from `lib/widgets/app_logo.dart`. CI runs
+`flutter pub run flutter_launcher_icons` (config in pubspec.yaml) to
+produce Android launcher icons + web PWA icons/favicon on every build.
+To regenerate locally: replace these PNGs, then run the same command.

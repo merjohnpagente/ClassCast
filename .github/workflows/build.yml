@@ -86,6 +86,9 @@ jobs:
 
       - run: flutter pub get
 
+      - name: Generate launcher icons
+        run: flutter pub run flutter_launcher_icons
+
       - name: Build release APK
         run: flutter build apk --release
 
@@ -128,6 +131,9 @@ jobs:
           git checkout -- web/index.html web/manifest.json || true
 
       - run: flutter pub get
+
+      - name: Generate web icons + favicon
+        run: flutter pub run flutter_launcher_icons
 
       - name: Build web
         run: flutter build web --release
