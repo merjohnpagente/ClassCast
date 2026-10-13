@@ -24,7 +24,7 @@ class _JoinScreenState extends State<JoinScreen> {
   final _name = TextEditingController();
   final _input = TextEditingController();
   bool _joining = false;
-  bool _allowAnonymous = true;
+  final bool _allowAnonymous = true;
 
   @override
   void initState() {

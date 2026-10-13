@@ -66,11 +66,12 @@ class _FilesScreenState extends State<FilesScreen> {
               tooltip: 'Add files',
               icon: const Icon(Icons.add),
               onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
                 final ok =
                     await library.pickAndAdd();
                 if (!mounted) return;
                 if (!ok && library.error != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  messenger.showSnackBar(
                     SnackBar(content: Text(library.error!)),
                   );
                 }

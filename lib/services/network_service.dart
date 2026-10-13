@@ -1,7 +1,5 @@
-import 'dart:async';
 import 'dart:io';
 
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 
 /// Local-network helpers for the offline classroom.
@@ -10,13 +8,6 @@ import 'package:network_info_plus/network_info_plus.dart';
 /// use [probeHost] after joining Wi-Fi.
 class NetworkService {
   final NetworkInfo _info = NetworkInfo();
-  final Connectivity _connectivity = Connectivity();
-
-  Stream<List<ConnectivityResult>> get onConnectivityChanged =>
-      _connectivity.onConnectivityChanged;
-
-  Future<List<ConnectivityResult>> currentConnectivity() =>
-      _connectivity.checkConnectivity();
 
   /// Actual device IP on the local Wi-Fi (e.g. `192.168.43.1`).
   /// Returns '' when unavailable (mobile data off / Wi-Fi off / web).

@@ -6,7 +6,6 @@ import '../../providers/app_state.dart';
 import '../../providers/session_provider.dart';
 import '../../services/network_service.dart';
 import '../../theme/app_colors.dart';
-import '../../utils/formatters.dart';
 import '../../widgets/session_card.dart';
 import '../../widgets/state_cards.dart';
 import '../../widgets/status_bits.dart';

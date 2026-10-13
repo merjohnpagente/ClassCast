@@ -45,13 +45,13 @@ class AppTheme {
           color: AppColors.ink,
         ),
       ),
-      cardTheme: CardThemeData(
+      cardTheme: const CardThemeData(
         color: AppColors.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius:
-              const BorderRadius.all(Radius.circular(AppRadius.card)),
-          side: const BorderSide(color: AppColors.border, width: 1),
+              BorderRadius.all(Radius.circular(AppRadius.card)),
+          side: BorderSide(color: AppColors.border, width: 1),
         ),
       ),
       dividerTheme: const DividerThemeData(
