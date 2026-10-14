@@ -6,6 +6,7 @@ import '../../providers/app_state.dart';
 import '../../providers/session_provider.dart';
 import '../../services/network_service.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/motion.dart';
 import '../../widgets/qr_card.dart';
 import '../../widgets/session_card.dart';
 import '../../widgets/state_cards.dart';
@@ -228,28 +229,23 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       required String label,
       VoidCallback? onTap}) {
     final disabled = onTap == null;
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        onTap: onTap,
+    return Pressable(
+      onTap: onTap,
+      child: Card(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon,
-                color: disabled
-                    ? AppColors.muted
-                    : AppColors.primary),
-            const SizedBox(height: 6),
+                color: disabled ? AppColors.muted : AppColors.primary),
+            const SizedBox(height: 8),
             Text(label,
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: disabled
-                      ? AppColors.muted
-                      : AppColors.ink,
+                  color: disabled ? AppColors.muted : AppColors.ink,
                 )),
           ],
         ),

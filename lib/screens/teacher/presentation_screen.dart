@@ -9,6 +9,7 @@ import '../../providers/session_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/document_viewer.dart';
+import '../../widgets/motion.dart';
 import '../../widgets/office/office_document_scroll_view.dart';
 import '../../widgets/state_cards.dart';
 import '../../widgets/status_bits.dart';
@@ -106,10 +107,7 @@ class _TeacherPresentationScreenState
               label: Text('${sessions.connectedCount}'),
               child: const Icon(Icons.people_outline),
             ),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                  builder: (_) => const StudentsScreen()),
-            ),
+            onPressed: () => _showStudents(context, sessions),
           ),
         ],
       ),
@@ -145,7 +143,7 @@ class _TeacherPresentationScreenState
     }
     if (doc.kind != DocKind.pdf) _syncPdfPage(active.page);
     final sessions = context.read<SessionProvider>();
-    return DocumentViewer(
+    final viewer = DocumentViewer(
       doc: doc,
       controller: _pdf,
       page: active.page,
@@ -158,6 +156,15 @@ class _TeacherPresentationScreenState
         // student on the same screen as the teacher.
         if (sessions.active?.page != page) sessions.setPage(page);
       },
+    );
+    // A PDF draws itself; an Office page is painted by us, so the turn has to
+    // be animated or it reads as a dropped frame.
+    if (doc.kind == DocKind.pdf) return viewer;
+    return PageSwitcher(
+      identity: _viewMode == OfficeViewMode.scroll
+          ? 'scroll'
+          : 'page-${active.page}',
+      child: viewer,
     );
   }
 
@@ -427,12 +434,110 @@ class _TeacherPresentationScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Session ID: ${active.id}'),
-            Text('${sessions.connectedCount} students connected'),
             if (active.joinAddress.isNotEmpty)
               Text(active.joinAddress,
                   style: const TextStyle(
-                      color: AppColors.muted, fontSize: 12)),
+                      color: AppColors.muted, fontSize: 13)),
+            const SizedBox(height: 10),
+            // Who is actually watching, live — a teacher needs this to know
+            // whether a student is missing before the lesson moves on.
+            _studentList(context, sessions),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Live roster: names appear as students join, disappear as they leave.
+  Widget _studentList(BuildContext context, SessionProvider sessions) {
+    final students = sessions.participants;
+    if (students.isEmpty) {
+      return Row(
+        children: [
+          const Icon(Icons.groups_outlined, size: 18, color: AppColors.muted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Waiting for students…',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.muted,
+                  ),
+            ),
+          ),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.groups, size: 18, color: AppColors.success),
+            const SizedBox(width: 8),
+            Text('${students.length} connected',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        for (final student in students)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              children: [
+                const Icon(Icons.circle, size: 8, color: AppColors.success),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    student.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                if (student.deviceType.isNotEmpty)
+                  Text(student.deviceType,
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.muted)),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Mobile equivalent of the roster panel: the same list, in a sheet, so the
+  /// teacher can check the room without leaving the presentation.
+  void _showStudents(BuildContext context, SessionProvider sessions) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Students',
+                  style: Theme.of(sheetContext).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              // Built inside the sheet so it keeps watching the provider.
+              _studentList(sheetContext, sessions),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(sheetContext).pop();
+                    Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const StudentsScreen()));
+                  },
+                  icon: const Icon(Icons.manage_accounts_outlined),
+                  label: const Text('Manage students'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

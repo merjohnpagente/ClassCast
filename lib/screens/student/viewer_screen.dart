@@ -10,6 +10,7 @@ import '../../services/classcast_client.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/document_viewer.dart';
+import '../../widgets/motion.dart';
 import '../../widgets/state_cards.dart';
 import '../../widgets/status_bits.dart';
 
@@ -186,12 +187,14 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
     }
     // Students stream the file from the teacher host over the local
     // network; no bundled sample asset is used.
-    return DocumentViewer(
+    final viewer = DocumentViewer(
       doc: doc,
       controller: _pdf,
       remoteUrl: doc.remoteUrl,
       page: active.page,
     );
+    if (doc.kind == DocKind.pdf) return viewer;
+    return PageSwitcher(identity: 'page-${active.page}', child: viewer);
   }
 
   Widget _footer(BuildContext context, ClassroomSession active) {

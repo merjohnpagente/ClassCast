@@ -8,6 +8,7 @@ import '../../services/classcast_client.dart';
 import '../../services/session_store.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/motion.dart';
 import '../../utils/validators.dart';
 
 /// Student join: scan QR or enter session ID / address + name.
@@ -99,30 +100,38 @@ class _JoinScreenState extends State<JoinScreen> {
       maxWidth: 520,
       child: ListView(
       children: [
-        Text('Join Classroom',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: AppColors.ink,
-            )),
-        Text('Scan the teacher QR or enter the details below.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: AppColors.muted,
-            )),
-        const SizedBox(height: 12),
+        FadeIn(
+          child: Text('Join Classroom',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: AppColors.ink,
+              )),
+        ),
+        FadeIn(
+          delay: Motion.stagger(1),
+          child: Text('Scan the teacher QR or enter the details below.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.muted,
+              )),
+        ),
+        const SizedBox(height: 16),
         // Scanning is the primary way into a classroom, so it comes first —
         // buried under a divider it looked like the fallback, not the main
         // action.
-        FilledButton.icon(
-          onPressed: joining ? null : _openScanner,
-          icon: const Icon(Icons.qr_code_scanner),
-          label: const Text('Scan Teacher QR Code'),
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(0, 52),
-            textStyle: const TextStyle(
-                fontSize: 16, fontWeight: FontWeight.w700),
+        FadeIn(
+          delay: Motion.stagger(2),
+          child: FilledButton.icon(
+            onPressed: joining ? null : _openScanner,
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Scan Teacher QR Code'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, 52),
+              textStyle: const TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.w700),
+            ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Row(
           children: [
             const Expanded(child: Divider()),
@@ -137,9 +146,11 @@ class _JoinScreenState extends State<JoinScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        Form(
-          key: _form,
-          child: Column(
+        FadeIn(
+          delay: Motion.stagger(3),
+          child: Form(
+            key: _form,
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               TextFormField(
@@ -176,7 +187,8 @@ class _JoinScreenState extends State<JoinScreen> {
                       )
                     : const Text('Join Classroom'),
               ),
-            ],
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 12),
