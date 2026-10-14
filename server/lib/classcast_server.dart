@@ -116,6 +116,15 @@ class ClasscastServer {
       if (!_checkTeacher(body)) {
         return _json(403, {'ok': false, 'error': 'Permission denied'});
       }
+      // Unshare: teacher cleared the document from the library.
+      if (body['clear'] == true) {
+        _documentId = '';
+        _documentName = '';
+        _totalPages = 0;
+        _page = 1;
+        _broadcast(_snapshotEvent('document_changed'));
+        return _json(200, {'ok': true, 'session': _snapshot()});
+      }
       final name = body['documentName'] as String? ?? '';
       if (name.isEmpty) {
         return _json(400, {'ok': false, 'error': 'documentName is required'});
@@ -131,7 +140,11 @@ class ClasscastServer {
       }
       _documentId = body['documentId'] as String? ?? '';
       _documentName = name;
-      _totalPages = (body['totalPages'] as num?)?.toInt() ?? 0;
+      final declared = (body['totalPages'] as num?)?.toInt() ?? 0;
+      // The teacher app does not know a freshly picked file's page count
+      // yet, so derive it here rather than showing students "Page 3" with no
+      // total. This is a heuristic; an unknown count degrades to 0.
+      _totalPages = declared > 0 ? declared : _pdfPageCount(name);
       _page = 1;
       _broadcast(_snapshotEvent('document_changed'));
       return _json(200, {'ok': true, 'session': _snapshot()});
@@ -237,17 +250,32 @@ router.post('/api/end', (Request req) async {
       }
       return webSocketHandler(
         (WebSocketChannel channel, String? _) =>
-            _onConnect(channel, params),
+            _onConnect(channel, params, isTeacher: params['role'] == 'teacher'),
       )(req);
     };
   }
 
   void _onConnect(
-      WebSocketChannel channel, Map<String, String> params) {
+    WebSocketChannel channel,
+    Map<String, String> params, {
+    bool isTeacher = false,
+  }) {
     final sessionId = params['session'] ?? '';
     final name = params['name'] ?? 'Student';
     final device = params['device'] ?? '';
     _sockets.add(channel);
+    // The teacher subscribes too (so it learns who joined), but must never
+    // appear in its own student roster.
+    if (isTeacher) {
+      channel.sink.add(jsonEncode(_snapshotEvent('session_state')));
+      channel.stream.listen(
+        (_) {/* teacher control happens over the REST API, not frames */},
+        onDone: () => _sockets.remove(channel),
+        onError: (_) => _sockets.remove(channel),
+        cancelOnError: false,
+      );
+      return;
+    }
     final pid =
         'ws-${_sockets.length}-${DateTime.now().millisecondsSinceEpoch}';
     _participants[pid] = {'id': pid, 'name': name, 'device': device};
@@ -362,6 +390,31 @@ router.post('/api/end', (Request req) async {
       return f.existsSync();
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Page count for a PDF, derived by counting page objects.
+  ///
+  /// The teacher app cannot report this for a file it just picked, and the
+  /// server already holds the bytes. Counting `/Type /Page` (excluding
+  /// `/Type /Pages`) is a well-known heuristic: it is right for ordinary
+  /// exported decks and returns 0 for compressed/linearised edge cases,
+  /// which the UI already treats as "unknown total".
+  int _pdfPageCount(String name) {
+    if (!name.toLowerCase().endsWith('.pdf')) return 0;
+    try {
+      final root = p.normalize(filesDir);
+      final f = File(p.normalize(p.join(root, name)));
+      if (!p.isWithin(root, f) || !f.existsSync()) return 0;
+      // Cap the read: a huge deck should not stall the share action.
+      const maxScan = 32 * 1024 * 1024;
+      final len = f.lengthSync();
+      if (len <= 0 || len > maxScan) return 0;
+      final text = latin1.decode(f.readAsBytesSync(), allowInvalid: true);
+      final pattern = RegExp(r'/Type\s*/Page(?![s])');
+      return pattern.allMatches(text).length;
+    } catch (_) {
+      return 0;
     }
   }
 

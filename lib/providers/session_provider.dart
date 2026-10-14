@@ -3,12 +3,14 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/classroom_session.dart';
 import '../models/participant.dart';
 import '../models/shared_document.dart';
 import '../models/sync_event.dart';
 import '../services/session_store.dart';
+import '../services/sync_protocol.dart';
 import '../services/teacher_host_client.dart';
 
 /// Teacher-side session state: create / end / page / document / participants.
@@ -31,7 +33,49 @@ class SessionProvider extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _closeHostEvents();
     super.dispose();
+  }
+
+  // --- teacher event link -------------------------------------------------
+  //
+  // The teacher holds a WebSocket to the host purely to *receive* join/leave
+  // notifications. Control still goes over the REST API with the teacher key,
+  // so a compromised socket cannot drive the presentation.
+
+  WebSocketChannel? _hostSocket;
+  StreamSubscription<dynamic>? _hostEvents;
+
+  void _openHostEvents(ClassroomSession s) {
+    _closeHostEvents();
+    if (s.hostIp.isEmpty) return;
+    try {
+      final channel = WebSocketChannel.connect(SyncProtocol.wsUri(
+        host: s.hostIp,
+        port: s.port,
+        sessionId: s.id,
+        name: 'Teacher',
+        role: 'teacher',
+      ));
+      _hostSocket = channel;
+      _hostEvents = channel.stream.listen((frame) {
+        final event = SyncProtocol.decode(frame);
+        if (event != null) applyEvent(event);
+      }, onError: (_) {}, cancelOnError: false);
+    } catch (_) {
+      // Standalone teacher mode: no host, so no live roster.
+      _hostSocket = null;
+      _hostEvents = null;
+    }
+  }
+
+  void _closeHostEvents() {
+    _hostEvents?.cancel();
+    _hostEvents = null;
+    try {
+      _hostSocket?.sink.close();
+    } catch (_) {/* ignore */}
+    _hostSocket = null;
   }
 
   void _safeNotify() {
@@ -96,8 +140,10 @@ class SessionProvider extends ChangeNotifier {
     await _store.saveSession(session);
     _recent = await _store.loadRecent();
     notifyListeners();
-    // Register the session on the host so students can join it.
+    // Register the session on the host so students can join it, and listen
+    // for the roster events it broadcasts back.
     unawaited(_host.startSession(session));
+    _openHostEvents(session);
     return session;
   }
 
@@ -105,6 +151,7 @@ class SessionProvider extends ChangeNotifier {
     if (_active == null) return;
     final ending = _active!;
     unawaited(_host.endSession(ending));
+    _closeHostEvents();
     final ended = ending.copyWith(isActive: false);
     await _store.saveSession(ended);
     _recent = await _store.loadRecent();
@@ -117,6 +164,7 @@ class SessionProvider extends ChangeNotifier {
     if (_active == null) return;
     _active = _active!.copyWith(hostIp: hostIp, port: port);
     notifyListeners();
+    _openHostEvents(_active!);
   }
 
   void shareDocument(SharedDocument doc, {int totalPages = 0}) {
@@ -146,6 +194,8 @@ class SessionProvider extends ChangeNotifier {
     _active = _active!
         .copyWith(documentId: () => null, documentName: () => null);
     notifyListeners();
+    // Tell the host too, otherwise students keep rendering the old file.
+    unawaited(_host.clearDocument(_active!));
   }
 
   /// Teacher pressed a navigation control: update locally, then broadcast.

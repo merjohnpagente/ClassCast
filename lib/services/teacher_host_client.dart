@@ -70,6 +70,10 @@ class TeacherHostClient {
   Future<bool> endSession(ClassroomSession s) =>
       _serial(() => _post(s, SyncProtocol.endApi, const {}));
 
+  /// Stop sharing the current document.
+  Future<bool> clearDocument(ClassroomSession s) =>
+      _serial(() => _post(s, SyncProtocol.documentApi, const {'clear': true}));
+
   /// Queue [op] behind any in-flight call, keeping the chain alive even when
   /// one call fails.
   Future<bool> _serial(Future<bool> Function() op) {

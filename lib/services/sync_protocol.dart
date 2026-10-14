@@ -63,11 +63,14 @@ class SyncProtocol {
     required String sessionId,
     String name = '',
     String device = '',
+    String role = '',
   }) {
     final query = {
       'session': sessionId,
       if (name.isNotEmpty) 'name': name,
       if (device.isNotEmpty) 'device': device,
+      // 'teacher' subscribes to events without joining the student roster.
+      if (role.isNotEmpty) 'role': role,
     };
     return Uri(
       scheme: 'ws',
