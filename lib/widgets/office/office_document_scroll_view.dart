@@ -121,7 +121,7 @@ class _OfficeDocumentScrollViewState extends State<OfficeDocumentScrollView> {
         // the height is the same for every page and the maths stays simple.
         final width = constraints.maxWidth;
         final ratio = _aspectRatio;
-        final height = width <= 0 ? 0 : width / ratio;
+        final height = width <= 0 ? 0.0 : width / ratio;
         _pageHeightPt = height;
         WidgetsBinding.instance.addPostFrameCallback((_) => _applyJump());
         return Scrollbar(
