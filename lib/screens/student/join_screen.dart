@@ -277,7 +277,7 @@ class _QrScanPageState extends State<_QrScanPage> {
             controller: _ctrl,
             fit: BoxFit.cover,
             onDetect: _onDetect,
-            placeholderBuilder: (_) => const Center(
+            placeholderBuilder: (_, __) => const Center(
               child: CircularProgressIndicator(color: Colors.white),
             ),
             errorBuilder: (context, error, child) => _cameraError(error),
