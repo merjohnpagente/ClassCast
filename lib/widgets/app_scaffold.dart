@@ -101,7 +101,12 @@ class AppScaffold extends StatelessWidget {
       ),
       body: Padding(
         padding: EdgeInsets.all(context.pagePadding),
-        child: body,
+        // Centred on tablets and wide phones too: a form stretched across the
+        // whole width reads as "broken layout", not as "big screen".
+        child: ContentWidth(
+          maxWidth: 720,
+          child: body,
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: currentIndex,

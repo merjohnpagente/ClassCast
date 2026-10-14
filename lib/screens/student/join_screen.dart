@@ -7,6 +7,7 @@ import '../../providers/sync_provider.dart';
 import '../../services/classcast_client.dart';
 import '../../services/session_store.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/responsive.dart';
 import '../../utils/validators.dart';
 
 /// Student join: scan QR or enter session ID / address + name.
@@ -94,7 +95,9 @@ class _JoinScreenState extends State<JoinScreen> {
     final sync = context.watch<SyncProvider>();
     final joining = _joining || sync.link == LinkState.connecting;
 
-    return ListView(
+    return ContentWidth(
+      maxWidth: 520,
+      child: ListView(
       children: [
         Text('Join Classroom',
             style: theme.textTheme.titleLarge?.copyWith(
@@ -200,6 +203,7 @@ class _JoinScreenState extends State<JoinScreen> {
           ),
         ),
       ],
+      ),
     );
   }
 }

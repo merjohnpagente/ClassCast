@@ -257,53 +257,60 @@ class _TeacherPresentationScreenState
       child: SafeArea(
         top: false,
         child: Row(
-          children: [
-            _navBtn(Icons.skip_previous, 'Previous',
-                active.page <= 1
-                    ? null
-                    : () => _goTo(sessions, active.page - 1)),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('${active.page}'
-                      '${active.totalPages > 0 ? ' / ${active.totalPages}' : ''}',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  Expanded(
+                    child: _navBtn(Icons.skip_previous, 'Previous',
+                        active.page <= 1
+                            ? null
+                            : () => _goTo(sessions, active.page - 1)),
+                  ),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(
-                        tooltip: active.syncPaused
-                            ? 'Resume sync'
-                            : 'Pause sync',
-                        icon: Icon(active.syncPaused
-                            ? Icons.play_arrow
-                            : Icons.pause),
-                        onPressed: () =>
-                            sessions.setPaused(!active.syncPaused),
-                      ),
-                      FilledButton.icon(
-                        onPressed: () => sessions.endSession(),
-                        icon: const Icon(Icons.stop, size: 18),
-                        label: const Text('End'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.error,
-                          minimumSize: const Size(48, 44),
-                        ),
+                      Text('${active.page}'
+                          '${active.totalPages > 0 ? ' / ${active.totalPages}' : ''}',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            tooltip: active.syncPaused
+                                ? 'Resume sync'
+                                : 'Pause sync',
+                            icon: Icon(active.syncPaused
+                                ? Icons.play_arrow
+                                : Icons.pause),
+                            onPressed: () =>
+                                sessions.setPaused(!active.syncPaused),
+                          ),
+                          FilledButton.icon(
+                            onPressed: () => sessions.endSession(),
+                            icon: const Icon(Icons.stop, size: 18),
+                            label: const Text('End'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.error,
+                              minimumSize: const Size(48, 44),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
+                  ),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: _navBtn(Icons.skip_next, 'Next',
+                          active.totalPages > 0 &&
+                                  active.page >= active.totalPages
+                              ? null
+                              : () => _goTo(sessions, active.page + 1)),
+                    ),
                   ),
                 ],
               ),
             ),
-            _navBtn(Icons.skip_next, 'Next',
-                active.totalPages > 0 && active.page >= active.totalPages
-                    ? null
-                    : () => _goTo(sessions, active.page + 1)),
-          ],
-        ),
       ),
     );
   }
@@ -318,22 +325,34 @@ class _TeacherPresentationScreenState
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton.icon(
+                  child: TextButton.icon(
                     onPressed: active.page <= 1
                         ? null
                         : () => _goTo(sessions, active.page - 1),
-                    icon: const Icon(Icons.skip_previous),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.inkSecondary,
+                      disabledForegroundColor: AppColors.muted,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: const Size(0, 36),
+                    ),
+                    icon: const Icon(Icons.skip_previous, size: 18),
                     label: const Text('Prev'),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: OutlinedButton.icon(
+                  child: TextButton.icon(
                     onPressed: active.totalPages > 0 &&
                             active.page >= active.totalPages
                         ? null
                         : () => _goTo(sessions, active.page + 1),
-                    icon: const Icon(Icons.skip_next),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.inkSecondary,
+                      disabledForegroundColor: AppColors.muted,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: const Size(0, 36),
+                    ),
+                    icon: const Icon(Icons.skip_next, size: 18),
                     label: const Text('Next'),
                   ),
                 ),
@@ -386,13 +405,14 @@ class _TeacherPresentationScreenState
   Widget _navBtn(IconData icon, String tip, VoidCallback? onTap) {
     return IconButton(
       tooltip: tip,
-      iconSize: 20,
+      iconSize: 18,
       visualDensity: VisualDensity.compact,
       style: IconButton.styleFrom(
-        foregroundColor: AppColors.inkSecondary,
-        disabledForegroundColor: AppColors.muted.withAlpha(90),
-        minimumSize: const Size(40, 40),
+        foregroundColor: AppColors.inkSecondary.withAlpha(170),
+        disabledForegroundColor: AppColors.muted.withAlpha(70),
+        minimumSize: const Size(36, 36),
         padding: EdgeInsets.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
       icon: Icon(icon),
       onPressed: onTap,

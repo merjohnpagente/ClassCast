@@ -8,6 +8,7 @@ import '../../models/shared_document.dart';
 import '../../providers/sync_provider.dart';
 import '../../services/classcast_client.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/document_viewer.dart';
 import '../../widgets/state_cards.dart';
 import '../../widgets/status_bits.dart';
@@ -113,15 +114,22 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _header(context, active, sync),
-        const SizedBox(height: 8),
-        Expanded(child: _preview(active)),
-        const SizedBox(height: 8),
-        _footer(context, active),
-      ],
+    // One centred column, so the title, the page and the controls line up
+    // with each other instead of each spanning the whole screen.
+    return Center(
+      child: ContentWidth(
+        maxWidth: 1000,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _header(context, active, sync),
+            const SizedBox(height: 8),
+            Expanded(child: _preview(active)),
+            const SizedBox(height: 8),
+            _footer(context, active),
+          ],
+        ),
+      ),
     );
   }
 
