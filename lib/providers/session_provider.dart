@@ -9,6 +9,7 @@ import '../models/classroom_session.dart';
 import '../models/participant.dart';
 import '../models/shared_document.dart';
 import '../models/sync_event.dart';
+import '../services/host/classcast_host.dart';
 import '../services/session_store.dart';
 import '../services/sync_protocol.dart';
 import '../services/teacher_host_client.dart';
@@ -88,6 +89,15 @@ class SessionProvider extends ChangeNotifier {
   bool get hostReachable => _host.lastCallOk;
   String? get hostError => _host.lastError;
 
+  /// True when this device is serving the classroom itself.
+  ///
+  /// Without a listener there is nothing for a student to join, no matter how
+  /// good the Wi-Fi is — so the teacher UI states this plainly.
+  bool get hostingLocally => ClasscastHost.instance.running;
+
+  /// Address students can reach, empty until the host is up.
+  String get hostAddress => ClasscastHost.instance.joinUrl;
+
   ClassroomSession? _active;
   ClassroomSession? get active => _active;
 
@@ -140,6 +150,13 @@ class SessionProvider extends ChangeNotifier {
     await _store.saveSession(session);
     _recent = await _store.loadRecent();
     notifyListeners();
+
+    // Bring up the classroom server on this device *before* announcing the
+    // session. A session nothing is listening for cannot be joined, which is
+    // exactly what happened when the app only posted to a host that did not
+    // exist yet.
+    await _startHost(session);
+
     // Register the session on the host so students can join it, and listen
     // for the roster events it broadcasts back.
     unawaited(_host.startSession(session));
@@ -147,11 +164,38 @@ class SessionProvider extends ChangeNotifier {
     return session;
   }
 
+  /// Starts the in-app host, restarting it if the port changed.
+  Future<void> _startHost(ClassroomSession session) async {
+    final host = ClasscastHost.instance;
+    if (host.running && host.port == session.port) {
+      if (session.hostIp.isNotEmpty) {
+        // Refresh the advertised address for a new network.
+        await host.start(
+          port: session.port,
+          advertisedIp: session.hostIp,
+        );
+      }
+      return;
+    }
+    if (host.running) await host.stop();
+    final started = await host.start(
+      port: session.port,
+      advertisedIp: session.hostIp,
+    );
+    if (!started) {
+      // The UI says so; the teacher can pick another port or use a laptop host.
+      _safeNotify();
+    }
+  }
+
   Future<void> endSession() async {
     if (_active == null) return;
     final ending = _active!;
     unawaited(_host.endSession(ending));
     _closeHostEvents();
+    // Stop serving: the classroom is over, and leaving a listener running
+    // would keep the camera-era battery drain going for no reason.
+    await ClasscastHost.instance.stop();
     final ended = ending.copyWith(isActive: false);
     await _store.saveSession(ended);
     _recent = await _store.loadRecent();
@@ -174,6 +218,12 @@ class SessionProvider extends ChangeNotifier {
     // shared directory exactly.
     final fileName =
         '${doc.name}${doc.extension.isEmpty ? '' : '.${doc.extension}'}';
+    // Hand the host the file it must serve. Only the current document is ever
+    // reachable, so the rest of the teacher's phone stays private.
+    final path = doc.localPath;
+    if (path != null && path.isNotEmpty) {
+      ClasscastHost.instance.registerDocument(fileName, path);
+    }
     _active = _active!.copyWith(
       documentId: () => doc.id,
       documentName: () => fileName,
@@ -194,6 +244,9 @@ class SessionProvider extends ChangeNotifier {
     _active = _active!
         .copyWith(documentId: () => null, documentName: () => null);
     notifyListeners();
+    // Stop serving the file locally as well, or a student who kept the URL
+    // could still pull it after the teacher unshared it.
+    ClasscastHost.instance.clearDocument();
     // Tell the host too, otherwise students keep rendering the old file.
     unawaited(_host.clearDocument(_active!));
   }

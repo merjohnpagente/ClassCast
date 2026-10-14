@@ -170,6 +170,47 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                 ),
               ),
             ] else ...[
+              // The classroom server lives on this phone. If it is not
+              // running, no student can join no matter how good the Wi-Fi is,
+              // so it is stated plainly instead of hidden behind a green tick.
+              if (!sessions.hostingLocally)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Card(
+                    color: AppColors.warningBg,
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.warning_amber_rounded,
+                                  color: AppColors.warning),
+                              const SizedBox(width: 10),
+                              const Expanded(
+                                child: Text(
+                                  'Students cannot reach this phone',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'The classroom server could not start on port '
+                            '${active.port}. Try a different port in Settings, '
+                            'or end the session and start again. Nothing on '
+                            'this phone can be joined until it is running.',
+                            style: const TextStyle(
+                                color: AppColors.inkSecondary, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               Card(
                 color: AppColors.successBg,
                 child: Padding(
@@ -190,6 +231,13 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                             Text('Session ID: ${active.id}',
                                 style: const TextStyle(
                                     color: AppColors.inkSecondary)),
+                            if (sessions.hostAddress.isNotEmpty)
+                              Text(
+                                'Serving ${sessions.hostAddress}',
+                                style: const TextStyle(
+                                    color: AppColors.inkSecondary,
+                                    fontSize: 12),
+                              ),
                           ],
                         ),
                       ),
