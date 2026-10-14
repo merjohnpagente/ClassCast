@@ -17,10 +17,12 @@
 </head>
 <body>
   <!-- Syncfusion's PDF viewer renders through PdfJs on the web platform and
-       will not display anything until this global is present. -->
+       shows nothing until this global exists. PdfJs is VENDORED under
+       web/vendor/ (Apache-2.0, https://mozilla.github.io/pdf.js) so the app
+       keeps working with no internet — do not switch these back to a CDN. -->
   <script type="module" async>
-    import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs';
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.worker.min.mjs";
+    import * as pdfjsLib from 'vendor/pdf.min.mjs';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.mjs";
     window['pdfjsLib'] = pdfjsLib;
   </script>
   <script src="flutter_bootstrap.js" async></script>

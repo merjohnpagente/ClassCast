@@ -13,17 +13,21 @@ import '../models/sync_event.dart';
 ///
 /// REST endpoints served by the host:
 /// - `GET  /api/session?id=CLASS-101` — session snapshot
-/// - `GET  /api/document?id=<docId>` — document metadata
-/// - `GET  /files/<docId>` — file bytes (when downloads allowed)
-/// - `WS   /ws?session=<id>&name=<student>` — live updates
+/// - `POST /api/session` (teacher key) — start / update the session
 /// - `POST /api/page` (teacher key) — set current page
 /// - `POST /api/document` (teacher key) — share a document
+/// - `POST /api/pause` (teacher key) — freeze / resume student screens
+/// - `POST /api/end` (teacher key) — end the session
+/// - `GET  /files/<name>` — the shared document's bytes
+/// - `WS   /ws?session=<id>&name=<student>` — live updates
 class SyncProtocol {
   static const defaultPort = 8080;
   static const wsPath = '/ws';
   static const sessionApi = '/api/session';
   static const documentApi = '/api/document';
   static const pageApi = '/api/page';
+  static const pauseApi = '/api/pause';
+  static const endApi = '/api/end';
   static const shareApi = '/api/document';
   static const filesRoot = '/files';
   static const webJoinPrefix = '/s/';

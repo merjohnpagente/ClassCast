@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -8,6 +9,7 @@ import '../models/participant.dart';
 import '../models/shared_document.dart';
 import '../models/sync_event.dart';
 import '../services/session_store.dart';
+import '../services/teacher_host_client.dart';
 
 /// Teacher-side session state: create / end / page / document / participants.
 /// With a real host, page/document changes are also broadcast over WS
@@ -15,6 +17,32 @@ import '../services/session_store.dart';
 class SessionProvider extends ChangeNotifier {
   static const _uuid = Uuid();
   final SessionStore _store = SessionStore();
+
+  /// Controls the laptop host so students actually receive the broadcast.
+  final TeacherHostClient _host = TeacherHostClient();
+
+  bool _disposed = false;
+
+  SessionProvider() {
+    // Repaint the host-status chip whenever a control call finishes.
+    _host.onStatusChanged = _safeNotify;
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  void _safeNotify() {
+    if (_disposed) return;
+    notifyListeners();
+  }
+
+  /// False when the last control call could not reach the host. The UI shows
+  /// this honestly instead of implying students are in sync.
+  bool get hostReachable => _host.lastCallOk;
+  String? get hostError => _host.lastError;
 
   ClassroomSession? _active;
   ClassroomSession? get active => _active;
@@ -68,12 +96,16 @@ class SessionProvider extends ChangeNotifier {
     await _store.saveSession(session);
     _recent = await _store.loadRecent();
     notifyListeners();
+    // Register the session on the host so students can join it.
+    unawaited(_host.startSession(session));
     return session;
   }
 
   Future<void> endSession() async {
     if (_active == null) return;
-    final ended = _active!.copyWith(isActive: false);
+    final ending = _active!;
+    unawaited(_host.endSession(ending));
+    final ended = ending.copyWith(isActive: false);
     await _store.saveSession(ended);
     _recent = await _store.loadRecent();
     _active = null;
@@ -89,14 +121,24 @@ class SessionProvider extends ChangeNotifier {
 
   void shareDocument(SharedDocument doc, {int totalPages = 0}) {
     if (_active == null) return;
+    final pages = totalPages > 0 ? totalPages : doc.pageCount;
+    // The host keys the file off its name, so it must match what is in the
+    // shared directory exactly.
+    final fileName =
+        '${doc.name}${doc.extension.isEmpty ? '' : '.${doc.extension}'}';
     _active = _active!.copyWith(
       documentId: () => doc.id,
-      documentName: () => '${doc.name}'
-          '${doc.extension.isEmpty ? '' : '.${doc.extension}'}',
+      documentName: () => fileName,
       page: 1,
-      totalPages: totalPages > 0 ? totalPages : doc.pageCount,
+      totalPages: pages,
     );
     notifyListeners();
+    unawaited(_host.shareDocument(
+      _active!,
+      documentId: doc.id,
+      documentName: fileName,
+      totalPages: pages,
+    ));
   }
 
   void clearDocument() {
@@ -106,13 +148,33 @@ class SessionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Teacher pressed a navigation control: update locally, then broadcast.
   void setPage(int page) {
-    if (_active == null) return;
+    final next = _applyPage(page);
+    if (next == null) return;
+    unawaited(_host.setPage(_active!, next));
+  }
+
+  /// Local-only page move. Used when applying an inbound event so the host
+  /// is not echoed back to itself.
+  void _setPageLocal(int page) => _applyPage(page);
+
+  int? _applyPage(int page) {
+    if (_active == null) return null;
     final total = _active!.totalPages;
-    final clamped =
-        total <= 0 ? page : page.clamp(1, total);
+    final clamped = total <= 0 ? page : page.clamp(1, total);
     _active = _active!.copyWith(page: clamped);
     notifyListeners();
+    return clamped;
+  }
+
+  /// Freeze / resume student screens. Single source of truth lives on the
+  /// session, so teacher and students agree.
+  void setPaused(bool paused) {
+    if (_active == null) return;
+    _active = _active!.copyWith(syncPaused: paused);
+    notifyListeners();
+    unawaited(_host.setPaused(_active!, paused));
   }
 
   /// Apply an incoming sync event (student echo / host broadcast).
@@ -120,7 +182,7 @@ class SessionProvider extends ChangeNotifier {
     if (_active == null || event.sessionId != _active!.id) return;
     switch (event.type) {
       case SyncEventType.pageChanged:
-        if (event.page != null) setPage(event.page!);
+        if (event.page != null) _setPageLocal(event.page!);
         break;
       case SyncEventType.documentChanged:
         _active = _active!.copyWith(

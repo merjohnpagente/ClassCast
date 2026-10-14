@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import '../../models/classroom_session.dart';
-import '../../providers/app_state.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/session_provider.dart';
 import '../../theme/app_colors.dart';
@@ -35,22 +34,33 @@ class _TeacherPresentationScreenState
   }
 
   void _goTo(SessionProvider sessions, int page) {
+    // Updates locally and POSTs /api/page with the teacher key, which the
+    // host broadcasts to every connected student.
     sessions.setPage(page);
-    // TODO(phase-2): POST /api/page with teacherKey, then WS broadcast.
-    // Local-teacher mode mirrors state in-process.
   }
 
   @override
   Widget build(BuildContext context) {
     final sessions = context.watch<SessionProvider>();
-    final app = context.watch<AppState>();
     final active = sessions.active;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(active?.name ?? 'Presentation'),
         actions: [
-          if (app.syncPaused)
+          // Honest about delivery: if the host is not reachable, the teacher
+          // is presenting locally only and students are NOT in sync.
+          if (!sessions.hostReachable)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: StatusChip(
+                label: 'Host offline',
+                icon: Icons.cloud_off,
+                color: AppColors.error,
+                background: AppColors.errorBg,
+              ),
+            ),
+          if (active?.syncPaused ?? false)
             const Padding(
               padding: EdgeInsets.only(right: 4),
               child: StatusChip(
@@ -97,8 +107,8 @@ class _TeacherPresentationScreenState
                   onAction: () => Navigator.of(context).pop(),
                 )
               : context.isDesktop
-                  ? _desktopLayout(context, sessions, active, app)
-                  : _mobileLayout(context, sessions, active, app),
+                  ? _desktopLayout(context, sessions, active)
+                  : _mobileLayout(context, sessions, active),
     );
   }
 
@@ -115,7 +125,7 @@ class _TeacherPresentationScreenState
   }
 
   Widget _mobileLayout(BuildContext context, SessionProvider sessions,
-      ClassroomSession active, AppState app) {
+      ClassroomSession active) {
     return Column(
       children: [
         Padding(
@@ -129,13 +139,13 @@ class _TeacherPresentationScreenState
             child: _preview(context, active),
           ),
         ),
-        _controlBar(context, sessions, active, app),
+        _controlBar(context, sessions, active),
       ],
     );
   }
 
   Widget _desktopLayout(BuildContext context, SessionProvider sessions,
-      ClassroomSession active, AppState app) {
+      ClassroomSession active) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -160,7 +170,7 @@ class _TeacherPresentationScreenState
             padding: const EdgeInsets.all(16),
             children: [
               const SectionHeader(title: 'Controls'),
-              _controlPanel(context, sessions, active, app),
+              _controlPanel(context, sessions, active),
               const SectionHeader(title: 'Session'),
               _sessionInfo(context, sessions, active),
             ],
@@ -202,7 +212,7 @@ class _TeacherPresentationScreenState
   }
 
   Widget _controlBar(BuildContext context, SessionProvider sessions,
-      ClassroomSession active, AppState app) {
+      ClassroomSession active) {
     return Container(
       padding: EdgeInsets.fromLTRB(
           context.pagePadding, 8, context.pagePadding, 16),
@@ -231,14 +241,14 @@ class _TeacherPresentationScreenState
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       IconButton(
-                        tooltip: app.syncPaused
+                        tooltip: active.syncPaused
                             ? 'Resume sync'
                             : 'Pause sync',
-                        icon: Icon(app.syncPaused
+                        icon: Icon(active.syncPaused
                             ? Icons.play_arrow
                             : Icons.pause),
-                        onPressed: () => app.setSyncPaused(
-                            !app.syncPaused),
+                        onPressed: () =>
+                            sessions.setPaused(!active.syncPaused),
                       ),
                       FilledButton.icon(
                         onPressed: () => sessions.endSession(),
@@ -265,7 +275,7 @@ class _TeacherPresentationScreenState
   }
 
   Widget _controlPanel(BuildContext context, SessionProvider sessions,
-      ClassroomSession active, AppState app) {
+      ClassroomSession active) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -300,8 +310,8 @@ class _TeacherPresentationScreenState
               contentPadding: EdgeInsets.zero,
               title: const Text('Pause sync'),
               subtitle: const Text('Freeze student screens'),
-              value: app.syncPaused,
-              onChanged: (v) => app.setSyncPaused(v),
+              value: active.syncPaused,
+              onChanged: (v) => sessions.setPaused(v),
             ),
             const SizedBox(height: 8),
             FilledButton.icon(

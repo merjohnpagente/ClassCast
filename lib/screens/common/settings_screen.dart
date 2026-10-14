@@ -126,9 +126,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: const Text('Pause synchronization'),
                   subtitle: const Text(
                       'Freeze student screens'),
-                  value: app.syncPaused,
-                  onChanged: (v) =>
-                      app.setSyncPaused(v),
+                  value: sessions.active?.syncPaused ?? false,
+                  onChanged: sessions.active == null
+                      ? null
+                      : (v) => sessions.setPaused(v),
                 ),
               ],
             ),

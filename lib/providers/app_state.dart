@@ -14,8 +14,10 @@ class AppState extends ChangeNotifier {
   int _serverPort = 8080;
   int get serverPort => _serverPort;
 
-  bool _syncPaused = false;
-  bool get syncPaused => _syncPaused;
+  /// Pause state intentionally does NOT live here. It belongs to the active
+  /// session (see `SessionProvider.setPaused`) because it has to reach
+  /// students; keeping a second copy here meant the teacher's toggle was
+  /// purely cosmetic.
 
   void setRole(AppRole role) {
     _role = role;
@@ -30,11 +32,6 @@ class AppState extends ChangeNotifier {
 
   void setServerPort(int port) {
     _serverPort = port;
-    notifyListeners();
-  }
-
-  void setSyncPaused(bool value) {
-    _syncPaused = value;
     notifyListeners();
   }
 }
