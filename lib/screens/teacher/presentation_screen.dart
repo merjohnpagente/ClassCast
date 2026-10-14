@@ -257,60 +257,59 @@ class _TeacherPresentationScreenState
       child: SafeArea(
         top: false,
         child: Row(
-                children: [
-                  Expanded(
-                    child: _navBtn(Icons.skip_previous, 'Previous',
-                        active.page <= 1
-                            ? null
-                            : () => _goTo(sessions, active.page - 1)),
-                  ),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('${active.page}'
-                          '${active.totalPages > 0 ? ' / ${active.totalPages}' : ''}',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          IconButton(
-                            tooltip: active.syncPaused
-                                ? 'Resume sync'
-                                : 'Pause sync',
-                            icon: Icon(active.syncPaused
-                                ? Icons.play_arrow
-                                : Icons.pause),
-                            onPressed: () =>
-                                sessions.setPaused(!active.syncPaused),
-                          ),
-                          FilledButton.icon(
-                            onPressed: () => sessions.endSession(),
-                            icon: const Icon(Icons.stop, size: 18),
-                            label: const Text('End'),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.error,
-                              minimumSize: const Size(48, 44),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: _navBtn(Icons.skip_next, 'Next',
-                          active.totalPages > 0 &&
-                                  active.page >= active.totalPages
-                              ? null
-                              : () => _goTo(sessions, active.page + 1)),
+          children: [
+            Expanded(
+              child: _navBtn(Icons.skip_previous, 'Previous',
+                  active.page <= 1
+                      ? null
+                      : () => _goTo(sessions, active.page - 1)),
+            ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${active.page}'
+                  '${active.totalPages > 0 ? ' / ${active.totalPages}' : ''}',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      tooltip: active.syncPaused
+                          ? 'Resume sync'
+                          : 'Pause sync',
+                      icon: Icon(active.syncPaused
+                          ? Icons.play_arrow
+                          : Icons.pause),
+                      onPressed: () => sessions.setPaused(!active.syncPaused),
                     ),
-                  ),
-                ],
+                    FilledButton.icon(
+                      onPressed: () => sessions.endSession(),
+                      icon: const Icon(Icons.stop, size: 18),
+                      label: const Text('End'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                        minimumSize: const Size(48, 44),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: _navBtn(Icons.skip_next, 'Next',
+                    active.totalPages > 0 &&
+                            active.page >= active.totalPages
+                        ? null
+                        : () => _goTo(sessions, active.page + 1)),
               ),
             ),
+          ],
+        ),
       ),
     );
   }
