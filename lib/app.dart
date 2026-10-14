@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:provider/single_child_widget.dart';
 
 import 'providers/app_state.dart';
 import 'providers/library_provider.dart';
@@ -76,7 +77,7 @@ class _RootRouterState extends State<_RootRouter> {
 /// Dart would infer every element as `<dynamic>` and register them as
 /// `Provider<dynamic>`, so `context.watch<AppState>()` would throw
 /// "Could not find the correct Provider<AppState>" at runtime.
-List<Widget> appProviders() {
+List<SingleChildWidget> appProviders() {
   return [
     ChangeNotifierProvider<AppState>(create: (_) => AppState()),
     ChangeNotifierProvider<SessionProvider>(
