@@ -62,6 +62,18 @@ class _OfficeCanvasState extends State<OfficeCanvas> {
     _transform.value = Matrix4.identity();
   }
 
+  /// Double tap: jump between "whole page" and a readable close-up. The
+  /// teacher is usually mid-lesson with one hand, so this has to be one tap.
+  void _toggleZoom() {
+    final zoomedIn = _transform.value.getMaxScaleOnAxis() > 1.05;
+    _transform.value = zoomedIn
+        ? Matrix4.identity()
+        : (Matrix4.identity()..scale(_doubleTapScale));
+  }
+
+  double get _doubleTapScale =>
+      widget.maxScale > 2.5 ? 2.5 : widget.maxScale;
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -108,7 +120,15 @@ class _OfficeCanvasState extends State<OfficeCanvas> {
                   // Slack around the page so a zoomed-in edge can still be
                   // dragged back into view.
                   boundaryMargin: const EdgeInsets.all(120),
-                  child: FittedBox(fit: BoxFit.fill, child: page),
+                  // Trackpad / mouse wheel pans the page on laptop and web,
+                  // and a double tap zooms on touch — without it nobody
+                  // discovers that the document can be zoomed at all.
+                  trackpadScrollCausesScale: false,
+                  scaleFactor: 240,
+                  child: GestureDetector(
+                    onDoubleTap: _toggleZoom,
+                    child: FittedBox(fit: BoxFit.fill, child: page),
+                  ),
                 ),
               ),
             ),
