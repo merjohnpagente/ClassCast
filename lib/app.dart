@@ -70,11 +70,19 @@ class _RootRouterState extends State<_RootRouter> {
 }
 
 /// Provider wiring shared by Android, desktop, and web.
-List<ChangeNotifierProvider> appProviders() {
+///
+/// IMPORTANT: type arguments are explicit. If this list were typed as the
+/// raw `List<ChangeNotifierProvider>` (= `ChangeNotifierProvider<dynamic>`),
+/// Dart would infer every element as `<dynamic>` and register them as
+/// `Provider<dynamic>`, so `context.watch<AppState>()` would throw
+/// "Could not find the correct Provider<AppState>" at runtime.
+List<Widget> appProviders() {
   return [
-    ChangeNotifierProvider(create: (_) => AppState()),
-    ChangeNotifierProvider(create: (_) => SessionProvider()),
-    ChangeNotifierProvider(create: (_) => LibraryProvider()),
-    ChangeNotifierProvider(create: (_) => SyncProvider()),
+    ChangeNotifierProvider<AppState>(create: (_) => AppState()),
+    ChangeNotifierProvider<SessionProvider>(
+        create: (_) => SessionProvider()),
+    ChangeNotifierProvider<LibraryProvider>(
+        create: (_) => LibraryProvider()),
+    ChangeNotifierProvider<SyncProvider>(create: (_) => SyncProvider()),
   ];
 }
