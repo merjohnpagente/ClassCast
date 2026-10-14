@@ -17,3 +17,6 @@ server/build/
 *.jks
 *.keystore
 local.properties
+
+# Dart package lockfiles for the local host
+server/pubspec.lock

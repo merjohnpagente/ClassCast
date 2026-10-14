@@ -30,9 +30,11 @@ void main() {
     String path, [
     Object? body,
   ]) async {
+    // Shelf requires an absolute requestedUri; everything here is same-host.
+    final uri = Uri.parse('http://localhost:8080$path');
     return server.handler(Request(
       method,
-      Uri.parse(path),
+      uri,
       body: body,
       headers: const {'content-type': 'application/json'},
     ));
@@ -79,6 +81,17 @@ void main() {
       expect(decoded['ok'], isFalse);
     });
 
+    test('unknown session id is JSON with ok:false', () async {
+      // The 404 path must stay machine-readable: the student's join flow
+      // parses this body to decide between "wrong ID" and "host down".
+      await startSession();
+      final res = await call('GET', '/api/session?id=CLASS-NOPE');
+      expect(res.headers['content-type'], contains('application/json'));
+      final decoded = await body(res);
+      expect(decoded['ok'], isFalse);
+      expect(decoded['error'], isNotNull);
+    });
+
     test('no session running is 404', () async {
       final res = await call('GET', '/api/session?id=anything');
       expect(res.statusCode, 404);
@@ -120,7 +133,7 @@ void main() {
     });
 
     test('a wrong key is refused', () async {
-      final [id, key] = await startSession();
+      await startSession();
       final res = await call('POST', '/api/page',
           jsonEncode({'teacherKey': 'not-the-key', 'page': 2}));
       expect(res.statusCode, 403);
@@ -211,14 +224,14 @@ void main() {
     });
 
     test('other files still require download permission', () async {
-      final [id, key] = await startSession(allowDownload: false);
+      await startSession(allowDownload: false);
       writeFile('answerkey.pdf', '%PDF-1.4');
       final res = await call('GET', '/files/answerkey.pdf');
       expect(res.statusCode, 403);
     });
 
     test('download permission unlocks the rest of the folder', () async {
-      final [id, key] = await startSession(allowDownload: true);
+      await startSession(allowDownload: true);
       writeFile('answerkey.pdf', '%PDF-1.4');
       final res = await call('GET', '/files/answerkey.pdf');
       expect(res.statusCode, 200);

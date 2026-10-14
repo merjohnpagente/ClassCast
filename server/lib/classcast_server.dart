@@ -185,32 +185,31 @@ router.post('/api/end', (Request req) async {
       final raw = Uri.decodeComponent(requestedName);
       if (!_isSafeRelativeName(raw)) return Response.notFound('not found');
       final root = p.normalize(filesDir);
-      final target = File(p.normalize(p.join(root, raw)));
+      final target = p.normalize(p.join(root, raw));
       if (!p.isWithin(root, target)) return Response.notFound('not found');
-      File file;
       int length;
       try {
-        file = target;
+        final file = File(target);
         if (!file.existsSync()) return Response.notFound('not found');
         length = file.lengthSync();
+        final isCurrent = raw == _documentName;
+        if (!isCurrent && _session?['allowDownload'] != true) {
+          return Response.forbidden('Downloads are disabled by the teacher');
+        }
+        return Response.ok(
+          file.openRead(),
+          headers: {
+            'content-type':
+                lookupMimeType(file.path) ?? 'application/octet-stream',
+            'content-disposition': isCurrent ? 'inline' : 'attachment',
+            'content-length': length.toString(),
+            // The shared document changes as the teacher moves on.
+            'cache-control': 'no-store',
+          },
+        );
       } catch (_) {
         return Response.notFound('not found');
       }
-      final isCurrent = raw == _documentName;
-      if (!isCurrent && _session?['allowDownload'] != true) {
-        return Response.forbidden('Downloads are disabled by the teacher');
-      }
-      return Response.ok(
-        file.openRead(),
-        headers: {
-          'content-type':
-              lookupMimeType(file.path) ?? 'application/octet-stream',
-          'content-disposition': isCurrent ? 'inline' : 'attachment',
-          'content-length': length.toString(),
-          // The shared document changes as the teacher moves on.
-          'cache-control': 'no-store',
-        },
-      );
     }
 
     final cascade = Cascade();
@@ -221,7 +220,22 @@ router.post('/api/end', (Request req) async {
       );
       cascade.add(web);
     }
-    return Cascade()
+    // shelf's Cascade treats 404/405 as "unacceptable" by default and moves on
+    // to the next handler, which silently broke this API: 404 is also how we
+    // report "no such session" and "that file is not in the shared directory",
+    // and those JSON bodies carry the message the teacher app displays. Every
+    // one of them was being replaced with a bare "not found". Cascade only on
+    // a *genuinely* unmatched route (no JSON content type), so real API 404s
+    // reach the client intact.
+    bool shouldCascade(Response res) =>
+        (res.statusCode == 404 || res.statusCode == 405) &&
+        !(res.headers['content-type']?.contains('application/json') ?? false);
+
+    // Only add the web static handler when a web build was configured:
+    // Cascade.handler throws "no inner handlers" if the inner cascade is
+    // empty, which broke every request when the server ran without --web
+    // (the default laptop API-only mode).
+    final outer = Cascade(shouldCascade: shouldCascade)
         .add(router.call)
         .add((req) {
           const prefix = 'files/';
@@ -229,9 +243,9 @@ router.post('/api/end', (Request req) async {
             return serveFile(req.url.path.substring(prefix.length));
           }
           return Response.notFound('not found');
-        })
-        .add(cascade.handler)
-        .handler;
+        });
+    if (webDir != null) outer.add(cascade.handler);
+    return outer.handler;
   }
 
   /// WebSocket endpoint. Query: ?session=<id>&name=<student>&device=<...>.
@@ -385,9 +399,10 @@ router.post('/api/end', (Request req) async {
   bool _isServable(String name) {
     if (!_isSafeRelativeName(name)) return false;
     try {
-      final f = File(p.normalize(p.join(filesDir, name)));
-      if (!p.isWithin(p.normalize(filesDir), f)) return false;
-      return f.existsSync();
+      final root = p.normalize(filesDir);
+      final target = p.normalize(p.join(root, name));
+      if (!p.isWithin(root, target)) return false;
+      return File(target).existsSync();
     } catch (_) {
       return false;
     }
@@ -404,11 +419,12 @@ router.post('/api/end', (Request req) async {
     if (!name.toLowerCase().endsWith('.pdf')) return 0;
     try {
       final root = p.normalize(filesDir);
-      final f = File(p.normalize(p.join(root, name)));
-      if (!p.isWithin(root, f) || !f.existsSync()) return 0;
+      final target = p.normalize(p.join(root, name));
+      if (!p.isWithin(root, target)) return 0;
+      final f = File(target);
       // Cap the read: a huge deck should not stall the share action.
       const maxScan = 32 * 1024 * 1024;
-      final len = f.lengthSync();
+      final len = f.existsSync() ? f.lengthSync() : -1;
       if (len <= 0 || len > maxScan) return 0;
       final text = latin1.decode(f.readAsBytesSync(), allowInvalid: true);
       final pattern = RegExp(r'/Type\s*/Page(?![s])');
@@ -481,22 +497,21 @@ router.post('/api/end', (Request req) async {
       'vpn',
       'pseudo',
     ];
-    List<Interface> ifaces;
-    try {
-      ifaces = await NetworkInterface.list(
-          includeLoopback: false, type: InternetAddressType.IPv4);
-    } catch (_) {
-      return '';
-    }
     String? fallback;
-    for (final nic in ifaces) {
-      for (final addr in nic.addresses) {
-        if (addr.isLoopback) continue;
-        final ip = addr.address;
-        if (fallback == null) fallback = ip;
-        final name = nic.name.toLowerCase();
-        if (!virtualHints.any(name.contains)) return ip;
+    try {
+      final ifaces = await NetworkInterface.list(
+          includeLoopback: false, type: InternetAddressType.IPv4);
+      for (final nic in ifaces) {
+        for (final addr in nic.addresses) {
+          if (addr.isLoopback) continue;
+          final ip = addr.address;
+          fallback ??= ip;
+          final name = nic.name.toLowerCase();
+          if (!virtualHints.any(name.contains)) return ip;
+        }
       }
+    } catch (_) {
+      // Enumeration is best-effort; fall through to whatever we found.
     }
     return fallback ?? '';
   }
