@@ -198,6 +198,20 @@ class SessionProvider extends ChangeNotifier {
     unawaited(_host.clearDocument(_active!));
   }
 
+  /// Publish the real page count of the shared document.
+  ///
+  /// The app only learns how many slides or pages a file has once it has been
+  /// opened and parsed, which happens after `shareDocument`. Students need the
+  /// total to enable their navigation, so it is pushed to the host as well.
+  void setTotalPages(int totalPages) {
+    if (_active == null || totalPages <= 0) return;
+    if (_active!.documentId == null) return;
+    if (_active!.totalPages == totalPages) return;
+    _active = _active!.copyWith(totalPages: totalPages);
+    notifyListeners();
+    unawaited(_host.setPage(_active!, _active!.page, totalPages: totalPages));
+  }
+
   /// Teacher pressed a navigation control: update locally, then broadcast.
   void setPage(int page) {
     final next = _applyPage(page);

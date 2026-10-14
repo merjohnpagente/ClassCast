@@ -63,6 +63,87 @@ void main() {
         .writeAsStringSync(contents);
   }
 
+  void writeFileBytes(String name, List<int> bytes) {
+    File('${tmp.path}${Platform.pathSeparator}$name').writeAsBytesSync(bytes);
+  }
+
+  /// Minimal zip whose entries look like a PowerPoint deck. The host only
+  /// reads the central directory, never the part contents, so the payloads can
+  /// stay empty.
+  List<int> _fakePptx({required int slides}) {
+    final entries = <String>[
+      '[Content_Types].xml',
+      'ppt/presentation.xml',
+      for (var i = 1; i <= slides; i++) 'ppt/slides/slide$i.xml',
+      'ppt/slides/_rels/slide1.xml.rels',
+      'ppt/media/image1.png',
+    ];
+
+    void u16(List<int> out, int value) {
+      out.add(value & 0xFF);
+      out.add((value >> 8) & 0xFF);
+    }
+
+    void u32(List<int> out, int value) {
+      for (var i = 0; i < 4; i++) {
+        out.add((value >> (i * 8)) & 0xFF);
+      }
+    }
+
+    final out = <int>[];
+    final central = <int>[];
+    for (final name in entries) {
+      final nameBytes = ascii.encode(name);
+      final offset = out.length;
+
+      // Local file header.
+      out.addAll([0x50, 0x4B, 0x03, 0x04]);
+      u16(out, 20); // version needed
+      u16(out, 0); // flags
+      u16(out, 0); // method: stored
+      u16(out, 0); // time
+      u16(out, 0); // date
+      u32(out, 0); // crc
+      u32(out, 0); // compressed size
+      u32(out, 0); // uncompressed size
+      u16(out, nameBytes.length);
+      u16(out, 0);
+      out.addAll(nameBytes);
+
+      // Central directory file header.
+      central.addAll([0x50, 0x4B, 0x01, 0x02]);
+      u16(central, 20); // version made by
+      u16(central, 20); // version needed
+      u16(central, 0); // flags
+      u16(central, 0); // method
+      u16(central, 0); // time
+      u16(central, 0); // date
+      u32(central, 0); // crc
+      u32(central, 0); // compressed size
+      u32(central, 0); // uncompressed size
+      u16(central, nameBytes.length);
+      u16(central, 0); // extra
+      u16(central, 0); // comment
+      u16(central, 0); // disk number
+      u16(central, 0); // internal attributes
+      u32(central, 0); // external attributes
+      u32(central, offset);
+      central.addAll(nameBytes);
+    }
+
+    final centralStart = out.length;
+    out.addAll(central);
+    out.addAll([0x50, 0x4B, 0x05, 0x06]);
+    u16(out, 0); // this disk
+    u16(out, 0); // disk with the directory
+    u16(out, entries.length);
+    u16(out, entries.length);
+    u32(out, central.length);
+    u32(out, centralStart);
+    u16(out, 0); // comment length
+    return out;
+  }
+
   group('session lifecycle', () {
     test('creates a session and returns a snapshot', () async {
       final [id, key] = await startSession();
@@ -249,6 +330,34 @@ void main() {
       expect(res['ok'], isTrue);
       expect((res['session'] as Map)['documentUrl'], isNull);
       expect((res['session'] as Map)['documentId'], isNull);
+    });
+
+    test('slide count is derived for a .pptx deck', () async {
+      final [id, key] = await startSession();
+      // A real deck's slides live in the zip; the host reads their names from
+      // the central directory, so students get "Page 2 of 3" instead of an
+      // unknown total.
+      writeFileBytes('deck.pptx', _fakePptx(slides: 3));
+      final res = await body(await call('POST', '/api/document',
+          jsonEncode({'teacherKey': key, 'documentName': 'deck.pptx'})));
+      expect((res['session'] as Map)['totalPages'], 3);
+    });
+
+    test('a file the teacher app could not count accepts a published total',
+        () async {
+      final [id, key] = await startSession();
+      writeFileBytes('deck.pptx', _fakePptx(slides: 3));
+      await call('POST', '/api/document', jsonEncode({
+        'teacherKey': key,
+        'documentName': 'deck.pptx',
+        'totalPages': 0,
+      }));
+      // The teacher app publishes the real count once it has opened the file.
+      final res = await body(await call('POST', '/api/page',
+          jsonEncode({'teacherKey': key, 'page': 2, 'totalPages': 3})));
+      final session = res['session'] as Map;
+      expect(session['totalPages'], 3);
+      expect(session['page'], 2);
     });
   });
 

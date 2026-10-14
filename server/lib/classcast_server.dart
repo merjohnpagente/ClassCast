@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as p;
@@ -105,6 +106,10 @@ class ClasscastServer {
       if (!_checkTeacher(body)) {
         return _json(403, {'ok': false, 'error': 'Permission denied'});
       }
+      // The teacher app only learns a deck's real slide count after opening
+      // it, so it may publish the total alongside the page.
+      final declaredTotal = (body['totalPages'] as num?)?.toInt() ?? 0;
+      if (declaredTotal > 0) _totalPages = declaredTotal;
       final page = (body['page'] as num?)?.toInt() ?? _page;
       _page = _totalPages > 0 ? page.clamp(1, _totalPages) : page;
       _broadcast(_snapshotEvent('page_changed'));
@@ -144,7 +149,7 @@ class ClasscastServer {
       // The teacher app does not know a freshly picked file's page count
       // yet, so derive it here rather than showing students "Page 3" with no
       // total. This is a heuristic; an unknown count degrades to 0.
-      _totalPages = declared > 0 ? declared : _pdfPageCount(name);
+      _totalPages = declared > 0 ? declared : _derivedPageCount(name);
       _page = 1;
       _broadcast(_snapshotEvent('document_changed'));
       return _json(200, {'ok': true, 'session': _snapshot()});
@@ -408,6 +413,16 @@ router.post('/api/end', (Request req) async {
     }
   }
 
+  /// Page count for a shared file, derived from the bytes the server already
+  /// has. PDFs are counted from page objects, PowerPoint decks from the slide
+  /// parts inside the zip; anything else degrades to 0 ("unknown total").
+  int _derivedPageCount(String name) {
+    final lower = name.toLowerCase();
+    if (lower.endsWith('.pdf')) return _pdfPageCount(name);
+    if (lower.endsWith('.pptx')) return _pptxSlideCount(name);
+    return 0;
+  }
+
   /// Page count for a PDF, derived by counting page objects.
   ///
   /// The teacher app cannot report this for a file it just picked, and the
@@ -417,20 +432,92 @@ router.post('/api/end', (Request req) async {
   /// which the UI already treats as "unknown total".
   int _pdfPageCount(String name) {
     if (!name.toLowerCase().endsWith('.pdf')) return 0;
+    final bytes = _readShared(name);
+    if (bytes == null) return 0;
+    // Cap the read: a huge deck should not stall the share action.
+    const maxScan = 32 * 1024 * 1024;
+    if (bytes.length > maxScan) return 0;
+    final text = latin1.decode(bytes, allowInvalid: true);
+    final pattern = RegExp(r'/Type\s*/Page(?![s])');
+    return pattern.allMatches(text).length;
+  }
+
+  /// Slide count for a .pptx, read from the zip central directory.
+  ///
+  /// Only the directory is parsed — the slide parts themselves are never
+  /// inflated — so this stays cheap even for a deck full of photos.
+  int _pptxSlideCount(String name) {
+    final bytes = _readShared(name);
+    if (bytes == null) return 0;
+    try {
+      return _zipEntryNames(bytes)
+          .where((entry) =>
+              entry.startsWith('ppt/slides/slide') && entry.endsWith('.xml'))
+          .length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Names of the entries in a zip archive, from its central directory.
+  List<String> _zipEntryNames(List<int> data) {
+    final view = Uint8List.fromList(data);
+    // End of central directory record: signature PK\x05\x06.
+    var eocd = -1;
+    for (var i = view.length - 22; i >= 0 && i >= view.length - 22 - 65536; i--) {
+      if (view[i] == 0x50 &&
+          view[i + 1] == 0x4b &&
+          view[i + 2] == 0x05 &&
+          view[i + 3] == 0x06) {
+        eocd = i;
+        break;
+      }
+    }
+    if (eocd < 0) return const [];
+    final count = view[eocd + 10] | (view[eocd + 11] << 8);
+    final offset =
+        (view[eocd + 16] | (view[eocd + 17] << 8) | (view[eocd + 18] << 16) |
+                (view[eocd + 19] << 24))
+            .toUnsigned(32);
+    if (offset < 0 || offset >= view.length) return const [];
+
+    final names = <String>[];
+    var cursor = offset;
+    for (var i = 0; i < count; i++) {
+      // Central directory file header: PK\x01\x02.
+      if (cursor + 46 > view.length) break;
+      if (view[cursor] != 0x50 ||
+          view[cursor + 1] != 0x4b ||
+          view[cursor + 2] != 0x01 ||
+          view[cursor + 3] != 0x02) {
+        break;
+      }
+      final nameLength = view[cursor + 28] | (view[cursor + 29] << 8);
+      final extraLength = view[cursor + 30] | (view[cursor + 31] << 8);
+      final commentLength = view[cursor + 32] | (view[cursor + 33] << 8);
+      final nameStart = cursor + 46;
+      if (nameStart + nameLength > view.length) break;
+      names.add(latin1.decode(
+        view.sublist(nameStart, nameStart + nameLength),
+        allowInvalid: true,
+      ));
+      cursor = nameStart + nameLength + extraLength + commentLength;
+    }
+    return names;
+  }
+
+  /// Reads a file from the shared folder, or null when it is missing or unsafe.
+  Uint8List? _readShared(String name) {
+    if (!_isSafeRelativeName(name)) return null;
     try {
       final root = p.normalize(filesDir);
       final target = p.normalize(p.join(root, name));
-      if (!p.isWithin(root, target)) return 0;
-      final f = File(target);
-      // Cap the read: a huge deck should not stall the share action.
-      const maxScan = 32 * 1024 * 1024;
-      final len = f.existsSync() ? f.lengthSync() : -1;
-      if (len <= 0 || len > maxScan) return 0;
-      final text = latin1.decode(f.readAsBytesSync(), allowInvalid: true);
-      final pattern = RegExp(r'/Type\s*/Page(?![s])');
-      return pattern.allMatches(text).length;
+      if (!p.isWithin(root, target)) return null;
+      final file = File(target);
+      if (!file.existsSync()) return null;
+      return file.readAsBytesSync();
     } catch (_) {
-      return 0;
+      return null;
     }
   }
 

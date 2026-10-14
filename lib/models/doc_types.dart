@@ -28,6 +28,14 @@ class SupportedFiles {
   static const image = ['jpg', 'jpeg', 'png'];
   static const text = ['txt'];
 
+  /// Office formats that are zip containers, opened by the app itself.
+  static const modernOffice = ['pptx', 'docx', 'xlsx'];
+
+  /// Office 97-2003 binary formats (OLE compound files, not zips). They can
+  /// still be picked so the teacher gets a clear message, but they cannot be
+  /// rendered on any device.
+  static const legacyOffice = ['ppt', 'doc', 'xls'];
+
   static const all = [
     ...pdf,
     ...powerpoint,
@@ -37,8 +45,11 @@ class SupportedFiles {
     ...text,
   ];
 
+  static String normalize(String extension) =>
+      extension.toLowerCase().replaceAll('.', '').trim();
+
   static DocKind kindOf(String extension) {
-    final ext = extension.toLowerCase().replaceAll('.', '');
+    final ext = normalize(extension);
     if (pdf.contains(ext)) return DocKind.pdf;
     if (powerpoint.contains(ext)) return DocKind.powerpoint;
     if (word.contains(ext)) return DocKind.word;
@@ -53,14 +64,29 @@ class SupportedFiles {
       case DocKind.pdf:
       case DocKind.image:
       case DocKind.text:
-        return DocStatus.ready;
       case DocKind.powerpoint:
       case DocKind.word:
       case DocKind.excel:
-        // Office files need laptop-host conversion before presenting.
-        return DocStatus.needsConversion;
+        // Modern Office files are opened by the app itself, so they are ready
+        // to present as soon as they are picked.
+        return DocStatus.ready;
       case DocKind.unknown:
         return DocStatus.unsupported;
     }
+  }
+
+  /// True when the app renders this file on the device, with no laptop and no
+  /// conversion step.
+  static bool rendersOnDevice(String extension) =>
+      modernOffice.contains(normalize(extension));
+
+  static bool isLegacyOffice(String extension) =>
+      legacyOffice.contains(normalize(extension));
+
+  /// Status for a concrete file. Unlike [initialStatus] this sees the
+  /// extension, so a legacy `.ppt` is correctly reported as unopenable.
+  static DocStatus statusFor(String extension) {
+    if (isLegacyOffice(extension)) return DocStatus.unsupported;
+    return initialStatus(kindOf(extension));
   }
 }

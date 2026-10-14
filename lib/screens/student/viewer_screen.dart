@@ -46,7 +46,9 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
       name: base,
       extension: ext,
       kind: kind,
-      status: SupportedFiles.initialStatus(kind),
+      // Status by extension: a legacy .ppt the teacher shared by mistake must
+      // not look like a file the student app can open.
+      status: SupportedFiles.statusFor(ext),
       pageCount: session.totalPages,
       currentPage: session.page,
       remoteUrl: session.documentUrl,
@@ -180,6 +182,7 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
       doc: doc,
       controller: _pdf,
       remoteUrl: doc.remoteUrl,
+      page: active.page,
     );
   }
 

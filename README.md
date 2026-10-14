@@ -58,17 +58,36 @@ For a real signed release:
 
 Until that is set up, treat the artifacts as classroom/internal builds.
 
+## What files open where
+
+| File | Who opens it | How |
+|---|---|---|
+| PDF | app | Syncfusion PDF viewer (teacher's file, or the host URL for students) |
+| PPTX (PowerPoint) | app | Parsed and drawn by the app: slides, text, pictures, tables |
+| DOCX (Word) | app | Parsed and drawn by the app: headings, lists, tables, images |
+| XLSX (Excel) | app | Parsed and printed by the app: sheets, cells, dates, merges |
+| JPG / PNG / TXT | app | Rendered directly |
+| PPT / DOC / XLS (1997-2003) | nobody | Binary format no device can read — save as the modern format or a PDF |
+
+Office files are opened **on the device**, with no laptop and no LibreOffice.
+They are a zip of XML, so the app reads the slides/pages/sheets itself and
+draws them on a fixed page canvas — which is also why "page 3" means the same
+thing on the teacher's phone and on every student's screen.
+
 ## What is tested vs. not
 
-**Tested in CI:** analyzer clean, 6 unit tests (doc types, sync wire format,
-join parsing, validators) and 3 widget tests that boot the real app and reach
+**Tested in CI:** analyzer clean, unit tests (doc types, sync wire format,
+join parsing, validators, and the OOXML parsers against real zipped
+.pptx/.docx/.xlsx fixtures) and widget tests that boot the real app and reach
 the role screen, teacher dashboard and student join screen; release APK and
-web builds both succeed.
+web builds both succeed. The laptop host has its own suite (session lifecycle,
+teacher key, document sharing, path traversal).
 
 **Not yet verified on real hardware:** hotspot join, QR scanning, live
 page-sync over WebSocket, reconnect recovery, PDF rendering of real files and
-Office→PDF conversion. Those need a real classroom test with 1 teacher device
-and 2+ student devices (see [OFFLINE_TESTING.md](OFFLINE_TESTING.md)).
+how close the on-device Office rendering is to PowerPoint/Word/Excel on a real
+deck. Those need a real classroom test with 1 teacher device and 2+ student
+devices (see [OFFLINE_TESTING.md](OFFLINE_TESTING.md)).
 A successful compile does not mean those flows work end-to-end.
 
 ## Project structure
@@ -82,8 +101,10 @@ lib/
   providers/                # AppState, SessionProvider, LibraryProvider, SyncProvider
   services/                 # sync_protocol, network_service, classcast_client,
                             # document_service, session_store
+    ooxml/                  # on-device Office readers: pptx, docx, xlsx + zip/xml
   widgets/                  # logo, scaffold, status chips, state cards,
                             # document/session/QR cards
+    office/                 # canvas + slide/page/sheet renderers
   screens/
     splash_screen.dart, role_selection_screen.dart
     teacher/                # shell, dashboard, create, share, present, students
@@ -108,8 +129,9 @@ dart run bin/classcast_server.dart --port 8080 --dir ./shared --web ../build/web
 ```
 
 - Prints the real LAN URLs, e.g. `http://192.168.43.1:8080/`.
-- Office → PDF conversion (laptop with LibreOffice):
-  `soffice --headless --convert-to pdf Lesson.pptx --outdir ./shared`
+- Office → PDF conversion is **no longer required**: .pptx / .docx / .xlsx are
+  opened by the clients themselves. Put the files in `--dir ./shared` so the
+  teacher (on the laptop web app) and every student can fetch them.
 - API: `GET /api/session?id=…`, `POST /api/page`, `POST /api/document`,
   `POST /api/end` (teacher key), `WS /ws?session=…&name=…`, `GET /files/…`.
 

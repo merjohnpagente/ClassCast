@@ -49,8 +49,14 @@ class TeacherHostClient {
         },
       ));
 
-  Future<bool> setPage(ClassroomSession s, int page) =>
-      _serial(() => _post(s, SyncProtocol.pageApi, {'page': page}));
+  /// Move the class to [page]. [totalPages] is sent when the teacher app has
+  /// just learned the real page count of a file it opened, so students get the
+  /// correct total instead of an unknown one.
+  Future<bool> setPage(ClassroomSession s, int page, {int? totalPages}) =>
+      _serial(() => _post(s, SyncProtocol.pageApi, {
+        'page': page,
+        if (totalPages != null && totalPages > 0) 'totalPages': totalPages,
+      }));
 
   Future<bool> shareDocument(
     ClassroomSession s, {

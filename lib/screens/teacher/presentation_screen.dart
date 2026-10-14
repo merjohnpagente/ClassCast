@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import '../../models/classroom_session.dart';
+import '../../models/doc_types.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/session_provider.dart';
 import '../../theme/app_colors.dart';
@@ -37,6 +38,22 @@ class _TeacherPresentationScreenState
     // Updates locally and POSTs /api/page with the teacher key, which the
     // host broadcasts to every connected student.
     sessions.setPage(page);
+  }
+
+  int _lastPdfPage = -1;
+
+  /// Keeps the PDF preview on the page the session is on, so the control bar
+  /// actually moves what is on screen (Office documents get the page directly
+  /// through [DocumentViewer.page]).
+  void _syncPdfPage(int page) {
+    if (page == _lastPdfPage) return;
+    _lastPdfPage = page;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      try {
+        _pdf.jumpToPage(page);
+      } catch (_) {/* the document is still loading */}
+    });
   }
 
   @override
@@ -121,7 +138,24 @@ class _TeacherPresentationScreenState
         subtitle: 'Pick a file from the library to start presenting.',
       );
     }
-    return DocumentViewer(doc: doc, controller: _pdf);
+    if (doc.kind != DocKind.pdf) _syncPdfPage(active.page);
+    return DocumentViewer(
+      doc: doc,
+      controller: _pdf,
+      page: active.page,
+      // The app only learns how many slides / pages a file really has once it
+      // is open; publish that so students get the same total.
+      onPageCount: (count) => _publishPageCount(context, count),
+    );
+  }
+
+  void _publishPageCount(BuildContext context, int count) {
+    final sessions = context.read<SessionProvider>();
+    final active = sessions.active;
+    if (active == null) return;
+    if (active.totalPages == count) return;
+    if (active.documentId == null) return;
+    sessions.setTotalPages(count);
   }
 
   Widget _mobileLayout(BuildContext context, SessionProvider sessions,

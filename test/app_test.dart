@@ -17,12 +17,29 @@ void main() {
       expect(SupportedFiles.kindOf('zip'), DocKind.unknown);
     });
 
-    test('office files need conversion, pdf is ready', () {
+    test('modern office files are ready, pdf is ready', () {
       expect(SupportedFiles.initialStatus(DocKind.pdf), DocStatus.ready);
+      // The app opens pptx / docx / xlsx itself, so there is nothing to
+      // convert before presenting them.
       expect(SupportedFiles.initialStatus(DocKind.powerpoint),
-          DocStatus.needsConversion);
+          DocStatus.ready);
+      expect(SupportedFiles.initialStatus(DocKind.word), DocStatus.ready);
+      expect(SupportedFiles.initialStatus(DocKind.excel), DocStatus.ready);
       expect(SupportedFiles.initialStatus(DocKind.unknown),
           DocStatus.unsupported);
+    });
+
+    test('legacy binary office files cannot be opened on device', () {
+      expect(SupportedFiles.rendersOnDevice('pptx'), isTrue);
+      expect(SupportedFiles.rendersOnDevice('docx'), isTrue);
+      expect(SupportedFiles.rendersOnDevice('xlsx'), isTrue);
+      expect(SupportedFiles.rendersOnDevice('ppt'), isFalse);
+      expect(SupportedFiles.isLegacyOffice('ppt'), isTrue);
+      expect(SupportedFiles.isLegacyOffice('xls'), isTrue);
+      // The extension decides: a legacy .ppt is unsupported even though its
+      // DocKind (powerpoint) on its own would be ready.
+      expect(SupportedFiles.statusFor('pptx'), DocStatus.ready);
+      expect(SupportedFiles.statusFor('ppt'), DocStatus.unsupported);
     });
   });
 

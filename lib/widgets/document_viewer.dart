@@ -8,15 +8,18 @@ import '../models/doc_types.dart';
 import '../models/shared_document.dart';
 import '../theme/app_colors.dart';
 import '../utils/local_file.dart';
+import 'office/office_document_view.dart';
 import 'state_cards.dart';
 
 /// Renders the real shared document.
 ///
 /// - PDF  → Syncfusion viewer on the local file (teacher) or the host URL
 ///          (student), with page control driven by the teacher.
+/// - PowerPoint / Word / Excel (.pptx / .docx / .xlsx) → opened by the app
+///   itself and drawn on a fixed page canvas, so the teacher can present a
+///   deck, a worksheet or a spreadsheet straight from the phone.
 /// - Image / text → rendered directly.
-/// - Office (ppt/doc/xls) → honest "needs conversion" panel. Flutter cannot
-///   render those natively; they are converted on a compatible laptop host.
+/// - Anything else → an honest panel instead of a blank screen.
 class DocumentViewer extends StatelessWidget {
   final SharedDocument doc;
   final PdfViewerController controller;
@@ -24,6 +27,14 @@ class DocumentViewer extends StatelessWidget {
   /// Remote URL for students (served by the teacher host). When null the
   /// viewer falls back to the local file picked on this device.
   final String? remoteUrl;
+
+  /// Page the teacher is on (1-based). Office documents draw exactly this
+  /// page; PDFs use it to stay in sync with the session too.
+  final int page;
+
+  /// Reports how many pages an Office file really has, so the session can
+  /// sync a real total.
+  final ValueChanged<int>? onPageCount;
 
   /// When true, show the conversion panel instead of a preview.
   final bool showConversionPanel;
@@ -33,6 +44,8 @@ class DocumentViewer extends StatelessWidget {
     required this.doc,
     required this.controller,
     this.remoteUrl,
+    this.page = 1,
+    this.onPageCount,
     this.showConversionPanel = false,
   });
 
@@ -64,6 +77,7 @@ class DocumentViewer extends StatelessWidget {
       case DocKind.powerpoint:
       case DocKind.word:
       case DocKind.excel:
+        return _office(box);
       case DocKind.unknown:
         return _ConversionPanel(doc: doc, box: box);
     }
@@ -75,6 +89,24 @@ class DocumentViewer extends StatelessWidget {
         s == DocStatus.converting ||
         s == DocStatus.conversionFailed ||
         s == DocStatus.unsupported;
+  }
+
+  /// PowerPoint, Word and Excel are parsed and drawn in-app.
+  Widget _office(BoxDecoration box) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.large),
+      child: Container(
+        decoration: box,
+        child: OfficeDocumentView(
+          extension: doc.extension,
+          name: doc.name,
+          localPath: doc.localPath,
+          remoteUrl: remoteUrl,
+          page: page,
+          onPageCount: onPageCount,
+        ),
+      ),
+    );
   }
 
   Widget _pdf(BoxDecoration box) {
@@ -252,7 +284,11 @@ class _MissingFile extends StatelessWidget {
   }
 }
 
-/// Honest panel for Office formats that Flutter cannot render natively.
+/// Honest panel for files this device cannot open.
+///
+/// Modern Office files are rendered by the app, so what lands here is either a
+/// legacy binary Office file, an explicitly gated document, or something the
+/// host could not convert.
 class _ConversionPanel extends StatelessWidget {
   final SharedDocument doc;
   final BoxDecoration box;
@@ -261,8 +297,39 @@ class _ConversionPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final legacy = SupportedFiles.isLegacyOffice(doc.extension);
     final failed = doc.status == DocStatus.conversionFailed;
     final working = doc.status == DocStatus.converting;
+    final title = working
+        ? 'Converting to PDF…'
+        : failed
+            ? 'Could not read this file'
+            : legacy
+                ? 'Old .${doc.extension} format'
+                : doc.status == DocStatus.unsupported
+                    ? 'Not a supported file'
+                    : 'Waiting for the host';
+    final body = working
+        ? 'This ${_label(doc.kind)} file is being converted on the host.'
+        : failed
+            ? 'Re-save the file and share it again, or share a PDF instead.'
+            : legacy
+                ? 'Files saved by Office 97-2003 use a format no device can '
+                    'open. Open it once and choose "Save as" the newer '
+                    'format (or a PDF), then share that file.'
+                : doc.status == DocStatus.unsupported
+                    ? 'This format is not supported. Use PDF, PPTX, DOCX, '
+                        'XLSX, JPG, PNG, or TXT.'
+                    : 'This ${_label(doc.kind)} file is waiting to be '
+                        'converted to PDF on the host.';
+    final icon = working
+        ? Icons.sync
+        : failed
+            ? Icons.error_outline
+            : legacy
+                ? Icons.warning_amber_rounded
+                : Icons.picture_as_pdf_outlined;
+
     return Container(
       decoration: box,
       padding: const EdgeInsets.all(20),
@@ -271,32 +338,19 @@ class _ConversionPanel extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              working
-                  ? Icons.sync
-                  : failed
-                      ? Icons.error_outline
-                      : Icons.picture_as_pdf_outlined,
+              icon,
               size: 40,
               color: failed ? AppColors.error : AppColors.warning,
             ),
             const SizedBox(height: 10),
             Text(
-              working
-                  ? 'Converting to PDF…'
-                  : failed
-                      ? 'Conversion failed'
-                      : 'Convert to PDF first',
+              title,
+              textAlign: TextAlign.center,
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(
-              working
-                  ? 'This ${_label(doc.kind)} file is being converted on the host.'
-                  : failed
-                      ? 'Try a laptop with LibreOffice, or share a PDF instead.'
-                      : 'This ${_label(doc.kind)} file cannot be shown '
-                          'directly. Convert it to PDF on a laptop host '
-                          '(LibreOffice), then share the PDF.',
+              body,
               textAlign: TextAlign.center,
               style: const TextStyle(
                   color: AppColors.muted, fontSize: 12, height: 1.4),
