@@ -62,9 +62,9 @@ class _OfficeDocumentViewState extends State<OfficeDocumentView> {
 
   Future<OoxmlDocument?> _load() async {
     final key = OoxmlLoader.sourceKey(
-      extension: widget.extension,
-      localPath: widget.localPath,
-      remoteUrl: widget.remoteUrl,
+      widget.extension,
+      widget.localPath,
+      widget.remoteUrl,
     );
     if (key != null) {
       final cached = OoxmlLoader.instance.peek(key);
