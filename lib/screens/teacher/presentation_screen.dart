@@ -381,10 +381,19 @@ class _TeacherPresentationScreenState
     );
   }
 
+  /// Page arrows stay out of the way: the deck is the content, and two big
+  /// filled circles next to it looked louder than the slide itself.
   Widget _navBtn(IconData icon, String tip, VoidCallback? onTap) {
-    return IconButton.filled(
+    return IconButton(
       tooltip: tip,
-      iconSize: 28,
+      iconSize: 20,
+      visualDensity: VisualDensity.compact,
+      style: IconButton.styleFrom(
+        foregroundColor: AppColors.inkSecondary,
+        disabledForegroundColor: AppColors.muted.withAlpha(90),
+        minimumSize: const Size(40, 40),
+        padding: EdgeInsets.zero,
+      ),
       icon: Icon(icon),
       onPressed: onTap,
     );

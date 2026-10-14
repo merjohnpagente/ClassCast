@@ -152,11 +152,13 @@ class DocumentViewer extends StatelessWidget {
 
   Widget _image() {
     if (remoteUrl != null && remoteUrl!.isNotEmpty) {
-      return Image.network(
-        remoteUrl!,
-        fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined,
-            size: 44, color: AppColors.muted),
+      return _zoomable(
+        Image.network(
+          remoteUrl!,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined,
+              size: 44, color: AppColors.muted),
+        ),
       );
     }
     final path = doc.localPath;
@@ -169,14 +171,26 @@ class DocumentViewer extends StatelessWidget {
       load: localFileReadBytes,
       onMissing: const Icon(Icons.broken_image_outlined,
           size: 44, color: AppColors.muted),
-      builder: (context, bytes) => Image.memory(
-        bytes,
-        fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined,
-            size: 44, color: AppColors.muted),
+      builder: (context, bytes) => _zoomable(
+        Image.memory(
+          bytes,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) =>
+              const Icon(Icons.broken_image_outlined,
+                  size: 44, color: AppColors.muted),
+        ),
       ),
     );
   }
+
+  /// Pinch or drag to zoom a photo — a teacher regularly needs to show one
+  /// corner of an image to the whole room.
+  Widget _zoomable(Widget child) => InteractiveViewer(
+        minScale: 1,
+        maxScale: 6,
+        boundaryMargin: const EdgeInsets.all(80),
+        child: child,
+      );
 
   Widget _text(BoxDecoration box) {
     final path = doc.localPath;
