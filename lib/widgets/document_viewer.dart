@@ -7,6 +7,7 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import '../models/doc_types.dart';
 import '../models/shared_document.dart';
 import '../theme/app_colors.dart';
+import 'state_cards.dart';
 
 /// Renders the real shared document.
 ///

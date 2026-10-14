@@ -32,6 +32,7 @@ class ClassroomSession {
     this.isActive = false,
     this.documentId,
     this.documentName,
+    this.documentUrl,
     this.page = 1,
     this.totalPages = 0,
     this.teacherKey = '',
