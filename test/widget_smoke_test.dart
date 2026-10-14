@@ -48,7 +48,11 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 1600));
     await tester.tap(find.text('Student'));
-    await tester.pumpAndSettle();
+    // StudentShell uses an IndexedStack that eagerly builds the waiting
+    // screen, which shows an endless CircularProgressIndicator. So we
+    // cannot use pumpAndSettle() here — it would never settle.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Join Classroom'), findsWidgets);
   });
 }
