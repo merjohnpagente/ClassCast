@@ -5,7 +5,6 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import '../../models/classroom_session.dart';
 import '../../models/doc_types.dart';
 import '../../models/shared_document.dart';
-import '../../providers/app_state.dart';
 import '../../providers/sync_provider.dart';
 import '../../services/classcast_client.dart';
 import '../../theme/app_colors.dart';
@@ -57,7 +56,6 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
   @override
   Widget build(BuildContext context) {
     final sync = context.watch<SyncProvider>();
-    final app = context.watch<AppState>();
     final active = sync.snapshot;
 
     if (active == null || active.documentId == null) {
@@ -116,17 +114,17 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _header(context, active, sync, app),
+        _header(context, active, sync),
         const SizedBox(height: 8),
         Expanded(child: _preview(active)),
         const SizedBox(height: 8),
-        _footer(context, active, app),
+        _footer(context, active),
       ],
     );
   }
 
   Widget _header(BuildContext context, ClassroomSession active,
-      SyncProvider sync, AppState app) {
+      SyncProvider sync) {
     final theme = Theme.of(context);
     return Row(
       children: [
@@ -158,7 +156,7 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
           StatusChip.live()
         else
           StatusChip.offline(),
-        if (app.syncPaused) ...[
+        if (sync.syncPaused) ...[
           const SizedBox(width: 6),
           StatusChip.paused(),
         ],
@@ -185,8 +183,7 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
     );
   }
 
-  Widget _footer(
-      BuildContext context, ClassroomSession active, AppState app) {
+  Widget _footer(BuildContext context, ClassroomSession active) {
     final canNav = active.allowStudentNav;
     final canDownload = active.allowDownload;
     return Row(

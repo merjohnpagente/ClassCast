@@ -35,6 +35,10 @@ class SyncProvider extends ChangeNotifier {
   bool _hasDocument = false;
   bool get hasDocument => _hasDocument;
 
+  /// Mirrors the teacher's pause so student UI can show the paused chip.
+  bool _syncPaused = false;
+  bool get syncPaused => _syncPaused;
+
   /// Authoritative session snapshot for students (from host REST +
   /// live WS events). The teacher's own [SessionProvider] is untouched
   /// in student mode.
@@ -60,6 +64,7 @@ class SyncProvider extends ChangeNotifier {
     _error = null;
     _hasDocument = false;
     _snapshot = null;
+    _syncPaused = false;
     final parsed = NetworkService.parseJoinInput(rawInput);
     if (parsed == null) {
       _error = 'Enter a Session ID or joining address.';
@@ -102,6 +107,7 @@ class SyncProvider extends ChangeNotifier {
         device: device);
     if (snapshot != null) {
       _snapshot = snapshot;
+      _syncPaused = snapshot.syncPaused;
       _hasDocument = snapshot.documentId != null;
     }
     bind();
@@ -128,10 +134,15 @@ class SyncProvider extends ChangeNotifier {
             documentId: () => event.documentId ?? base.documentId,
             documentName: () =>
                 event.documentName ?? base.documentName,
+            // Must be mirrored too: a student who joined before the teacher
+            // shared anything learns the fetch URL from this event alone.
+            documentUrl: () => event.documentUrl ?? base.documentUrl,
             page: event.page ?? base.page,
             totalPages: event.totalPages ?? base.totalPages,
+            syncPaused: event.syncPaused ?? base.syncPaused,
           );
           if (event.documentId != null) _hasDocument = true;
+          _syncPaused = _snapshot!.syncPaused;
           notifyListeners();
           break;
         case SyncEventType.sessionEnded:
@@ -158,6 +169,7 @@ class SyncProvider extends ChangeNotifier {
     _sessionId = '';
     _snapshot = null;
     _hasDocument = false;
+    _syncPaused = false;
     _error = null;
     await _eventSub?.cancel();
     _eventSub = null;

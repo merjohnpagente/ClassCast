@@ -81,7 +81,7 @@ lib/
   models/                   # ClassroomSession, SharedDocument, Participant, SyncEvent
   providers/                # AppState, SessionProvider, LibraryProvider, SyncProvider
   services/                 # sync_protocol, network_service, classcast_client,
-                            # document_service, session_store, demo_data
+                            # document_service, session_store
   widgets/                  # logo, scaffold, status chips, state cards,
                             # document/session/QR cards
   screens/
@@ -140,5 +140,4 @@ hotspot + QR + page sync + reconnect checks.
 ## Feature status
 
 See [FEATURE_STATUS.md](FEATURE_STATUS.md) — what works now (UI prototype +
-local server + sync protocol), what uses labeled demo data (demo-mode toggle
-on role screen), and what is still TODO per phase.
+local server + sync protocol) and what is still TODO per phase.

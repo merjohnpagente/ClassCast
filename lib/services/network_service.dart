@@ -1,5 +1,4 @@
-import 'dart:io';
-
+import 'package:http/http.dart' as http;
 import 'package:network_info_plus/network_info_plus.dart';
 
 /// Local-network helpers for the offline classroom.
@@ -96,13 +95,14 @@ class NetworkService {
   }) async {
     if (host.isEmpty) return false;
     try {
-      final client = HttpClient()
-        ..connectionTimeout = timeout;
-      final req = await client
-          .getUrl(Uri(scheme: 'http', host: host, port: port, path: '/api/ping'))
-          .timeout(timeout);
-      final res = await req.close().timeout(timeout);
-      client.close(force: true);
+      // `package:http` picks the right transport per platform (dart:io on
+      // mobile, fetch/XHR on web), so this probe works in the browser too.
+      final res = await http.get(Uri(
+        scheme: 'http',
+        host: host,
+        port: port,
+        path: '/api/ping',
+      )).timeout(timeout);
       return res.statusCode >= 200 && res.statusCode < 500;
     } catch (_) {
       return false;

@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:mime/mime.dart';
+import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
@@ -64,18 +66,32 @@ class ClasscastServer {
       if (_session != null && key != _teacherKey) {
         return _json(403, {'ok': false, 'error': 'Permission denied'});
       }
-      _teacherKey =
-          key ?? DateTime.now().millisecondsSinceEpoch.toString();
-      _session = {
+      if (_session == null && (key == null || key.isEmpty)) {
+        // An empty key would make `_checkTeacher` pass for everyone.
+        _teacherKey = _code();
+      } else {
+        _teacherKey = key!.isEmpty ? _code() : key;
+      }
+      // Update in place: re-posting must not wipe the session the teacher is
+      // already presenting (or reset createdAt / flags back to defaults).
+      _session ??= {
         'id': body['id'] ?? 'CLASS-${_code()}',
         'name': body['name'] ?? 'Classroom',
-        'subject': body['subject'] ?? '',
-        'allowAnonymous': body['allowAnonymous'] ?? true,
-        'allowDownload': body['allowDownload'] ?? false,
-        'allowStudentNav': body['allowStudentNav'] ?? false,
+        'subject': '',
+        'allowAnonymous': true,
+        'allowDownload': false,
+        'allowStudentNav': false,
         'isActive': true,
         'createdAt': DateTime.now().toIso8601String(),
       };
+      final s = _session!;
+      s['name'] = body['name'] ?? s['name'];
+      s['subject'] = body['subject'] ?? s['subject'];
+      s['allowAnonymous'] = body['allowAnonymous'] ?? s['allowAnonymous'];
+      s['allowDownload'] = body['allowDownload'] ?? s['allowDownload'];
+      s['allowStudentNav'] =
+          body['allowStudentNav'] ?? s['allowStudentNav'];
+      s['isActive'] = true;
       _broadcast(_snapshotEvent('session_state'));
       return _json(200, {
         'ok': true,
@@ -100,15 +116,40 @@ class ClasscastServer {
       if (!_checkTeacher(body)) {
         return _json(403, {'ok': false, 'error': 'Permission denied'});
       }
+      final name = body['documentName'] as String? ?? '';
+      if (name.isEmpty) {
+        return _json(400, {'ok': false, 'error': 'documentName is required'});
+      }
+      // Refuse to announce a document the host cannot actually serve, so the
+      // teacher sees the error instead of every student getting a blank page.
+      if (!_isServable(name)) {
+        return _json(404, {
+          'ok': false,
+          'error': 'File "$name" is not in the shared directory',
+          'filesDir': filesDir,
+        });
+      }
       _documentId = body['documentId'] as String? ?? '';
-      _documentName = body['documentName'] as String? ?? '';
+      _documentName = name;
       _totalPages = (body['totalPages'] as num?)?.toInt() ?? 0;
       _page = 1;
       _broadcast(_snapshotEvent('document_changed'));
       return _json(200, {'ok': true, 'session': _snapshot()});
     });
 
-    router.post('/api/end', (Request req) async {
+    router.post('/api/pause', (Request req) async {
+      final body = await _readJson(req);
+      if (!_checkTeacher(body)) {
+        return _json(403, {'ok': false, 'error': 'Permission denied'});
+      }
+      // Reuses the full-snapshot event so clients can mirror it without a
+      // new wire type.
+      _syncPaused = body['paused'] as bool? ?? !_syncPaused;
+      _broadcast(_snapshotEvent('session_state'));
+      return _json(200, {'ok': true, 'session': _snapshot()});
+    });
+
+router.post('/api/end', (Request req) async {
       final body = await _readJson(req);
       if (!_checkTeacher(body)) {
         return _json(403, {'ok': false, 'error': 'Permission denied'});
@@ -123,20 +164,41 @@ class ClasscastServer {
 
     router.get('/ws', wsRoute());
 
-    final staticFiles = createStaticHandler(
-      filesDir,
-      listDirectories: false,
-    );
-
-    // File download (only when the session allows it).
-    Handler files = (Request req) async {
-      if (_session?['allowDownload'] != true) {
-        // Metadata (converted PDF preview) is still served to viewers
-        // through the app channel; raw download needs permission.
+    // Document delivery. Viewing the document that is currently on screen is
+    // the core feature, so it is always allowed; `allowDownload` only gates
+    // the *rest* of the shared folder. (Note: anything a student can render,
+    // they can also save — this is a classroom courtesy switch, not DRM.)
+    Future<Response> serveFile(String requestedName) async {
+      final raw = Uri.decodeComponent(requestedName);
+      if (!_isSafeRelativeName(raw)) return Response.notFound('not found');
+      final root = p.normalize(filesDir);
+      final target = File(p.normalize(p.join(root, raw)));
+      if (!p.isWithin(root, target)) return Response.notFound('not found');
+      File file;
+      int length;
+      try {
+        file = target;
+        if (!file.existsSync()) return Response.notFound('not found');
+        length = file.lengthSync();
+      } catch (_) {
+        return Response.notFound('not found');
+      }
+      final isCurrent = raw == _documentName;
+      if (!isCurrent && _session?['allowDownload'] != true) {
         return Response.forbidden('Downloads are disabled by the teacher');
       }
-      return staticFiles(req);
-    };
+      return Response.ok(
+        file.openRead(),
+        headers: {
+          'content-type':
+              lookupMimeType(file.path) ?? 'application/octet-stream',
+          'content-disposition': isCurrent ? 'inline' : 'attachment',
+          'content-length': length.toString(),
+          // The shared document changes as the teacher moves on.
+          'cache-control': 'no-store',
+        },
+      );
+    }
 
     final cascade = Cascade();
     if (webDir != null) {
@@ -149,14 +211,9 @@ class ClasscastServer {
     return Cascade()
         .add(router.call)
         .add((req) {
-          if (req.url.path.startsWith('files/')) {
-            final sub = req.url.path.substring('files/'.length);
-            return files(Request(
-              req.method,
-              req.requestedUri.replace(path: '/$sub'),
-              headers: req.headers,
-              body: req.read(),
-            ));
+          const prefix = 'files/';
+          if (req.url.path.startsWith(prefix)) {
+            return serveFile(req.url.path.substring(prefix.length));
           }
           return Response.notFound('not found');
         })
@@ -169,6 +226,15 @@ class ClasscastServer {
   Handler wsRoute() {
     return (Request req) {
       final params = req.url.queryParameters;
+      final sessionId = params['session'] ?? '';
+      // Validate BEFORE the HTTP upgrade: a wrong or ended session must never
+      // receive a snapshot or show up in the participant list.
+      if (_session == null) {
+        return Response.forbidden('No session is running');
+      }
+      if (sessionId.isEmpty || sessionId != _session!['id']) {
+        return Response.forbidden('Unknown session');
+      }
       return webSocketHandler(
         (WebSocketChannel channel, String? _) =>
             _onConnect(channel, params),
@@ -243,6 +309,9 @@ class ClasscastServer {
         'port': port,
         'documentId': _documentId.isEmpty ? null : _documentId,
         'documentName': _documentName.isEmpty ? null : _documentName,
+        // Students cannot render a local path; they fetch these bytes from
+        // the teacher host. Without this the viewer has nothing to load.
+        'documentUrl': _documentUrl(),
         'page': _page,
         'totalPages': _totalPages,
         'syncPaused': _syncPaused,
@@ -253,13 +322,47 @@ class ClasscastServer {
         'sessionId': _session?['id'] ?? '',
         'documentId': _documentId.isEmpty ? null : _documentId,
         'documentName': _documentName.isEmpty ? null : _documentName,
+        'documentUrl': _documentUrl(),
         'page': _page,
         'totalPages': _totalPages,
+        'syncPaused': _syncPaused,
       };
+
+  /// Absolute URL of the shared document, or null when none is shared.
+  /// Falls back to a root-relative path before the LAN address is resolved
+  /// so a same-origin web viewer still resolves it.
+  String? _documentUrl() {
+    if (_documentName.isEmpty) return null;
+    final encoded = Uri.encodeComponent(_documentName);
+    if (advertisedIp.isEmpty) return '/files/$encoded';
+    return 'http://$advertisedIp:$port/files/$encoded';
+  }
 
   bool _checkTeacher(Map<String, dynamic> body) {
     if (_session == null) return false;
+    if (_teacherKey.isEmpty) return false;
     return body['teacherKey'] == _teacherKey;
+  }
+
+  /// Rejects empty names, absolute paths, and any `..` segment.
+  bool _isSafeRelativeName(String name) {
+    if (name.isEmpty || name.contains('\u0000')) return false;
+    if (p.isAbsolute(name)) return false;
+    return !name
+        .split(RegExp(r'[/\\]'))
+        .any((seg) => seg.isEmpty || seg == '.' || seg == '..');
+  }
+
+  /// True when [name] is a real file inside the shared directory.
+  bool _isServable(String name) {
+    if (!_isSafeRelativeName(name)) return false;
+    try {
+      final f = File(p.normalize(p.join(filesDir, name)));
+      if (!p.isWithin(p.normalize(filesDir), f)) return false;
+      return f.existsSync();
+    } catch (_) {
+      return false;
+    }
   }
 
   void _broadcast(Map<String, dynamic> event) {
@@ -299,22 +402,49 @@ class ClasscastServer {
   }
 
   Future<HttpServer> serve() async {
-    final server =
-        await shelf_io.serve(handler, InternetAddress.anyIPv4, port);
-    // Resolve the real LAN address students must use (not 0.0.0.0).
+    // Resolve first so the very first snapshot already carries a usable
+    // documentUrl instead of a root-relative placeholder.
+    advertisedIp = await _resolveLanIp();
+    return shelf_io.serve(handler, InternetAddress.anyIPv4, port);
+  }
+
+  /// Pick the address students can actually reach.
+  ///
+  /// Taking the first non-loopback IPv4 is wrong on a typical dev machine:
+  /// VMware / VirtualBox / Hyper-V / Docker / WSL adapters usually win and
+  /// hand students an address that routes nowhere.
+  static Future<String> _resolveLanIp() async {
+    const virtualHints = <String>[
+      'loopback',
+      'vmware',
+      'virtualbox',
+      'vethernet',
+      'hyper-v',
+      'docker',
+      'wsl',
+      'tailscale',
+      'zerotier',
+      'bluetooth',
+      'vpn',
+      'pseudo',
+    ];
+    List<Interface> ifaces;
     try {
-      final ifaces = await NetworkInterface.list(
+      ifaces = await NetworkInterface.list(
           includeLoopback: false, type: InternetAddressType.IPv4);
-      for (final nic in ifaces) {
-        for (final addr in nic.addresses) {
-          if (!addr.isLoopback) {
-            advertisedIp = addr.address;
-            break;
-          }
-        }
-        if (advertisedIp.isNotEmpty) break;
+    } catch (_) {
+      return '';
+    }
+    String? fallback;
+    for (final nic in ifaces) {
+      for (final addr in nic.addresses) {
+        if (addr.isLoopback) continue;
+        final ip = addr.address;
+        if (fallback == null) fallback = ip;
+        final name = nic.name.toLowerCase();
+        if (!virtualHints.any(name.contains)) return ip;
       }
-    } catch (_) {/* keep empty */}
-    return server;
+    }
+    return fallback ?? '';
   }
 }

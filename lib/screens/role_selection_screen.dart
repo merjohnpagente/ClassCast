@@ -4,7 +4,7 @@ import '../theme/app_colors.dart';
 import '../utils/responsive.dart';
 import '../widgets/app_logo.dart';
 
-/// Role selection: Teacher / Student big icon cards + demo toggle.
+/// Role selection: Teacher / Student big icon cards.
 class RoleSelectionScreen extends StatelessWidget {
   final VoidCallback onTeacher;
   final VoidCallback onStudent;

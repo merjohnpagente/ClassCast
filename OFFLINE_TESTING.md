@@ -5,7 +5,7 @@ before Office conversion or Android-hosted sessions.
 
 ## You need
 
-- 1 teacher device (laptop for hosted mode, or Android phone for demo mode).
+- 1 teacher device (laptop for hosted mode, or Android phone).
 - 2 student devices (Android phones and/or a laptop browser).
 - No internet, no SIM data. Charge everything first.
 
@@ -48,5 +48,3 @@ before Office conversion or Android-hosted sessions.
   laptop with LibreOffice. Animations/macros do not survive PDF conversion.
 - Android-hosted teacher server is stubbed (permissions + lifecycle vary by
   vendor); use the laptop host for real sessions.
-- Demo mode (role-screen toggle) shows **labeled sample data** for UI review
-  only — never used in real sessions.

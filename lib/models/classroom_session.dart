@@ -17,6 +17,9 @@ class ClassroomSession {
   final String? documentUrl;
   final int page;
   final int totalPages;
+
+  /// Teacher has paused page-following; students stay frozen on their page.
+  final bool syncPaused;
   final String teacherKey;
 
   const ClassroomSession({
@@ -35,6 +38,7 @@ class ClassroomSession {
     this.documentUrl,
     this.page = 1,
     this.totalPages = 0,
+    this.syncPaused = false,
     this.teacherKey = '',
   });
 
@@ -57,6 +61,7 @@ class ClassroomSession {
     String? Function()? documentUrl,
     int? page,
     int? totalPages,
+    bool? syncPaused,
     String? teacherKey,
   }) {
     return ClassroomSession(
@@ -76,6 +81,7 @@ class ClassroomSession {
       documentUrl: documentUrl == null ? this.documentUrl : documentUrl(),
       page: page ?? this.page,
       totalPages: totalPages ?? this.totalPages,
+      syncPaused: syncPaused ?? this.syncPaused,
       teacherKey: teacherKey ?? this.teacherKey,
     );
   }
@@ -96,6 +102,7 @@ class ClassroomSession {
         'documentUrl': documentUrl,
         'page': page,
         'totalPages': totalPages,
+        'syncPaused': syncPaused,
       };
 
   factory ClassroomSession.fromJson(Map<String, dynamic> json) {
@@ -117,6 +124,7 @@ class ClassroomSession {
       documentUrl: json['documentUrl'] as String?,
       page: (json['page'] as num?)?.toInt() ?? 1,
       totalPages: (json['totalPages'] as num?)?.toInt() ?? 0,
+      syncPaused: json['syncPaused'] as bool? ?? false,
     );
   }
 }

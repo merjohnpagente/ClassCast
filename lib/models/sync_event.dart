@@ -64,8 +64,15 @@ class SyncEvent {
   final String sessionId;
   final String? documentId;
   final String? documentName;
+
+  /// Where the teacher host serves the shared document from.
+  /// Without this a student who joins *before* the teacher shares anything
+  /// never learns where to fetch the file.
+  final String? documentUrl;
+
   final int? page;
   final int? totalPages;
+  final bool? syncPaused;
   final String? participantId;
   final String? participantName;
   final String? message;
@@ -76,8 +83,10 @@ class SyncEvent {
     required this.sessionId,
     this.documentId,
     this.documentName,
+    this.documentUrl,
     this.page,
     this.totalPages,
+    this.syncPaused,
     this.participantId,
     this.participantName,
     this.message,
@@ -89,8 +98,10 @@ class SyncEvent {
         'sessionId': sessionId,
         if (documentId != null) 'documentId': documentId,
         if (documentName != null) 'documentName': documentName,
+        if (documentUrl != null) 'documentUrl': documentUrl,
         if (page != null) 'page': page,
         if (totalPages != null) 'totalPages': totalPages,
+        if (syncPaused != null) 'syncPaused': syncPaused,
         if (participantId != null) 'participantId': participantId,
         if (participantName != null) 'participantName': participantName,
         if (message != null) 'message': message,
@@ -106,8 +117,10 @@ class SyncEvent {
       sessionId: json['sessionId'] as String? ?? '',
       documentId: json['documentId'] as String?,
       documentName: json['documentName'] as String?,
+      documentUrl: json['documentUrl'] as String?,
       page: (json['page'] as num?)?.toInt(),
       totalPages: (json['totalPages'] as num?)?.toInt(),
+      syncPaused: json['syncPaused'] as bool?,
       participantId: json['participantId'] as String?,
       participantName: json['participantName'] as String?,
       message: json['message'] as String?,

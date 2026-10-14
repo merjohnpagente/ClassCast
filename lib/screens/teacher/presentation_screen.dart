@@ -15,7 +15,7 @@ import 'students_screen.dart';
 
 /// Teacher presentation controller. Mobile: preview top, controls bottom.
 /// Desktop: big preview + right-side control panel.
-/// Page changes broadcast to students (host WS; demo mode mirrors locally).
+/// Page changes broadcast to students (host WS).
 class TeacherPresentationScreen extends StatefulWidget {
   const TeacherPresentationScreen({super.key});
 
@@ -37,7 +37,7 @@ class _TeacherPresentationScreenState
   void _goTo(SessionProvider sessions, int page) {
     sessions.setPage(page);
     // TODO(phase-2): POST /api/page with teacherKey, then WS broadcast.
-    // Demo / local-teacher mode mirrors state in-process.
+    // Local-teacher mode mirrors state in-process.
   }
 
   @override

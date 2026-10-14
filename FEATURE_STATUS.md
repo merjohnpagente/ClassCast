@@ -21,13 +21,6 @@
 - Unit tests: doc types, sync wire format, join parsing, validators.
 - GitHub Actions: analyze + test + release APK + web build.
 
-## Demo data (explicitly labeled, opt-in only)
-
-- Role-screen **Demo mode** toggle fills dashboard/library/students with
-  sample content from `lib/services/demo_data.dart`.
-- Production default (toggle off): real local data or honest empty states.
-  No fake students, sessions, or “Connected” states anywhere in real flows.
-
 ## Still TODO (per spec phases)
 
 - **Phase 2 (remainder):** wire teacher Present screen to real file bytes /

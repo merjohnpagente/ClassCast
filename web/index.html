@@ -16,6 +16,13 @@
   <meta name="theme-color" content="#3568F5">
 </head>
 <body>
+  <!-- Syncfusion's PDF viewer renders through PdfJs on the web platform and
+       will not display anything until this global is present. -->
+  <script type="module" async>
+    import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.worker.min.mjs";
+    window['pdfjsLib'] = pdfjsLib;
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

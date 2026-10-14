@@ -31,14 +31,15 @@ Future<void> main(List<String> args) async {
       ClasscastServer(port: port, filesDir: dir.path, webDir: webDir);
   final http = await server.serve();
 
-  // Print the real LAN IPs so the teacher can share them / make a QR.
-  final ips = await NetworkInterface.list(
-      includeLoopback: false, type: InternetAddressType.IPv4);
+  // Print the same address the session snapshot advertises, so the QR code,
+  // the terminal output and what students type can never disagree.
   stdout.writeln('ClassCast Offline server on port ${http.port}');
-  for (final nic in ips) {
-    for (final addr in nic.addresses) {
-      stdout.writeln('  http://${addr.address}:${http.port}/');
-    }
+  if (server.advertisedIp.isEmpty) {
+    stdout.writeln(
+        '  WARNING: no LAN address found. Connect to Wi-Fi/hotspot and restart.');
+  } else {
+    stdout.writeln('  http://${server.advertisedIp}:${http.port}/');
+    stdout.writeln('  (this is the address encoded in the join QR code)');
   }
   if (webDir != null) stdout.writeln('Serving web build from $webDir');
   stdout.writeln('Shared files from ${dir.path}');

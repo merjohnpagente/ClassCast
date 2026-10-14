@@ -1,3 +1,4 @@
+import 'package:classcast_offline/models/classroom_session.dart';
 import 'package:classcast_offline/models/doc_types.dart';
 import 'package:classcast_offline/models/sync_event.dart';
 import 'package:classcast_offline/services/network_service.dart';
@@ -39,6 +40,65 @@ void main() {
       expect(back.type, SyncEventType.pageChanged);
       expect(back.page, 4);
       expect(back.totalPages, 12);
+    });
+
+    test('document_url and sync_paused round-trip', () {
+      const e = SyncEvent(
+        type: SyncEventType.documentChanged,
+        sessionId: 'CLASS-101',
+        documentId: 'doc-1',
+        documentName: 'Lesson.pdf',
+        documentUrl: 'http://192.168.43.1:8080/files/Lesson.pdf',
+        page: 1,
+        totalPages: 12,
+        syncPaused: true,
+      );
+      final back = SyncEvent.fromJson(Map<String, dynamic>.from(e.toJson()));
+      expect(back.documentUrl,
+          'http://192.168.43.1:8080/files/Lesson.pdf');
+      expect(back.documentName, 'Lesson.pdf');
+      expect(back.syncPaused, isTrue);
+    });
+
+    test('absent optional fields stay null (not defaulted)', () {
+      const e = SyncEvent(
+        type: SyncEventType.pageChanged,
+        sessionId: 'CLASS-101',
+        page: 2,
+      );
+      final json = e.toJson();
+      expect(json.containsKey('documentUrl'), isFalse);
+      expect(json.containsKey('syncPaused'), isFalse);
+      expect(SyncEvent.fromJson(Map<String, dynamic>.from(json)).documentUrl,
+          isNull);
+    });
+  });
+
+  group('ClassroomSession snapshot', () {
+    test('carries documentUrl and syncPaused from the host', () {
+      final s = ClassroomSession.fromJson(const {
+        'id': 'CLASS-101',
+        'name': 'Physics',
+        'createdAt': '2026-01-01T09:00:00.000',
+        'documentUrl': 'http://10.0.0.5:8080/files/Lesson.pdf',
+        'page': 3,
+        'totalPages': 9,
+        'syncPaused': true,
+      });
+      expect(s.documentUrl, 'http://10.0.0.5:8080/files/Lesson.pdf');
+      expect(s.page, 3);
+      expect(s.totalPages, 9);
+      expect(s.syncPaused, isTrue);
+    });
+
+    test('defaults syncPaused to false when the host omits it', () {
+      final s = ClassroomSession.fromJson(const {
+        'id': 'CLASS-101',
+        'name': 'Physics',
+        'createdAt': '2026-01-01T09:00:00.000',
+      });
+      expect(s.syncPaused, isFalse);
+      expect(s.documentUrl, isNull);
     });
   });
 

@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
@@ -7,6 +7,7 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import '../models/doc_types.dart';
 import '../models/shared_document.dart';
 import '../theme/app_colors.dart';
+import '../utils/local_file.dart';
 import 'state_cards.dart';
 
 /// Renders the real shared document.
@@ -93,17 +94,25 @@ class DocumentViewer extends StatelessWidget {
       );
     }
     final path = doc.localPath;
-    if (path == null || path.isEmpty || !File(path).existsSync()) {
+    if (path == null || path.isEmpty) {
       return _MissingFile(box: box, name: doc.name);
     }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppRadius.large),
-      child: Container(
-        decoration: box,
-        child: SfPdfViewer.file(
-          File(path),
-          controller: controller,
-          canShowScrollHead: false,
+    return _LocalFile<Uint8List>(
+      path: path,
+      load: localFileReadBytes,
+      onMissing: _MissingFile(box: box, name: doc.name),
+      builder: (context, bytes) => ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.large),
+        child: Container(
+          decoration: box,
+          // `.memory` rather than `.file`: it is the one constructor that
+          // exists on mobile *and* web, so students in a browser get a real
+          // document instead of a compile error.
+          child: SfPdfViewer.memory(
+            bytes,
+            controller: controller,
+            canShowScrollHead: false,
+          ),
         ),
       ),
     );
@@ -119,45 +128,98 @@ class DocumentViewer extends StatelessWidget {
       );
     }
     final path = doc.localPath;
-    if (path == null || path.isEmpty || !File(path).existsSync()) {
+    if (path == null || path.isEmpty) {
       return const Icon(Icons.broken_image_outlined,
           size: 44, color: AppColors.muted);
     }
-    return Image.file(
-      File(path),
-      fit: BoxFit.contain,
-      errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined,
+    return _LocalFile<Uint8List>(
+      path: path,
+      load: localFileReadBytes,
+      onMissing: const Icon(Icons.broken_image_outlined,
           size: 44, color: AppColors.muted),
+      builder: (context, bytes) => Image.memory(
+        bytes,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined,
+            size: 44, color: AppColors.muted),
+      ),
     );
   }
 
   Widget _text(BoxDecoration box) {
     final path = doc.localPath;
-    if (path == null || path.isEmpty || !File(path).existsSync()) {
+    if (path == null || path.isEmpty) {
       return _MissingFile(box: box, name: doc.name);
     }
     return Container(
       decoration: box,
       padding: const EdgeInsets.all(16),
-      child: FutureBuilder<String>(
-        future: File(path).readAsString(),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const LoadingState(message: 'Opening…');
-          }
-          if (snap.hasError) {
-            return const Center(
-              child: Text('Could not read this text file.'),
-            );
-          }
-          return SingleChildScrollView(
-            child: Text(
-              snap.data ?? '',
-              style: const TextStyle(fontSize: 13, height: 1.5),
-            ),
-          );
-        },
+      child: _LocalFile<String>(
+        path: path,
+        load: localFileReadString,
+        onMissing:
+            const Center(child: Text('Could not read this text file.')),
+        builder: (context, text) => SingleChildScrollView(
+          child: Text(
+            text,
+            style: const TextStyle(fontSize: 13, height: 1.5),
+          ),
+        ),
       ),
+    );
+  }
+}
+
+/// Reads a picked local file exactly once and rebuilds from the result.
+///
+/// Deliberately stateful: the previous `FutureBuilder(File(path).readAsString())`
+/// built a *new* future on every frame, so the read restarted each rebuild.
+/// The future is cached here and only recreated when [path] actually changes.
+class _LocalFile<T> extends StatefulWidget {
+  final String path;
+  final Future<T?> Function(String path) load;
+  final Widget Function(BuildContext context, T data) builder;
+  final Widget onMissing;
+
+  const _LocalFile({
+    super.key,
+    required this.path,
+    required this.load,
+    required this.builder,
+    required this.onMissing,
+  });
+
+  @override
+  State<_LocalFile<T>> createState() => _LocalFileState<T>();
+}
+
+class _LocalFileState<T> extends State<_LocalFile<T>> {
+  late Future<T?> _pending;
+
+  @override
+  void initState() {
+    super.initState();
+    _pending = widget.load(widget.path);
+  }
+
+  @override
+  void didUpdateWidget(_LocalFile<T> old) {
+    super.didUpdateWidget(old);
+    if (old.path != widget.path) _pending = widget.load(widget.path);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<T?>(
+      future: _pending,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const LoadingState(message: 'Opening…');
+        }
+        final data = snap.data;
+        if (snap.hasError || data == null) return widget.onMissing;
+        return widget.builder(context, data as T);
+      },
     );
   }
 }

@@ -10,7 +10,6 @@ import '../models/sync_event.dart';
 import '../services/session_store.dart';
 
 /// Teacher-side session state: create / end / page / document / participants.
-/// In demo mode this runs fully offline with labeled sample data.
 /// With a real host, page/document changes are also broadcast over WS
 /// (see `server/` + [SyncProvider] on the student side).
 class SessionProvider extends ChangeNotifier {
