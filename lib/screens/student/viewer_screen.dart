@@ -3,10 +3,13 @@ import 'package:provider/provider.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import '../../models/classroom_session.dart';
+import '../../models/doc_types.dart';
+import '../../models/shared_document.dart';
 import '../../providers/app_state.dart';
 import '../../providers/sync_provider.dart';
 import '../../services/classcast_client.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/document_viewer.dart';
 import '../../widgets/state_cards.dart';
 import '../../widgets/status_bits.dart';
 
@@ -28,6 +31,27 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
   void dispose() {
     _pdf.dispose();
     super.dispose();
+  }
+
+  /// Rebuild the shared document from the session snapshot so the viewer
+  /// renders the teacher's real file instead of a placeholder asset.
+  SharedDocument? _documentFor(ClassroomSession? session) {
+    final name = session?.documentName;
+    if (session == null || name == null || name.isEmpty) return null;
+    final dot = name.lastIndexOf('.');
+    final base = dot <= 0 ? name : name.substring(0, dot);
+    final ext = dot <= 0 ? '' : name.substring(dot + 1).toLowerCase();
+    final kind = SupportedFiles.kindOf(ext);
+    return SharedDocument(
+      id: session.documentId ?? '',
+      name: base,
+      extension: ext,
+      kind: kind,
+      status: SupportedFiles.initialStatus(kind),
+      pageCount: session.totalPages,
+      currentPage: session.page,
+      remoteUrl: session.documentUrl,
+    );
   }
 
   @override
@@ -143,44 +167,21 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
   }
 
   Widget _preview(ClassroomSession active) {
-    final name =
-        (active.documentName ?? '').toLowerCase();
-    final isPdf = name.endsWith('.pdf');
-    if (!isPdf) {
-      return Container(
-        decoration: BoxDecoration(
-          color: AppColors.surfaceSoft,
-          borderRadius: BorderRadius.circular(AppRadius.large),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.description,
-                  size: 48, color: AppColors.muted),
-              SizedBox(height: 8),
-              Text('Document will appear when ready',
-                  style: TextStyle(color: AppColors.muted)),
-            ],
-          ),
-        ),
+    final doc = _documentFor(active);
+    if (doc == null) {
+      return const EmptyState(
+        icon: Icons.hourglass_bottom,
+        title: 'Preparing the document',
+        subtitle:
+            'The teacher is sending the file for this slide deck.',
       );
     }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppRadius.large),
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.border),
-          borderRadius: BorderRadius.circular(AppRadius.large),
-        ),
-        child: SfPdfViewer.asset(
-          'assets/images/demo.pdf',
-          controller: _pdf,
-          enableTextSelection: false,
-          canShowScrollHead: false,
-        ),
-      ),
+    // Students stream the file from the teacher host over the local
+    // network; no bundled sample asset is used.
+    return DocumentViewer(
+      doc: doc,
+      controller: _pdf,
+      remoteUrl: doc.remoteUrl,
     );
   }
 

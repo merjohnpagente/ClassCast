@@ -12,6 +12,9 @@ class ClassroomSession {
   final bool isActive;
   final String? documentId;
   final String? documentName;
+
+  /// Where students fetch the file from (teacher host, local network).
+  final String? documentUrl;
   final int page;
   final int totalPages;
   final String teacherKey;
@@ -50,6 +53,7 @@ class ClassroomSession {
     bool? isActive,
     String? Function()? documentId,
     String? Function()? documentName,
+    String? Function()? documentUrl,
     int? page,
     int? totalPages,
     String? teacherKey,
@@ -68,6 +72,7 @@ class ClassroomSession {
       documentId: documentId == null ? this.documentId : documentId(),
       documentName:
           documentName == null ? this.documentName : documentName(),
+      documentUrl: documentUrl == null ? this.documentUrl : documentUrl(),
       page: page ?? this.page,
       totalPages: totalPages ?? this.totalPages,
       teacherKey: teacherKey ?? this.teacherKey,
@@ -87,6 +92,7 @@ class ClassroomSession {
         'isActive': isActive,
         'documentId': documentId,
         'documentName': documentName,
+        'documentUrl': documentUrl,
         'page': page,
         'totalPages': totalPages,
       };
@@ -107,6 +113,7 @@ class ClassroomSession {
       isActive: json['isActive'] as bool? ?? false,
       documentId: json['documentId'] as String?,
       documentName: json['documentName'] as String?,
+      documentUrl: json['documentUrl'] as String?,
       page: (json['page'] as num?)?.toInt() ?? 1,
       totalPages: (json['totalPages'] as num?)?.toInt() ?? 0,
     );

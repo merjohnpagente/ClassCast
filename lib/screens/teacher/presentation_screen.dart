@@ -4,9 +4,11 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import '../../models/classroom_session.dart';
 import '../../providers/app_state.dart';
+import '../../providers/library_provider.dart';
 import '../../providers/session_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/document_viewer.dart';
 import '../../widgets/state_cards.dart';
 import '../../widgets/status_bits.dart';
 import 'students_screen.dart';
@@ -101,48 +103,15 @@ class _TeacherPresentationScreenState
   }
 
   Widget _preview(BuildContext context, ClassroomSession active) {
-    // Phase 2 wires the real file bytes / converted PDF URL here.
-    // PDF renders directly; Office shows conversion guidance until
-    // the laptop host converts it (see Share screen + server/).
-    final isPdf = (active.documentName ?? '').toLowerCase().endsWith('.pdf');
-    if (!isPdf) {
-      return Container(
-        decoration: BoxDecoration(
-          color: AppColors.surfaceSoft,
-          borderRadius: BorderRadius.circular(AppRadius.large),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.description,
-                  size: 48, color: AppColors.muted),
-              SizedBox(height: 8),
-              Text('Preview appears after host conversion',
-                  style: TextStyle(color: AppColors.muted)),
-            ],
-          ),
-        ),
+    final doc = context.read<LibraryProvider>().selected;
+    if (doc == null) {
+      return const EmptyState(
+        icon: Icons.description_outlined,
+        title: 'No document shared',
+        subtitle: 'Pick a file from the library to start presenting.',
       );
     }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppRadius.large),
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.border),
-          borderRadius: BorderRadius.circular(AppRadius.large),
-        ),
-        // Demo asset path; replaced by shared file / URL in phase 2.
-        child: SfPdfViewer.asset(
-          'assets/images/demo.pdf',
-          controller: _pdf,
-          onPageChanged: (details) {
-            // Keep local state authoritative for the teacher.
-          },
-        ),
-      ),
-    );
+    return DocumentViewer(doc: doc, controller: _pdf);
   }
 
   Widget _mobileLayout(BuildContext context, SessionProvider sessions,
