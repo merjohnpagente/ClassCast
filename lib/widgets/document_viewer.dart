@@ -9,6 +9,7 @@ import '../models/shared_document.dart';
 import '../theme/app_colors.dart';
 import '../utils/local_file.dart';
 import 'office/office_document_view.dart';
+import 'office/office_document_scroll_view.dart';
 import 'state_cards.dart';
 
 /// Renders the real shared document.
@@ -36,6 +37,13 @@ class DocumentViewer extends StatelessWidget {
   /// sync a real total.
   final ValueChanged<int>? onPageCount;
 
+  /// Page-by-page or continuous scrolling. Only the teacher normally switches
+  /// this; students follow the teacher's page either way.
+  final OfficeViewMode viewMode;
+
+  /// Reports the page being scrolled, so the session can follow along.
+  final ValueChanged<int>? onPageChanged;
+
   /// When true, show the conversion panel instead of a preview.
   final bool showConversionPanel;
 
@@ -46,6 +54,8 @@ class DocumentViewer extends StatelessWidget {
     this.remoteUrl,
     this.page = 1,
     this.onPageCount,
+    this.viewMode = OfficeViewMode.pages,
+    this.onPageChanged,
     this.showConversionPanel = false,
   });
 
@@ -104,6 +114,8 @@ class DocumentViewer extends StatelessWidget {
           remoteUrl: remoteUrl,
           page: page,
           onPageCount: onPageCount,
+          viewMode: viewMode,
+          onPageChanged: onPageChanged,
         ),
       ),
     );

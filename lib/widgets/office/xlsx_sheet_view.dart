@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 import '../../services/ooxml/xlsx_workbook.dart';
 import 'office_canvas.dart';
 
+/// Height of one rendered sheet page, in points. The scroll view needs the
+/// same number the canvas uses, or the page maths drifts and scrolling jumps.
+const double kSheetPageRenderedHeightPt =
+    kRowsPerSheetPage * kSheetRowHeightPt + kSheetRowHeightPt + 22;
+
 /// Draws one printed page of a spreadsheet on the shared [OfficeCanvas].
 ///
 /// Rows are cut into fixed-size pages (see [kRowsPerSheetPage]) so the page
@@ -26,7 +31,7 @@ class XlsxSheetView extends StatelessWidget {
 
     return OfficeCanvas(
       widthPt: kSheetPageWidthPt,
-      heightPt: kRowsPerSheetPage * kSheetRowHeightPt + headerHeight + 22,
+      heightPt: kSheetPageRenderedHeightPt,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

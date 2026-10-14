@@ -6,6 +6,7 @@ import '../../theme/app_colors.dart';
 import '../state_cards.dart';
 import 'docx_page_view.dart';
 import 'office_canvas.dart';
+import 'office_document_scroll_view.dart';
 import 'pptx_slide_view.dart';
 import 'xlsx_sheet_view.dart';
 
@@ -25,6 +26,14 @@ class OfficeDocumentView extends StatefulWidget {
   /// right total instead of an unknown one.
   final ValueChanged<int>? onPageCount;
 
+  /// Page-by-page (default) or one continuous scroll. The teacher chooses; the
+  /// class stays in step either way because scrolling reports the page.
+  final OfficeViewMode viewMode;
+
+  /// Reports the page the teacher is looking at while scrolling, so students
+  /// follow along.
+  final ValueChanged<int>? onPageChanged;
+
   const OfficeDocumentView({
     super.key,
     required this.extension,
@@ -33,6 +42,8 @@ class OfficeDocumentView extends StatefulWidget {
     this.localPath,
     this.remoteUrl,
     this.onPageCount,
+    this.viewMode = OfficeViewMode.pages,
+    this.onPageChanged,
   });
 
   @override
@@ -108,6 +119,13 @@ class _OfficeDocumentViewState extends State<OfficeDocumentView> {
           );
         }
         _reportPageCount(document.pageCount);
+        if (widget.viewMode == OfficeViewMode.scroll) {
+          return OfficeDocumentScrollView(
+            document: document,
+            page: widget.page,
+            onPageChanged: widget.onPageChanged,
+          );
+        }
         return _render(document);
       },
     );

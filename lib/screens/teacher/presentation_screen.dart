@@ -9,6 +9,7 @@ import '../../providers/session_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/document_viewer.dart';
+import '../../widgets/office/office_document_scroll_view.dart';
 import '../../widgets/state_cards.dart';
 import '../../widgets/status_bits.dart';
 import 'students_screen.dart';
@@ -27,6 +28,10 @@ class TeacherPresentationScreen extends StatefulWidget {
 class _TeacherPresentationScreenState
     extends State<TeacherPresentationScreen> {
   final PdfViewerController _pdf = PdfViewerController();
+
+  /// Page-by-page or continuous scroll. Both keep the class in step: in scroll
+  /// mode the page nearest the top is broadcast as the teacher scrolls.
+  OfficeViewMode _viewMode = OfficeViewMode.pages;
 
   @override
   void dispose() {
@@ -139,6 +144,7 @@ class _TeacherPresentationScreenState
       );
     }
     if (doc.kind != DocKind.pdf) _syncPdfPage(active.page);
+    final sessions = context.read<SessionProvider>();
     return DocumentViewer(
       doc: doc,
       controller: _pdf,
@@ -146,7 +152,23 @@ class _TeacherPresentationScreenState
       // The app only learns how many slides / pages a file really has once it
       // is open; publish that so students get the same total.
       onPageCount: (count) => _publishPageCount(context, count),
+      viewMode: _viewMode,
+      onPageChanged: (page) {
+        // Scrolling is teacher-driven; broadcasting the page keeps every
+        // student on the same screen as the teacher.
+        if (sessions.active?.page != page) sessions.setPage(page);
+      },
     );
+  }
+
+  /// Scrolling only means something for Office documents; a PDF already
+  /// scrolls inside its own viewer.
+  bool get _supportsScrollMode {
+    final doc = context.read<LibraryProvider>().selected;
+    if (doc == null) return false;
+    return doc.kind == DocKind.powerpoint ||
+        doc.kind == DocKind.word ||
+        doc.kind == DocKind.excel;
   }
 
   void _publishPageCount(BuildContext context, int count) {
@@ -276,6 +298,23 @@ class _TeacherPresentationScreenState
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    if (_supportsScrollMode)
+                      IconButton(
+                        tooltip: _viewMode == OfficeViewMode.pages
+                            ? 'Switch to scrolling'
+                            : 'Switch to one page at a time',
+                        icon: Icon(
+                          _viewMode == OfficeViewMode.pages
+                              ? Icons.swipe_vertical
+                              : Icons.crop_free,
+                          size: 20,
+                        ),
+                        onPressed: () => setState(() {
+                          _viewMode = _viewMode == OfficeViewMode.pages
+                              ? OfficeViewMode.scroll
+                              : OfficeViewMode.pages;
+                        }),
+                      ),
                     IconButton(
                       tooltip: active.syncPaused
                           ? 'Resume sync'
