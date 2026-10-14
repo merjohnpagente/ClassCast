@@ -106,6 +106,34 @@ class _JoinScreenState extends State<JoinScreen> {
               color: AppColors.muted,
             )),
         const SizedBox(height: 12),
+        // Scanning is the primary way into a classroom, so it comes first —
+        // buried under a divider it looked like the fallback, not the main
+        // action.
+        FilledButton.icon(
+          onPressed: joining ? null : _openScanner,
+          icon: const Icon(Icons.qr_code_scanner),
+          label: const Text('Scan Teacher QR Code'),
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 52),
+            textStyle: const TextStyle(
+                fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            const Expanded(child: Divider()),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text('or enter it manually',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: AppColors.muted)),
+            ),
+            const Expanded(child: Divider()),
+          ],
+        ),
+        const SizedBox(height: 12),
         Form(
           key: _form,
           child: Column(
@@ -144,27 +172,6 @@ class _JoinScreenState extends State<JoinScreen> {
                             color: Colors.white),
                       )
                     : const Text('Join Classroom'),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Expanded(child: Divider()),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12),
-                    child: Text('or',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(
-                                color: AppColors.muted)),
-                  ),
-                  const Expanded(child: Divider()),
-                ],
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: _openScanner,
-                icon: const Icon(Icons.qr_code_scanner),
-                label: const Text('Scan QR Code'),
               ),
             ],
           ),
@@ -379,14 +386,35 @@ class _QrScanPageState extends State<_QrScanPage> {
                     color: Colors.white70, fontSize: 12, height: 1.4),
               ),
               const SizedBox(height: 20),
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                ),
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.keyboard, size: 18),
-                label: const Text('Enter session ID instead'),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // A camera that failed once often works on a second try:
+                  // the student may have just granted the permission.
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white54),
+                    ),
+                    onPressed: () async {
+                      try {
+                        await _ctrl.start();
+                      } catch (_) {/* still unavailable */}
+                    },
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Try again'),
+                  ),
+                  const SizedBox(width: 10),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.keyboard, size: 18),
+                    label: const Text('Enter session ID'),
+                  ),
+                ],
               ),
             ],
           ),
