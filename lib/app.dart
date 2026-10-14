@@ -13,45 +13,59 @@ import 'theme/app_theme.dart';
 import 'utils/responsive.dart';
 
 /// ClassCast Offline root: splash -> role -> teacher / student shell.
-class ClassCastApp extends StatefulWidget {
+///
+/// NOTE: [ClassCastApp] itself never calls `context.watch` — the role
+/// router ([_RootRouter]) sits below [MaterialApp], so its context is
+/// always under the providers. This avoids the "Provider not found"
+/// class of startup crashes.
+class ClassCastApp extends StatelessWidget {
   const ClassCastApp({super.key});
 
   @override
-  State<ClassCastApp> createState() => _ClassCastAppState();
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'ClassCast Offline',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light(),
+      builder: responsiveTextScale,
+      home: const _RootRouter(),
+    );
+  }
 }
 
-class _ClassCastAppState extends State<ClassCastApp> {
+class _RootRouter extends StatefulWidget {
+  const _RootRouter();
+
+  @override
+  State<_RootRouter> createState() => _RootRouterState();
+}
+
+class _RootRouterState extends State<_RootRouter> {
   bool _splashed = false;
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
 
-    return MaterialApp(
-      title: 'ClassCast Offline',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      builder: responsiveTextScale,
-      home: !_splashed
-          ? SplashScreen(
-              onFinished: () =>
-                  setState(() => _splashed = true))
-          : switch (app.role) {
-              AppRole.teacher => const TeacherShell(),
-              AppRole.student => const StudentShell(),
-              AppRole.none => RoleSelectionScreen(
-                  onTeacher: () {
-                    app.setRole(AppRole.teacher);
-                    context.read<SessionProvider>().load(
-                        demoMode: app.demoMode);
-                    context.read<LibraryProvider>().load(
-                        demoMode: app.demoMode);
-                  },
-                  onStudent: () =>
-                      app.setRole(AppRole.student),
-                ),
-            },
-    );
+    if (!_splashed) {
+      return SplashScreen(
+          onFinished: () => setState(() => _splashed = true));
+    }
+    return switch (app.role) {
+      AppRole.teacher => const TeacherShell(),
+      AppRole.student => const StudentShell(),
+      AppRole.none => RoleSelectionScreen(
+          onTeacher: () {
+            app.setRole(AppRole.teacher);
+            context.read<SessionProvider>().load(
+                demoMode: app.demoMode);
+            context.read<LibraryProvider>().load(
+                demoMode: app.demoMode);
+          },
+          onStudent: () =>
+              app.setRole(AppRole.student),
+        ),
+    };
   }
 }
 

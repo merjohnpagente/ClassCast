@@ -1,0 +1,112 @@
+name: Build Android APK
+
+# ClassCast Offline Android pipeline (JohnFood-style):
+# TEST first, BUILD only when green. No Flutter SDK needed locally —
+# everything runs here. GitHub Actions only builds the APK; the
+# classroom local backend runs on the teacher device, not in CI.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ---- 1) TEST: analyze + all tests. The APK waits for this. ----
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Bootstrap platform folders if missing
+        run: |
+          if [ ! -d android ]; then
+            flutter create . --project-name classcast_offline --org com.classcast.offline
+          fi
+          # flutter create drops a default counter test — ours are test/app_test.dart + test/widget_smoke_test.dart
+          rm -f test/widget_test.dart
+          git checkout -- web/index.html web/manifest.json || true
+
+      - run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Test
+        run: flutter test
+
+  # ---- 2) BUILD APK (only when Test is green) ----
+  apk:
+    name: APK
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Bootstrap platform folders if missing
+        run: |
+          if [ ! -d android ]; then
+            flutter create . --project-name classcast_offline --org com.classcast.offline
+          fi
+          rm -f test/widget_test.dart
+          git checkout -- web/index.html web/manifest.json || true
+
+      - name: Configure Android (label + compileSdk 36)
+        run: |
+          sed -i 's/android:label="[^"]*"/android:label="ClassCast Offline"/' android/app/src/main/AndroidManifest.xml
+          # file_picker's transitive deps require compiling against Android 36.
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i -E 's/compileSdk *=.*/compileSdk = 36/' android/app/build.gradle.kts
+            grep -n "compileSdk" android/app/build.gradle.kts
+          elif [ -f android/app/build.gradle ]; then
+            sed -i -E 's/(compileSdk(Version)?) .*/\1 36/' android/app/build.gradle
+            grep -n "compileSdk" android/app/build.gradle
+          fi
+
+      - name: Install Android SDK 36
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36"
+
+      - run: flutter pub get
+
+      - name: Generate launcher icons
+        run: flutter pub run flutter_launcher_icons
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload APK (download from this run)
+        uses: actions/upload-artifact@v4
+        with:
+          name: classcast-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Attach APK to release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/app/outputs/flutter-apk/app-release.apk
