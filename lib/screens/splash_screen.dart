@@ -75,7 +75,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   child: CircularProgressIndicator(strokeWidth: 3),
                 ),
                 const SizedBox(height: 16),
-                Text('v1.0.0 · works offline',
+                Text('v1.0.1 · works offline',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: AppColors.muted,
                     )),
