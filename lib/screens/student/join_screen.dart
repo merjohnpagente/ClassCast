@@ -68,17 +68,24 @@ class _JoinScreenState extends State<JoinScreen> {
     }
   }
 
-  void _openScanner() {
-    Navigator.of(context).push(
+  Future<void> _joinWith(String? rawInput) async {
+    if (rawInput != null && rawInput.isNotEmpty) {
+      _input.text = rawInput.trim();
+    }
+    await _join();
+  }
+
+  /// Opens the camera scanner. The scanner page pops *itself* with the payload,
+  /// so the join screen stays underneath; scanning then joins straight away —
+  /// pointing a phone at the teacher's QR is already the intent to join.
+  Future<void> _openScanner() async {
+    final scanned = await Navigator.of(context).push<String>(
       MaterialPageRoute(
-        builder: (_) => _QrScanPage(
-          onScanned: (value) {
-            _input.text = value;
-            Navigator.of(context).pop();
-          },
-        ),
+        builder: (_) => const _QrScanPage(),
       ),
     );
+    if (!mounted || scanned == null || scanned.trim().isEmpty) return;
+    await _joinWith(scanned);
   }
 
   @override
@@ -190,11 +197,13 @@ class _JoinScreenState extends State<JoinScreen> {
   }
 }
 
-/// Minimal QR scanner page with manual-entry fallback.
+/// Camera QR scanner, with an honest fallback when the camera cannot start.
+///
+/// The page returns the scanned payload through `Navigator.pop`, which is what
+/// the join screen awaits — a scanner that popped its *parent* route left the
+/// camera sitting on top of a dead join form.
 class _QrScanPage extends StatefulWidget {
-  final ValueChanged<String> onScanned;
-
-  const _QrScanPage({required this.onScanned});
+  const _QrScanPage();
 
   @override
   State<_QrScanPage> createState() => _QrScanPageState();
@@ -203,6 +212,7 @@ class _QrScanPage extends StatefulWidget {
 class _QrScanPageState extends State<_QrScanPage> {
   late final MobileScannerController _ctrl;
   bool _done = false;
+  bool _torchOn = false;
 
   @override
   void initState() {
@@ -215,42 +225,114 @@ class _QrScanPageState extends State<_QrScanPage> {
 
   @override
   void dispose() {
+    // Release the camera immediately: leaving it running drains the battery
+    // and keeps the camera indicator on after leaving the page.
     _ctrl.dispose();
     super.dispose();
+  }
+
+  void _onDetect(BarcodeCapture capture) {
+    if (_done || capture.barcodes.isEmpty) return;
+    for (final barcode in capture.barcodes) {
+      final value = barcode.rawValue;
+      if (value == null || value.trim().isEmpty) continue;
+      _done = true;
+      Navigator.of(context).pop(value.trim());
+      return;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Scan QR Code')),
-      body: Column(
-        children: [
-          Expanded(
-            child: MobileScanner(
-              controller: _ctrl,
-              errorBuilder: (context, error, child) =>
-                  _cameraError(error),
-              onDetect: (capture) {
-                if (_done) return;
-                if (capture.barcodes.isEmpty) return;
-                final code = capture.barcodes.first.rawValue;
-                if (code == null || code.isEmpty) return;
-                _done = true;
-                widget.onScanned(code);
-              },
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: const Text('Scan QR Code'),
+        actions: [
+          IconButton(
+            tooltip: _torchOn ? 'Turn off flashlight' : 'Flashlight',
+            icon: Icon(
+              _torchOn ? Icons.flash_on : Icons.flash_off,
+              color: Colors.white,
             ),
+            onPressed: () async {
+              // `toggleTorch` throws when the camera never started (for
+              // example the permission was denied), which must not crash the
+              // page — the manual-entry button is the way out anyway.
+              try {
+                await _ctrl.toggleTorch();
+                if (mounted) setState(() => _torchOn = !_torchOn);
+              } catch (_) {/* torch is a convenience, not a requirement */}
+            },
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              'Point the camera at the teacher QR code.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AppColors.muted),
+        ],
+      ),
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          MobileScanner(
+            controller: _ctrl,
+            fit: BoxFit.cover,
+            onDetect: _onDetect,
+            placeholderBuilder: (_) => const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            ),
+            errorBuilder: (context, error, child) => _cameraError(error),
+            overlayBuilder: (context, constraints) => _scanOverlay(context),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                const Spacer(),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Point the camera at the QR code on the teacher screen.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white24,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(0, 48),
+                      ),
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.keyboard),
+                      label: const Text('Enter session ID instead'),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Simple framing guide so the teacher knows where to hold the phone.
+  Widget _scanOverlay(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 220,
+        height: 220,
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.white70, width: 2),
+          borderRadius: BorderRadius.circular(20),
+        ),
       ),
     );
   }
@@ -260,44 +342,54 @@ class _QrScanPageState extends State<_QrScanPage> {
   Widget _cameraError(MobileScannerException error) {
     final denied = error.errorCode ==
         MobileScannerErrorCode.permissionDenied;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              denied
-                  ? Icons.no_photography_outlined
-                  : Icons.videocam_off_outlined,
-              size: 44,
-              color: AppColors.muted,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              denied
-                  ? 'Camera permission is blocked'
-                  : 'Camera unavailable',
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              denied
-                  ? 'Enable the camera permission for ClassCast in Android '
-                      'Settings, then try again.'
-                  : 'This device could not start the camera. Ask the '
-                      'teacher for the session ID or address instead.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  color: AppColors.muted, fontSize: 12),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.keyboard, size: 18),
-              label: const Text('Enter session ID instead'),
-            ),
-          ],
+    return ColoredBox(
+      color: Colors.black,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                denied
+                    ? Icons.no_photography_outlined
+                    : Icons.videocam_off_outlined,
+                size: 44,
+                color: Colors.white70,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                denied
+                    ? 'Camera permission is blocked'
+                    : 'Camera unavailable',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                denied
+                    ? 'Enable the camera permission for ClassCast in Android '
+                        'Settings, then try again.'
+                    : 'This device could not start the camera. Ask the '
+                        'teacher for the session ID or address instead.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    color: Colors.white70, fontSize: 12, height: 1.4),
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                ),
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.keyboard, size: 18),
+                label: const Text('Enter session ID instead'),
+              ),
+            ],
+          ),
         ),
       ),
     );

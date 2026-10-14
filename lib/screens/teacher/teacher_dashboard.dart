@@ -6,6 +6,7 @@ import '../../providers/app_state.dart';
 import '../../providers/session_provider.dart';
 import '../../services/network_service.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/qr_card.dart';
 import '../../widgets/session_card.dart';
 import '../../widgets/state_cards.dart';
 import '../../widgets/status_bits.dart';
@@ -256,6 +257,11 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     );
   }
 
+  /// Shows the real, scannable QR code for a live session.
+  ///
+  /// This used to print the raw join payload as text, which is useless in a
+  /// classroom: students have to point a camera at it. The code is drawn large
+  /// enough to scan from a student's desk.
   void _showQrSheet(BuildContext context, ClassroomSession active) {
     final address = active.joinAddress;
     final payload = NetworkService.qrPayload(
@@ -263,28 +269,58 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(active.name,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w700, fontSize: 16)),
-            const SizedBox(height: 4),
-            Text(address,
-                style: const TextStyle(color: AppColors.muted)),
-            const SizedBox(height: 12),
-            Text(payload,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12)),
-            const SizedBox(height: 8),
-            const StatusChip(
-                label: 'Students scan this in the app',
-                icon: Icons.qr_code_2,
-                color: AppColors.primary,
-                background: AppColors.primarySoft),
-          ],
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  active.name,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 16),
+                ),
+                const SizedBox(height: 12),
+                if (active.hostIp.isEmpty)
+                  // No LAN address yet: a QR without a host cannot be scanned,
+                  // so say so instead of showing a dead code.
+                  const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        Icon(Icons.wifi_off,
+                            size: 40, color: AppColors.warning),
+                        SizedBox(height: 12),
+                        Text(
+                          'No network address yet',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        SizedBox(height: 6),
+                        Text(
+                          'Start the hotspot (or connect to classroom Wi-Fi) '
+                          'so students can reach this phone.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: AppColors.muted, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  QrCard(
+                    payload: payload,
+                    address: address.isEmpty
+                        ? 'Session ${active.id}'
+                        : address,
+                    sessionId: active.id,
+                    size: 240,
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -11,34 +11,44 @@ class QrCard extends StatelessWidget {
   final String address;
   final String sessionId;
 
+  /// Edge length of the code. Bigger is easier to scan from a student's desk;
+  /// the dashboard's QR sheet uses a larger one than the create-session screen.
+  final double size;
+
   const QrCard({
     super.key,
     required this.payload,
     required this.address,
     required this.sessionId,
+    this.size = 168,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Card(
+      margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: QrImageView(
-                data: payload,
-                version: QrVersions.auto,
-                size: 168,
-                backgroundColor: Colors.white,
-                errorCorrectionLevel: QrErrorCorrectLevel.M,
+            // Centered so the code is the optical anchor of the sheet, not an
+            // element that drifts with the surrounding text.
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: QrImageView(
+                  data: payload,
+                  version: QrVersions.auto,
+                  size: size,
+                  backgroundColor: Colors.white,
+                  errorCorrectionLevel: QrErrorCorrectLevel.M,
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -46,6 +56,10 @@ class QrCard extends StatelessWidget {
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                   color: AppColors.ink,
+                )),
+            Text(sessionId,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.muted,
                 )),
             if (address.isNotEmpty) ...[
               const SizedBox(height: 2),

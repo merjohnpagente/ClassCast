@@ -221,6 +221,8 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                     ? 'Start hotspot to show the address'
                     : active.joinAddress,
                 sessionId: active.id,
+                // Large enough for students to scan from their desks.
+                size: 220,
               ),
               const SizedBox(height: 12),
               FilledButton.icon(
