@@ -1,0 +1,36 @@
+name: ClassCast Server
+
+# Type-checks and tests the local Shelf host (server/).
+#
+# This package was previously invisible to CI: the root
+# analysis_options.yaml excludes `server/**`, and no workflow ran Dart
+# tooling inside it. Every change to the host was therefore unverified until
+# somebody ran it by hand on a laptop.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  server:
+    name: Server analyze + test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+          cache: true
+
+      - run: dart pub get
+
+      # Catches compile and type errors in the host. `--fatal-warnings` is
+      # deliberately omitted: warnings should not block a classroom build.
+      - run: dart analyze
+
+      - run: dart test

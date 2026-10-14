@@ -1,0 +1,14 @@
+# Analysis options for the local Shelf host.
+#
+# The repository-root analysis_options.yaml excludes `server/**` because it
+# targets Flutter code. Dart walks up the directory tree to find the nearest
+# options file, so WITHOUT this file `dart analyze` run from `server/` would
+# resolve the root options, exclude every single file, and pass vacuously
+# without ever type-checking anything.
+#
+# Deliberately no `include: package:lints/...` here: CI should fail on real
+# compile errors and type errors in the host, not on style preferences for
+# code that was written before this file existed.
+analyzer:
+  exclude:
+    - build/**
