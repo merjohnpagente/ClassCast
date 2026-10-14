@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 
 import '../models/doc_types.dart';
 import '../models/shared_document.dart';
-import '../services/demo_data.dart';
 import '../services/document_service.dart';
 
 /// Teacher document library: pick, search, filter, share-target.
@@ -27,12 +26,9 @@ class LibraryProvider extends ChangeNotifier {
   String? _error;
   String? get error => _error;
 
-  void load({required bool demoMode}) {
-    if (demoMode) {
-      _items = DemoData.documents();
-    } else {
-      _items = [];
-    }
+  /// Start with an empty library; real files arrive via the file picker.
+  void load() {
+    _items = [];
     _loaded = true;
     notifyListeners();
   }

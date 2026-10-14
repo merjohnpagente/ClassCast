@@ -7,7 +7,6 @@ import '../models/classroom_session.dart';
 import '../models/participant.dart';
 import '../models/shared_document.dart';
 import '../models/sync_event.dart';
-import '../services/demo_data.dart';
 import '../services/session_store.dart';
 
 /// Teacher-side session state: create / end / page / document / participants.
@@ -27,7 +26,6 @@ class SessionProvider extends ChangeNotifier {
   List<Participant> _participants = [];
   List<Participant> get participants => List.unmodifiable(_participants);
 
-  bool _demoMode = false;
   bool _loaded = false;
   bool get isLoaded => _loaded;
 
@@ -35,23 +33,11 @@ class SessionProvider extends ChangeNotifier {
       .where((p) => p.status == Presence.connected)
       .length;
 
-  Future<void> load({required bool demoMode}) async {
-    _demoMode = demoMode;
-    if (demoMode) {
-      _recent = DemoData.sessions();
-      _participants = DemoData.participants();
-    } else {
-      _recent = await _store.loadRecent();
-      _participants = [];
-    }
+  /// Load sessions saved on this device (SQLite). No sample data.
+  Future<void> load() async {
+    _recent = await _store.loadRecent();
+    _participants = [];
     _loaded = true;
-    notifyListeners();
-  }
-
-  void refreshDemo() {
-    if (!_demoMode) return;
-    _recent = DemoData.sessions();
-    _participants = DemoData.participants();
     notifyListeners();
   }
 
@@ -80,10 +66,8 @@ class SessionProvider extends ChangeNotifier {
       teacherKey: _uuid.v4().substring(0, 8),
     );
     _active = session;
-    if (!_demoMode) {
-      await _store.saveSession(session);
-      _recent = await _store.loadRecent();
-    }
+    await _store.saveSession(session);
+    _recent = await _store.loadRecent();
     notifyListeners();
     return session;
   }
@@ -91,12 +75,10 @@ class SessionProvider extends ChangeNotifier {
   Future<void> endSession() async {
     if (_active == null) return;
     final ended = _active!.copyWith(isActive: false);
-    if (!_demoMode) {
-      await _store.saveSession(ended);
-      _recent = await _store.loadRecent();
-    }
+    await _store.saveSession(ended);
+    _recent = await _store.loadRecent();
     _active = null;
-    _participants = _demoMode ? DemoData.participants() : [];
+    _participants = [];
     notifyListeners();
   }
 

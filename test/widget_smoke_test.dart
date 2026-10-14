@@ -1,4 +1,5 @@
 import 'package:classcast_offline/app.dart';
+import 'package:classcast_offline/services/local_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,7 +10,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    // SQLite is not available in the widget-test environment; the
+    // SharedPreferences store exercises the same SessionStore API.
+    setLocalStoreOverride(PrefsLocalStore());
   });
+
+  tearDown(() => setLocalStoreOverride(null));
 
   testWidgets('app boots to role selection', (tester) async {
     await tester.pumpWidget(

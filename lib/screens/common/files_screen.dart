@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/doc_types.dart';
-import '../../providers/app_state.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/session_provider.dart';
 import '../../utils/responsive.dart';
@@ -29,8 +28,7 @@ class _FilesScreenState extends State<FilesScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final app = context.read<AppState>();
-      context.read<LibraryProvider>().load(demoMode: app.demoMode);
+      context.read<LibraryProvider>().load();
     });
   }
 
@@ -124,9 +122,7 @@ class _FilesScreenState extends State<FilesScreen> {
       return ErrorState(
         title: 'Could not load files',
         message: library.error!,
-        onRetry: () => context
-            .read<LibraryProvider>()
-            .load(demoMode: context.read<AppState>().demoMode),
+        onRetry: () => context.read<LibraryProvider>().load(),
       );
     }
     if (visible.isEmpty) {

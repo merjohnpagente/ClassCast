@@ -58,10 +58,8 @@ class _RootRouterState extends State<_RootRouter> {
       AppRole.none => RoleSelectionScreen(
           onTeacher: () {
             app.setRole(AppRole.teacher);
-            context.read<SessionProvider>().load(
-                demoMode: app.demoMode);
-            context.read<LibraryProvider>().load(
-                demoMode: app.demoMode);
+            context.read<SessionProvider>().load();
+            context.read<LibraryProvider>().load();
           },
           onStudent: () =>
               app.setRole(AppRole.student),

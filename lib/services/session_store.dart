@@ -1,10 +1,12 @@
 import 'dart:convert';
 
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../models/classroom_session.dart';
+import 'local_store.dart';
 
-/// Local persistence for session info (no cloud).
+/// Local persistence for session info. No cloud, no accounts.
+///
+/// Backed by SQLite on Android/iOS (see [local_store]) so recent
+/// sessions and preferences survive restarts and app upgrades.
 class SessionStore {
   static const _recentKey = 'classcast_recent_sessions';
   static const _lastRoleKey = 'classcast_last_role';
@@ -12,8 +14,7 @@ class SessionStore {
 
   Future<List<ClassroomSession>> loadRecent() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_recentKey);
+      final raw = await localStore().read(_recentKey);
       if (raw == null || raw.isEmpty) return [];
       final list = jsonDecode(raw) as List;
       return list
@@ -27,25 +28,23 @@ class SessionStore {
 
   Future<void> saveSession(ClassroomSession session) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final current = await loadRecent();
       final updated = [
         session,
         ...current.where((s) => s.id != session.id),
       ].take(10).toList();
-      await prefs.setString(
+      await localStore().write(
         _recentKey,
         jsonEncode(updated.map((s) => s.toJson()).toList()),
       );
-    } catch (_) {/* offline cache is best-effort */}
+    } catch (_) {/* local cache is best-effort */}
   }
 
   Future<void> removeSession(String id) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final current = await loadRecent();
       final updated = current.where((s) => s.id != id).toList();
-      await prefs.setString(
+      await localStore().write(
         _recentKey,
         jsonEncode(updated.map((s) => s.toJson()).toList()),
       );
@@ -54,15 +53,13 @@ class SessionStore {
 
   Future<void> saveLastRole(String role) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_lastRoleKey, role);
+      await localStore().write(_lastRoleKey, role);
     } catch (_) {/* ignore */}
   }
 
   Future<String?> loadLastRole() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_lastRoleKey);
+      return await localStore().read(_lastRoleKey);
     } catch (_) {
       return null;
     }
@@ -70,15 +67,13 @@ class SessionStore {
 
   Future<void> saveStudentName(String name) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_studentNameKey, name);
+      await localStore().write(_studentNameKey, name);
     } catch (_) {/* ignore */}
   }
 
   Future<String?> loadStudentName() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_studentNameKey);
+      return await localStore().read(_studentNameKey);
     } catch (_) {
       return null;
     }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/participant.dart';
-import '../../providers/app_state.dart';
 import '../../providers/session_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/formatters.dart';
@@ -18,7 +17,6 @@ class StudentsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final sessions = context.watch<SessionProvider>();
-    final app = context.watch<AppState>();
     final items = sessions.participants;
 
     return Scaffold(
@@ -28,8 +26,7 @@ class StudentsScreen extends StatelessWidget {
           IconButton(
             tooltip: 'Refresh',
             icon: const Icon(Icons.refresh),
-            onPressed: () =>
-                sessions.load(demoMode: app.demoMode),
+            onPressed: () => sessions.load(),
           ),
         ],
       ),

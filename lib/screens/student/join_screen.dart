@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
@@ -200,13 +202,27 @@ class _QrScanPage extends StatefulWidget {
 }
 
 class _QrScanPageState extends State<_QrScanPage> {
-  final _ctrl = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates,
-  );
+  late final MobileScannerController _ctrl;
   bool _done = false;
+
+  /// Stream state so we can show a real error (e.g. camera denied)
+  /// instead of a silent black screen.
+  StreamSubscription<Object>? _states;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = MobileScannerController(
+      detectionSpeed: DetectionSpeed.noDuplicates,
+      formats: const [BarcodeFormat.qrCode],
+    );
+    _states = _ctrl.start().catchError((Object e) => _error = e);
+  }
 
   @override
   void dispose() {
+    _states?.cancel();
     _ctrl.dispose();
     super.dispose();
   }
@@ -217,28 +233,85 @@ class _QrScanPageState extends State<_QrScanPage> {
       appBar: AppBar(title: const Text('Scan QR Code')),
       body: Column(
         children: [
-          Expanded(
-            child: MobileScanner(
-              controller: _ctrl,
-              onDetect: (capture) {
-                if (_done) return;
-                if (capture.barcodes.isEmpty) return;
-                final code = capture.barcodes.first.rawValue;
-                if (code == null || code.isEmpty) return;
-                _done = true;
-                widget.onScanned(code);
-              },
-            ),
-          ),
+          Expanded(child: _view()),
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Text('Point the camera at the teacher QR code.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: AppColors.muted)),
+            child: Text(
+              'Point the camera at the teacher QR code.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AppColors.muted),
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _view() {
+    return MobileScanner(
+      controller: _ctrl,
+      errorBuilder: (context, error) {
+        return _cameraError(error);
+      },
+      onDetect: (capture) {
+        if (_done) return;
+        if (capture.barcodes.isEmpty) return;
+        final code = capture.barcodes.first.rawValue;
+        if (code == null || code.isEmpty) return;
+        _done = true;
+        widget.onScanned(code);
+      },
+    );
+  }
+
+  /// Honest failure state: the camera may be blocked by permissions or
+  /// unavailable on this device. Always offer manual entry as a fallback.
+  Widget _cameraError(Object error) {
+    final denied = error is MobileScannerException &&
+        (error.errorCode ==
+                MobileScannerErrorCode.permissionDenied ||
+            error.errorCode == MobileScannerErrorCode.unspecified);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              denied
+                  ? Icons.no_photography_outlined
+                  : Icons.videocam_off_outlined,
+              size: 44,
+              color: AppColors.muted,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              denied
+                  ? 'Camera permission is blocked'
+                  : 'Camera unavailable',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              denied
+                  ? 'Enable the camera permission for ClassCast in Android '
+                      'Settings, then try again.'
+                  : 'This device could not start the camera. '
+                      'Ask the teacher for the session ID or address instead.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: AppColors.muted, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.keyboard, size: 18),
+              label: const Text('Enter session ID instead'),
+            ),
+          ],
+        ),
       ),
     );
   }

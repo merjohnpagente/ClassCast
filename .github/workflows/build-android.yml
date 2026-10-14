@@ -74,9 +74,40 @@ jobs:
           rm -f test/widget_test.dart
           git checkout -- web/index.html web/manifest.json || true
 
-      - name: Configure Android (label + compileSdk 36)
+      - name: Configure Android (label, permissions, compileSdk 36)
         run: |
-          sed -i 's/android:label="[^"]*"/android:label="ClassCast Offline"/' android/app/src/main/AndroidManifest.xml
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          sed -i 's/android:label="[^"]*"/android:label="ClassCast Offline"/' "$MANIFEST"
+
+          # Permissions: QR scan (camera), Wi-Fi info for the joining address,
+          # and local networking for the Android-hosted server (phase 6).
+          # Insert before the closing <application> tag.
+          python3 - "$MANIFEST" <<'PY'
+          import sys, re
+          path = sys.argv[1]
+          src = open(path, encoding="utf-8").read()
+          perms = [
+              '<uses-permission android:name="android.permission.CAMERA"/>',
+              '<uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>',
+              '<uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>',
+              '<uses-permission android:name="android.permission.INTERNET"/>',
+              '<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>',
+          ]
+          missing = [p for p in perms if p not in src]
+          if missing:
+              block = "    " + "\n    ".join(missing) + "\n"
+              src = src.replace("<application", block + "    <application", 1)
+          # QR scanning camera is optional so the app still installs on
+          # devices without a camera; manual session-ID entry still works.
+          if "uses-feature" not in src:
+              src = src.replace(
+                  "<application",
+                  '    <uses-feature android:name="android.hardware.camera" android:required="false"/>\n    <application', 1)
+          open(path, "w", encoding="utf-8").write(src)
+          print("permissions patched")
+          PY
+          cat "$MANIFEST"
+
           # file_picker's transitive deps require compiling against Android 36.
           if [ -f android/app/build.gradle.kts ]; then
             sed -i -E 's/compileSdk *=.*/compileSdk = 36/' android/app/build.gradle.kts

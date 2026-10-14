@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../providers/app_state.dart';
 import '../theme/app_colors.dart';
 import '../utils/responsive.dart';
 import '../widgets/app_logo.dart';
@@ -20,7 +19,6 @@ class RoleSelectionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final app = context.watch<AppState>();
     return Scaffold(
       body: SafeArea(
         child: ContentWidth(
@@ -64,19 +62,6 @@ class RoleSelectionScreen extends StatelessWidget {
                 onTap: onStudent,
               ),
               const SizedBox(height: 24),
-              Card(
-                child: SwitchListTile(
-                  secondary: const Icon(Icons.science_outlined,
-                      color: AppColors.secondary),
-                  title: const Text('Demo mode',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: const Text(
-                      'Show labeled sample data for UI review'),
-                  value: app.demoMode,
-                  onChanged: (v) => app.setDemoMode(v),
-                ),
-              ),
-              const SizedBox(height: 8),
               Text(
                 'No internet needed. Connect to the teacher hotspot or local Wi-Fi.',
                 textAlign: TextAlign.center,

@@ -60,12 +60,11 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final sessions = context.watch<SessionProvider>();
-    final app = context.watch<AppState>();
     final active = sessions.active;
 
     return RefreshIndicator(
       onRefresh: () async {
-        await sessions.load(demoMode: app.demoMode);
+        await sessions.load();
         await _loadIp();
       },
       child: ListView(
@@ -76,9 +75,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 color: AppColors.ink,
               )),
           Text(
-            app.demoMode
-                ? 'Demo mode · sample data labeled'
-                : 'Host an offline classroom',
+            'Host an offline classroom',
             style: theme.textTheme.bodySmall?.copyWith(
               color: AppColors.muted,
             ),
