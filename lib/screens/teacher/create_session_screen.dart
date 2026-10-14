@@ -190,21 +190,20 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                               const SizedBox(width: 10),
                               const Expanded(
                                 child: Text(
-                                  'Students cannot reach this phone',
+                                  'Students cannot connect',
                                   style: TextStyle(
-                                      fontWeight: FontWeight.w700),
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15),
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'The classroom server could not start on port '
-                            '${active.port}. Try a different port in Settings, '
-                            'or end the session and start again. Nothing on '
-                            'this phone can be joined until it is running.',
+                            'Port ${active.port} is busy. Change the port in '
+                            'Settings, then start a new session.',
                             style: const TextStyle(
-                                color: AppColors.inkSecondary, fontSize: 12),
+                                color: AppColors.inkSecondary, fontSize: 14),
                           ),
                         ],
                       ),

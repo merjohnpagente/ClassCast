@@ -1,4 +1,4 @@
-
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
@@ -348,6 +348,24 @@ class _QrScanPageState extends State<_QrScanPage> {
     );
   }
 
+  /// One short sentence for the actual reason, because "camera not working"
+  /// with no next step is the most frustrating message in an app like this.
+  String _cameraHint(bool denied) {
+    // Browsers only expose the camera in a secure context: HTTPS, or
+    // localhost. Opened from a phone over plain http://<teacher-ip>, it is not.
+    final insecure = kIsWeb &&
+        Uri.base.scheme != 'https' &&
+        Uri.base.host != 'localhost';
+    if (insecure) {
+      return 'Browsers only allow the camera on a secure address. Open the app '
+          'on your phone, or type the session ID below.';
+    }
+    return denied
+        ? 'Allow the camera for ClassCast in your phone settings, then try '
+            'again.'
+        : 'Type the session ID instead — it is on the teacher screen.';
+  }
+
   /// Honest failure state: the camera may be blocked by permissions or
   /// unavailable on this device. Always offer manual entry as a fallback.
   Widget _cameraError(MobileScannerException error) {
@@ -370,24 +388,20 @@ class _QrScanPageState extends State<_QrScanPage> {
               ),
               const SizedBox(height: 12),
               Text(
-                denied
-                    ? 'Camera permission is blocked'
-                    : 'Camera unavailable',
+                denied ? 'Camera blocked' : 'Camera not available',
+                textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
+                  fontSize: 17,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Text(
-                denied
-                    ? 'Enable the camera permission for ClassCast in Android '
-                        'Settings, then try again.'
-                    : 'This device could not start the camera. Ask the '
-                        'teacher for the session ID or address instead.',
+                _cameraHint(denied),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                    color: Colors.white70, fontSize: 12, height: 1.4),
+                    color: Colors.white70, fontSize: 14, height: 1.45),
               ),
               const SizedBox(height: 20),
               Row(

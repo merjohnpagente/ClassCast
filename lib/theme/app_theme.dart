@@ -28,11 +28,29 @@ class AppTheme {
         },
       ),
     );
+    // Inter at a readable floor: the old 11–12px body sizes were the "can't
+    // read this" complaint, especially on a phone held at arm's length in a
+    // classroom. Secondary text now sits at 13px with real contrast.
+    final text = base.textTheme.apply(
+      fontFamily: 'Inter',
+      bodyColor: AppColors.ink,
+      displayColor: AppColors.ink,
+    );
     return base.copyWith(
-      textTheme: base.textTheme.apply(
-        fontFamily: 'Inter',
-        bodyColor: AppColors.ink,
-        displayColor: AppColors.ink,
+      textTheme: text.copyWith(
+        bodySmall: text.bodySmall?.copyWith(
+          fontSize: 13,
+          height: 1.4,
+          color: AppColors.inkSecondary,
+        ),
+        labelSmall: text.labelSmall?.copyWith(
+          fontSize: 12,
+          color: AppColors.inkSecondary,
+        ),
+        labelMedium: text.labelMedium?.copyWith(
+          fontSize: 13,
+          color: AppColors.inkSecondary,
+        ),
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.background,
@@ -131,7 +149,17 @@ class AppTheme {
         filled: true,
         fillColor: AppColors.surfaceSoft,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        labelStyle: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 14,
+          color: AppColors.inkSecondary,
+        ),
+        hintStyle: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 14,
+          color: AppColors.muted,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.input),
           borderSide: BorderSide.none,

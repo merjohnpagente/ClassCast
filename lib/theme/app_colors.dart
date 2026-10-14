@@ -16,7 +16,7 @@ class AppColors {
 
   static const ink = Color(0xFF14213D); // dark navy
   static const inkSecondary = Color(0xFF3E4A63);
-  static const muted = Color(0xFF7C879D); // muted gray
+  static const muted = Color(0xFF6B7688); // muted gray (kept legible)
   static const border = Color(0xFFE4E9F2);
 
   static const success = Color(0xFF1F9D55);
