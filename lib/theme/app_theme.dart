@@ -1,11 +1,11 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 
 /// Material 3 theme for ClassCast Offline.
-/// Inter typography, white background, royal-blue accents.
+/// Bundled Inter (assets/fonts), white background, royal-blue accents.
+/// Fully offline — no runtime font downloads.
 class AppTheme {
   static ThemeData light() {
     final base = ThemeData(
@@ -29,17 +29,19 @@ class AppTheme {
       ),
     );
     return base.copyWith(
-      textTheme: GoogleFonts.interTextTheme(base.textTheme).apply(
+      textTheme: base.textTheme.apply(
+        fontFamily: 'Inter',
         bodyColor: AppColors.ink,
         displayColor: AppColors.ink,
       ),
-      appBarTheme: AppBarTheme(
+      appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.background,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
         foregroundColor: AppColors.ink,
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: TextStyle(
+          fontFamily: 'Inter',
           fontSize: 18,
           fontWeight: FontWeight.w700,
           color: AppColors.ink,
@@ -64,7 +66,8 @@ class AppTheme {
         indicatorColor: AppColors.primarySoft,
         height: 68,
         labelTextStyle: WidgetStateProperty.resolveWith(
-          (states) => GoogleFonts.inter(
+          (states) => TextStyle(
+            fontFamily: 'Inter',
             fontSize: 12,
             fontWeight: states.contains(WidgetState.selected)
                 ? FontWeight.w600
@@ -100,7 +103,8 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.input),
           ),
-          textStyle: GoogleFonts.inter(
+          textStyle: const TextStyle(
+            fontFamily: 'Inter',
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -119,7 +123,8 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primary,
-          textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+          textStyle:
+              const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
