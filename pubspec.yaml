@@ -22,7 +22,7 @@ dependencies:
   file_picker: ^13.1.0
   network_info_plus: ^8.2.2
   uuid: ^4.5.1
-  archive: ^3.6.1
+  archive: ^4.0.9
   xml: ^7.0.1
   syncfusion_flutter_pdfviewer: ^33.2.13
   shelf: ^1.4.2

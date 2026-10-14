@@ -223,7 +223,7 @@ Uint8List _zip(Map<String, Object> files) {
     archive.addFile(ArchiveFile(entry.key, bytes.length, bytes));
   }
   final encoded = ZipEncoder().encode(archive);
-  return Uint8List.fromList(encoded ?? const <int>[]);
+  return encoded is Uint8List ? encoded : Uint8List.fromList(encoded);
 }
 
 const _contentTypes = '''
