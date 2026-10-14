@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../providers/app_state.dart';
 import '../../providers/sync_provider.dart';
 import '../../services/classcast_client.dart';
 import '../../widgets/app_scaffold.dart';
@@ -51,6 +52,15 @@ class _StudentShellState extends State<StudentShell> {
       destinations: _destinations,
       currentIndex: _index,
       onNavigate: (i) => setState(() => _index = i),
+      // Back from the Join (QR / session ID) flow returns to role selection.
+      // Leaving first matters: otherwise the socket and participant entry
+      // would outlive the screen.
+      onBack: () async {
+        if (joined) await sync.leave();
+        if (context.mounted) {
+          context.read<AppState>().resetRole();
+        }
+      },
       actions: [
         if (joined)
           TextButton.icon(

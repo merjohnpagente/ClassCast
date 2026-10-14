@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/app_state.dart';
 import '../../widgets/app_scaffold.dart';
 import 'create_session_screen.dart';
 import 'teacher_dashboard.dart';
@@ -43,6 +45,9 @@ class _TeacherShellState extends State<TeacherShell> {
       destinations: _destinations,
       currentIndex: _index,
       onNavigate: (i) => setState(() => _index = i),
+      // This shell is the app's home route, so an explicit leading is the
+      // only way back to the role screen.
+      onBack: () => context.read<AppState>().resetRole(),
       actions: [
         IconButton(
           tooltip: 'Present now',

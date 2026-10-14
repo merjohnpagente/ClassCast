@@ -17,6 +17,13 @@ class AppScaffold extends StatelessWidget {
   final Widget? panel;
   final bool showBack;
 
+  /// Explicit back affordance.
+  ///
+  /// Needed by the role shells: they are the app's `home` route, so
+  /// `Navigator.canPop()` is false and `automaticallyImplyLeading` silently
+  /// draws nothing, leaving users with no way back to role selection.
+  final VoidCallback? onBack;
+
   const AppScaffold({
     super.key,
     required this.title,
@@ -28,7 +35,17 @@ class AppScaffold extends StatelessWidget {
     this.floatingActionButton,
     this.panel,
     this.showBack = false,
+    this.onBack,
   });
+
+  Widget? _leading() {
+    if (onBack == null) return null;
+    return IconButton(
+      icon: const Icon(Icons.arrow_back),
+      tooltip: 'Back',
+      onPressed: onBack,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +53,7 @@ class AppScaffold extends StatelessWidget {
       return Scaffold(
         appBar: AppBar(
           automaticallyImplyLeading: showBack,
+          leading: _leading(),
           title: Text(title),
           actions: actions,
         ),
@@ -77,6 +95,7 @@ class AppScaffold extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: showBack,
+        leading: _leading(),
         title: Text(title),
         actions: actions,
       ),

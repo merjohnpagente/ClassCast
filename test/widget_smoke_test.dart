@@ -61,4 +61,47 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Join Classroom'), findsWidgets);
   });
+
+  testWidgets('teacher shell has a back button to role selection',
+      (tester) async {
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: appProviders(),
+        child: const ClassCastApp(),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 1600));
+    await tester.tap(find.text('Teacher'));
+    await tester.pumpAndSettle();
+
+    // The shell is the app's home route, so this back button must be an
+    // explicit leading rather than an automaticallyImplyLeading arrow.
+    expect(find.byTooltip('Back'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose your role'), findsOneWidget);
+  });
+
+  testWidgets('student join screen has a back button to role selection',
+      (tester) async {
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: appProviders(),
+        child: const ClassCastApp(),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 1600));
+    await tester.tap(find.text('Student'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byTooltip('Back'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back'));
+    // Same IndexedStack caveat as above: avoid pumpAndSettle here.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Choose your role'), findsOneWidget);
+  });
 }
