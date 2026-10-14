@@ -1,4 +1,3 @@
-import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -205,11 +204,6 @@ class _QrScanPageState extends State<_QrScanPage> {
   late final MobileScannerController _ctrl;
   bool _done = false;
 
-  /// Stream state so we can show a real error (e.g. camera denied)
-  /// instead of a silent black screen.
-  StreamSubscription<Object>? _states;
-  Object? _error;
-
   @override
   void initState() {
     super.initState();
@@ -217,12 +211,10 @@ class _QrScanPageState extends State<_QrScanPage> {
       detectionSpeed: DetectionSpeed.noDuplicates,
       formats: const [BarcodeFormat.qrCode],
     );
-    _states = _ctrl.start().catchError((Object e) => _error = e);
   }
 
   @override
   void dispose() {
-    _states?.cancel();
     _ctrl.dispose();
     super.dispose();
   }
@@ -233,7 +225,21 @@ class _QrScanPageState extends State<_QrScanPage> {
       appBar: AppBar(title: const Text('Scan QR Code')),
       body: Column(
         children: [
-          Expanded(child: _view()),
+          Expanded(
+            child: MobileScanner(
+              controller: _ctrl,
+              errorBuilder: (context, error, child) =>
+                  _cameraError(error),
+              onDetect: (capture) {
+                if (_done) return;
+                if (capture.barcodes.isEmpty) return;
+                final code = capture.barcodes.first.rawValue;
+                if (code == null || code.isEmpty) return;
+                _done = true;
+                widget.onScanned(code);
+              },
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
@@ -249,30 +255,11 @@ class _QrScanPageState extends State<_QrScanPage> {
     );
   }
 
-  Widget _view() {
-    return MobileScanner(
-      controller: _ctrl,
-      errorBuilder: (context, error) {
-        return _cameraError(error);
-      },
-      onDetect: (capture) {
-        if (_done) return;
-        if (capture.barcodes.isEmpty) return;
-        final code = capture.barcodes.first.rawValue;
-        if (code == null || code.isEmpty) return;
-        _done = true;
-        widget.onScanned(code);
-      },
-    );
-  }
-
   /// Honest failure state: the camera may be blocked by permissions or
   /// unavailable on this device. Always offer manual entry as a fallback.
-  Widget _cameraError(Object error) {
-    final denied = error is MobileScannerException &&
-        (error.errorCode ==
-                MobileScannerErrorCode.permissionDenied ||
-            error.errorCode == MobileScannerErrorCode.unspecified);
+  Widget _cameraError(MobileScannerException error) {
+    final denied = error.errorCode ==
+        MobileScannerErrorCode.permissionDenied;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -298,8 +285,8 @@ class _QrScanPageState extends State<_QrScanPage> {
               denied
                   ? 'Enable the camera permission for ClassCast in Android '
                       'Settings, then try again.'
-                  : 'This device could not start the camera. '
-                      'Ask the teacher for the session ID or address instead.',
+                  : 'This device could not start the camera. Ask the '
+                      'teacher for the session ID or address instead.',
               textAlign: TextAlign.center,
               style: const TextStyle(
                   color: AppColors.muted, fontSize: 12),
