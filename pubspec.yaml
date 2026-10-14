@@ -23,7 +23,7 @@ dependencies:
   network_info_plus: ^8.2.2
   uuid: ^4.5.1
   archive: ^3.6.1
-  xml: ^6.5.0
+  xml: ^7.0.1
   syncfusion_flutter_pdfviewer: ^33.2.13
   shelf: ^1.4.2
   shelf_router: ^1.1.4
