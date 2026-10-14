@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/doc_types.dart';
+import '../../models/shared_document.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/session_provider.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/document_card.dart';
+import '../../widgets/motion.dart';
+import '../../widgets/status_bits.dart';
 import '../../widgets/state_cards.dart';
 import '../teacher/share_document_screen.dart';
 
@@ -46,41 +49,65 @@ class _FilesScreenState extends State<FilesScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _search,
-                onChanged: (v) => library.setQuery(v),
-                textInputAction: TextInputAction.search,
-                decoration: const InputDecoration(
-                  hintText: 'Search files…',
-                  prefixIcon: Icon(Icons.search),
+        FadeIn(
+          child: SectionHeader(
+            title: widget.sharing ? 'Documents' : 'Files',
+            subtitle: library.items.isEmpty
+                ? null
+                : '${library.items.length} file'
+                    '${library.items.length == 1 ? '' : 's'}',
+          ),
+        ),
+        FadeIn(
+          delay: Motion.stagger(1),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _search,
+                  onChanged: (v) => library.setQuery(v),
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    hintText: 'Search files',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 14),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            IconButton.filled(
-              tooltip: 'Add files',
-              icon: const Icon(Icons.add),
-              onPressed: () async {
-                final messenger = ScaffoldMessenger.of(context);
-                final ok =
-                    await library.pickAndAdd();
-                if (!mounted) return;
-                if (!ok && library.error != null) {
-                  messenger.showSnackBar(
-                    SnackBar(content: Text(library.error!)),
-                  );
-                }
-              },
-            ),
-          ],
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final ok = await library.pickAndAdd();
+                  if (!mounted) return;
+                  if (!ok && library.error != null) {
+                    messenger.showSnackBar(
+                      SnackBar(content: Text(library.error!)),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Add'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 48),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         _filters(context, library),
-        const SizedBox(height: 8),
-        Expanded(child: _body(context, library, visible)),
+        const SizedBox(height: 10),
+        // Cross-fade between loading / empty / list instead of a hard swap.
+        Expanded(
+          child: AnimatedSwitcher(
+            duration: Motion.standard,
+            child: _body(context, library, visible),
+          ),
+        ),
       ],
     );
   }
@@ -114,7 +141,7 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   Widget _body(BuildContext context, LibraryProvider library,
-      List visible) {
+      List<SharedDocument> visible) {
     if (!library.isLoaded) {
       return const LoadingState(message: 'Loading files…');
     }
@@ -133,7 +160,8 @@ class _FilesScreenState extends State<FilesScreen> {
             : 'No documents yet',
         subtitle: library.query.isNotEmpty || library.filter != null
             ? 'Try a different search or filter.'
-            : 'Add PDF, slides, docs, sheets, images, or text files.',
+            : 'PDF, PowerPoint, Word, Excel, images and text all open '
+                'straight on this phone.',
         actionLabel: 'Add files',
         onAction: () => library.pickAndAdd(),
       );
@@ -142,8 +170,7 @@ class _FilesScreenState extends State<FilesScreen> {
       return GridView.builder(
         gridDelegate: docGridDelegate(mainExtent: 132),
         itemCount: visible.length,
-        itemBuilder: (_, i) =>
-            _card(context, visible[i] as dynamic),
+        itemBuilder: (_, i) => _card(context, visible[i]),
       );
     }
     return ListView.builder(
@@ -155,7 +182,7 @@ class _FilesScreenState extends State<FilesScreen> {
     );
   }
 
-  Widget _card(BuildContext context, doc) {
+  Widget _card(BuildContext context, SharedDocument doc) {
     final sessions = context.read<SessionProvider>();
     final sharingToActive = widget.sharing && sessions.active != null;
     return DocumentCard(

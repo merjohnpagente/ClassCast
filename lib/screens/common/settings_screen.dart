@@ -5,6 +5,8 @@ import '../../providers/app_state.dart';
 import '../../providers/session_provider.dart';
 import '../../services/network_service.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/responsive.dart';
+import '../../widgets/motion.dart';
 import '../../widgets/status_bits.dart';
 import 'network_help_screen.dart';
 
@@ -49,9 +51,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final sessions = context.watch<SessionProvider>();
     final isTeacher = widget.roleLabel == 'Teacher';
 
-    return ListView(
+    return ContentWidth(
+      maxWidth: 640,
+      child: ListView(
       children: [
-        const SectionHeader(title: 'Network'),
+        FadeIn(child: const SectionHeader(title: 'Network')),
         Card(
           child: Column(
             children: [
@@ -182,7 +186,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const SizedBox(height: 24),
-      ],
+        ],
+      ),
     );
   }
 

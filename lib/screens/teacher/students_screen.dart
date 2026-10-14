@@ -6,6 +6,7 @@ import '../../providers/session_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/formatters.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/motion.dart';
 import '../../widgets/state_cards.dart';
 
 /// Connected students: total, list, status, device, join time,
@@ -35,18 +36,19 @@ class StudentsScreen extends StatelessWidget {
         child: ListView(
           padding: EdgeInsets.all(context.pagePadding),
           children: [
-            Text('${sessions.connectedCount} Online',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.ink,
-                )),
+            FadeIn(
+              child: Text('${sessions.connectedCount} online',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink,
+                  )),
+            ),
             const SizedBox(height: 8),
             if (items.isEmpty)
               const EmptyState(
                 icon: Icons.people_outline,
-                title: 'No connected students',
-                subtitle:
-                    'Share the QR code or joining address to invite students.',
+                title: 'No students yet',
+                subtitle: 'Show the QR code — students join by scanning it.',
               )
             else
               for (final p in items)
