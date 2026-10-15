@@ -73,13 +73,22 @@ void main() {
 
   test('a page change clamps to the real total', () async {
     await sessions.createSession(name: 'Physics');
-    sessions.setTotalPages(3);
+    // The total only arrives with a document, which is how the teacher
+    // actually learns it: the file is opened and counted.
+    sessions.applyEvent(SyncEvent(
+      type: SyncEventType.documentChanged,
+      sessionId: sessions.active!.id,
+      documentId: 'doc-1',
+      documentName: 'lesson.pptx',
+      totalPages: 3,
+    ));
     sessions.applyEvent(SyncEvent(
       type: SyncEventType.pageChanged,
       sessionId: sessions.active!.id,
       page: 99,
     ));
 
+    expect(sessions.active!.totalPages, 3);
     expect(sessions.active!.page, 3);
   });
 

@@ -152,7 +152,7 @@ void main() {
     test('entries whose file has vanished are pruned, real ones are kept',
         () async {
       final library = LibraryStore();
-      final present = await _tempFile('present.pdf');
+      final present = _tempFile('present.pdf');
       addTearDown(() => present.deleteSync());
 
       await library.save(SharedDocument(
