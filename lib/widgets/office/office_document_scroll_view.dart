@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../../services/ooxml/docx_document.dart';
 import '../../services/ooxml/ooxml_document.dart';
 import '../../services/ooxml/xlsx_workbook.dart';
+import '../document_zoom.dart';
 import 'docx_page_view.dart';
 import 'pptx_slide_view.dart';
 import 'xlsx_sheet_view.dart';
+
 
 /// How a document is presented.
 enum OfficeViewMode {
