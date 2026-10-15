@@ -4,8 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import '../widgets/app_logo.dart';
+import '../widgets/motion.dart';
 
-/// Splash: logo, name, tagline, short load, then auto-navigate.
+/// Splash: the logo settles in, then the app moves on.
+///
+/// Everything is finite — a looping animation here would keep the CPU awake
+/// during the one moment the app has nothing to do.
 class SplashScreen extends StatefulWidget {
   final VoidCallback onFinished;
 
@@ -50,35 +54,78 @@ class _SplashScreenState extends State<SplashScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const AppLogo(size: 88),
-                const SizedBox(height: 16),
-                Text('ClassCast',
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.ink,
-                    )),
-                Text('Offline',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.muted,
-                      letterSpacing: 4,
-                    )),
-                const SizedBox(height: 8),
-                Text('Share. Present. Learn.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: AppColors.muted,
-                    )),
-                const SizedBox(height: 28),
-                const SizedBox(
-                  width: 28,
-                  height: 28,
-                  child: CircularProgressIndicator(strokeWidth: 3),
+                // The mark grows out of nothing, then the wordmark follows it:
+                // one gesture, so the screen feels composed rather than stacked.
+                TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0.86, end: 1),
+                  duration: Motion.page,
+                  curve: Curves.easeOutBack,
+                  builder: (context, value, child) => Transform.scale(
+                    scale: value,
+                    child: Opacity(opacity: value.clamp(0, 1), child: child),
+                  ),
+                  child: const AppLogo(size: 88),
                 ),
-                const SizedBox(height: 16),
-                Text('v1.0.2 · works offline',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: AppColors.muted,
-                    )),
+                FadeIn(
+                  delay: Motion.stagger(2),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 18),
+                      Text(
+                        'ClassCast',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.ink,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'OFFLINE',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                          letterSpacing: 3,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Share. Present. Learn.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: AppColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 30),
+                // A determinate-looking sweep instead of an endless spinner:
+                // it finishes exactly as the app hands over to the role screen.
+                SizedBox(
+                  width: 120,
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: 0, end: 1),
+                    duration: const Duration(milliseconds: 1250),
+                    curve: Curves.easeInOutCubic,
+                    builder: (context, value, _) => ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: value,
+                        minHeight: 3,
+                        backgroundColor: AppColors.primarySoft,
+                        valueColor:
+                            const AlwaysStoppedAnimation(AppColors.primary),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Works without internet',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.muted,
+                  ),
+                ),
               ],
             ),
           ),
@@ -87,3 +134,4 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 }
+

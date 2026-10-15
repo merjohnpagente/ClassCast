@@ -65,15 +65,19 @@ class AppTheme {
           color: AppColors.ink,
         ),
       ),
-      cardTheme: const CardThemeData(
+      cardTheme: CardThemeData(
         color: AppColors.surface,
         elevation: 0,
+        margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius:
               BorderRadius.all(Radius.circular(AppRadius.card)),
           side: BorderSide(color: AppColors.border, width: 1),
         ),
       ),
+      // A hairline plus a whisper of shadow: enough to lift a card off the
+      // page without the "sticker" look of a heavy border.
+      shadowColor: const Color(0x14000000),
       dividerTheme: const DividerThemeData(
         color: AppColors.border,
         thickness: 1,

@@ -8,6 +8,7 @@ import '../../services/network_service.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
 import '../../utils/validators.dart';
+import '../../widgets/motion.dart';
 import '../../widgets/qr_card.dart';
 import '../../widgets/status_bits.dart';
 import 'presentation_screen.dart';

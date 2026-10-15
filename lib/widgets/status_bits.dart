@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import 'motion.dart';
 
 /// Small status pill: icon + short label. Used for connection,
 /// sharing, conversion, and presence states.
@@ -62,7 +63,12 @@ class StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    // A chip that flips between live and paused should not snap: the colour
+    // and the label cross-fade, which is the only feedback the teacher gets
+    // when a control toggles.
+    return AnimatedContainer(
+      duration: Motion.standard,
+      curve: Curves.easeOut,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: background,
@@ -71,14 +77,25 @@ class StatusChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
+          AnimatedSwitcher(
+            duration: Motion.standard,
+            child: Icon(icon, size: 14, color: color, key: ValueKey(icon)),
+          ),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: color,
+          AnimatedSwitcher(
+            duration: Motion.standard,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: child,
+            ),
+            child: Text(
+              label,
+              key: ValueKey(label),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
             ),
           ),
         ],

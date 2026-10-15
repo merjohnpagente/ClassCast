@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import '../utils/responsive.dart';
+import 'motion.dart';
 
 /// Responsive shell: bottom nav on phones, sidebar on desktop.
 /// [destinations] drives both. [panel] is an optional right-side panel
 /// (session info) on wide screens.
-class AppScaffold extends StatelessWidget {
+class AppScaffold extends StatefulWidget {
   final String title;
   final Widget body;
   final List<AppDestination> destinations;
@@ -38,17 +39,32 @@ class AppScaffold extends StatelessWidget {
     this.onBack,
   });
 
+  @override
+  State<AppScaffold> createState() => _AppScaffoldState();
+}
+
+class _AppScaffoldState extends State<AppScaffold> {
   Widget? _leading() {
-    if (onBack == null) return null;
+    if (widget.onBack == null) return null;
     return IconButton(
       icon: const Icon(Icons.arrow_back),
       tooltip: 'Back',
-      onPressed: onBack,
+      onPressed: widget.onBack,
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final title = widget.title;
+    final body = widget.body;
+    final destinations = widget.destinations;
+    final currentIndex = widget.currentIndex;
+    final onNavigate = widget.onNavigate;
+    final actions = widget.actions;
+    final floatingActionButton = widget.floatingActionButton;
+    final panel = widget.panel;
+    final showBack = widget.showBack;
+
     if (context.isDesktop) {
       return Scaffold(
         appBar: AppBar(
@@ -77,15 +93,14 @@ class AppScaffold extends StatelessWidget {
             Expanded(
               child: ContentWidth(
                 child: Padding(
-                  padding:
-                      EdgeInsets.all(context.pagePadding),
-                  child: body,
+                  padding: EdgeInsets.all(context.pagePadding),
+                  child: _withTabFade(body),
                 ),
               ),
             ),
             if (panel != null) ...[
               const VerticalDivider(width: 1),
-              SizedBox(width: 300, child: panel!),
+              SizedBox(width: 300, child: panel),
             ],
           ],
         ),
@@ -101,11 +116,9 @@ class AppScaffold extends StatelessWidget {
       ),
       body: Padding(
         padding: EdgeInsets.all(context.pagePadding),
-        // Centred on tablets and wide phones too: a form stretched across the
-        // whole width reads as "broken layout", not as "big screen".
         child: ContentWidth(
           maxWidth: 720,
-          child: body,
+          child: _withTabFade(body),
         ),
       ),
       bottomNavigationBar: NavigationBar(
@@ -121,6 +134,20 @@ class AppScaffold extends StatelessWidget {
         ],
       ),
       floatingActionButton: floatingActionButton,
+    );
+  }
+
+  /// A short dip on tab change. The tab screens keep their state underneath,
+  /// so this reads as a cross-fade rather than a rebuild.
+  Widget _withTabFade(Widget child) {
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(widget.currentIndex),
+      tween: Tween<double>(begin: 0.72, end: 1),
+      duration: Motion.standard,
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) =>
+          Opacity(opacity: value, child: child),
+      child: child,
     );
   }
 }
