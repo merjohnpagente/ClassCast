@@ -374,6 +374,14 @@ class SessionProvider extends ChangeNotifier {
     unawaited(_host.setPaused(_active!, paused));
   }
 
+  /// Pull a wandering student back onto the class page. Omitting the id pulls
+  /// the whole class back, which is what a teacher means by "take control".
+  void takeControl({String? participantId}) {
+    final active = _active;
+    if (active == null) return;
+    unawaited(_host.takeControl(active, participantId: participantId));
+  }
+
   /// Apply an incoming sync event (student echo / host broadcast).
   void applyEvent(SyncEvent event) {
     if (_active == null || event.sessionId != _active!.id) return;
@@ -431,6 +439,9 @@ class SessionProvider extends ChangeNotifier {
       case SyncEventType.join:
       case SyncEventType.sessionState:
       case SyncEventType.connectionStatus:
+      case SyncEventType.takeControl:
+        // The host answers the teacher's take-control with a page change on the
+        // student's own socket only; the teacher's screen has nothing to do.
         break;
     }
   }

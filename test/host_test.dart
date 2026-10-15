@@ -100,6 +100,15 @@ void main() {
     expect(res.statusCode, 403);
   });
 
+  test('take control needs the teacher key', () async {
+    await send('POST', '/api/session', {'id': 'CLASS-TC', 'teacherKey': 'k9'});
+    final denied = await send('POST', '/api/take-control', {'teacherKey': 'wrong'});
+    expect(denied.statusCode, 403);
+    final allowed = await json(
+        await send('POST', '/api/take-control', {'teacherKey': 'k9'}));
+    expect(allowed['ok'], isTrue);
+  });
+
   test('stopping releases the port', () async {
     await ClasscastHost.instance.stop();
     final again = await ClasscastHost.instance.start(port: port);

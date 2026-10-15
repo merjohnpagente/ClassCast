@@ -143,6 +143,8 @@ class SyncProvider extends ChangeNotifier {
           );
           if (event.documentId != null) _hasDocument = true;
           _syncPaused = _snapshot!.syncPaused;
+          // Following the class again is normal teaching, so the hold is over.
+          if (event.page != null) _takenOver = false;
           notifyListeners();
           break;
         case SyncEventType.sessionEnded:
@@ -158,6 +160,19 @@ class SyncProvider extends ChangeNotifier {
           // The teacher mirrors these on their own screen; the student UI
           // only needs its own hand state, tracked locally.
           break;
+        case SyncEventType.takeControl:
+          // The teacher wants this screen back on the class page. Land on the
+          // page they are on now, and hold this student to it until the class
+          // page moves again.
+          final base = _snapshot;
+          if (base == null) return;
+          _takenOver = true;
+          _snapshot = base.copyWith(
+            page: event.page ?? base.page,
+            totalPages: event.totalPages ?? base.totalPages,
+          );
+          notifyListeners();
+          break;
         case SyncEventType.participantJoined:
         case SyncEventType.participantLeft:
         case SyncEventType.join:
@@ -166,6 +181,18 @@ class SyncProvider extends ChangeNotifier {
       }
     });
   }
+
+  /// True while the teacher holds this screen to the class page. Cleared as
+  /// soon as the class page moves, because then following it is the point.
+  bool _takenOver = false;
+  bool get takenOver => _takenOver;
+
+  /// Whether this student may turn pages right now.
+  ///
+  /// Turned off while taken over: that is what "take control" means, and
+  /// letting the student keep turning pages would make it a no-op.
+  bool get canNavigate =>
+      (_snapshot?.allowStudentNav ?? false) && !_takenOver;
 
   /// Whether this student currently has a hand up.
   bool _handRaised = false;

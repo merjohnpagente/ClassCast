@@ -22,6 +22,10 @@ enum SyncEventType {
   /// allows it). The teacher sees where that student is — it does not take
   /// the class page away from them.
   studentPageChanged,
+
+  /// The teacher pulled a student's screen back to the class page. Sent to one
+  /// student, or to everyone when the teacher wants the whole class back.
+  takeControl,
 }
 
 extension SyncEventTypeWire on SyncEventType {
@@ -49,6 +53,8 @@ extension SyncEventTypeWire on SyncEventType {
         return 'hand_lowered';
       case SyncEventType.studentPageChanged:
         return 'student_page_changed';
+      case SyncEventType.takeControl:
+        return 'take_control';
     }
   }
 
@@ -76,6 +82,8 @@ extension SyncEventTypeWire on SyncEventType {
         return SyncEventType.handLowered;
       case 'student_page_changed':
         return SyncEventType.studentPageChanged;
+      case 'take_control':
+        return SyncEventType.takeControl;
       default:
         return null;
     }

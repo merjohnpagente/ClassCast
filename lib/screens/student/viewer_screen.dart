@@ -205,14 +205,14 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
     if (page == _lastReportedPage) return;
     _lastReportedPage = page;
     final sync = context.read<SyncProvider>();
-    if (sync.snapshot?.allowStudentNav ?? false) sync.reportPage(page);
+    if (sync.canNavigate) sync.reportPage(page);
   }
 
   int _lastReportedPage = -1;
 
   Widget _footer(BuildContext context, ClassroomSession active) {
     final sync = context.watch<SyncProvider>();
-    final canNav = active.allowStudentNav;
+    final canNav = sync.canNavigate;
     final canDownload = active.allowDownload;
     return Row(
       children: [
@@ -229,8 +229,10 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
         ),
         Expanded(
           child: Text(
-            'Teacher controls the presentation'
-            '${canNav ? ' · you may also turn pages' : ''}',
+            sync.takenOver
+                ? 'The teacher took control — back on the class page'
+                : 'Teacher controls the presentation'
+                    '${canNav ? ' · you may also turn pages' : ''}',
             textAlign: TextAlign.center,
             style: Theme.of(context)
                 .textTheme

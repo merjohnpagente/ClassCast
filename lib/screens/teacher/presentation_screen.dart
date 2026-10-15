@@ -346,6 +346,11 @@ class _TeacherPresentationScreenState
                           : Icons.pause),
                       onPressed: () => sessions.setPaused(!active.syncPaused),
                     ),
+                    IconButton(
+                      tooltip: 'Bring every student back to this page',
+                      icon: const Icon(Icons.my_location),
+                      onPressed: () => sessions.takeControl(),
+                    ),
                     FilledButton.icon(
                       onPressed: () => sessions.endSession(),
                       icon: const Icon(Icons.stop, size: 18),
@@ -541,6 +546,16 @@ class _TeacherPresentationScreenState
                     icon: const Icon(Icons.check, color: AppColors.success),
                     onPressed: () => sessions.lowerHand(student.id),
                   ),
+                // Pull a wandering student back onto the class page.
+                IconButton(
+                  tooltip: 'Take control',
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 16,
+                  icon: const Icon(Icons.my_location,
+                      color: AppColors.primary),
+                  onPressed: () => sessions.takeControl(
+                      participantId: student.id),
+                ),
                 if (student.deviceType.isNotEmpty)
                   Text(student.deviceType,
                       style: const TextStyle(

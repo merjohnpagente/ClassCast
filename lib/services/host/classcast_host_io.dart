@@ -39,6 +39,10 @@ class ClasscastHost {
   final Set<String> _raisedHands = {};
   final Set<WebSocketChannel> _sockets = {};
 
+  /// Socket per student id. The roster is a broadcast, but pulling one student
+  /// back to the class page has to reach exactly that student and nobody else.
+  final Map<String, WebSocketChannel> _socketsById = {};
+
   bool get running => _server != null;
   int get port => _port;
 
@@ -86,6 +90,7 @@ class ClasscastHost {
       } catch (_) {/* already gone */}
     }
     _sockets.clear();
+    _socketsById.clear();
     _participants.clear();
     final server = _server;
     _server = null;
@@ -130,6 +135,9 @@ class ClasscastHost {
       }
       if (path == '/api/end') {
         return await _endEndpoint(request);
+      }
+      if (path == '/api/take-control') {
+        return await _takeControlEndpoint(request);
       }
       if (path == '/ws') {
         return await _websocket(request);
@@ -282,8 +290,49 @@ class ClasscastHost {
     return _json(request, 200, {'ok': true});
   }
 
-  // --- websocket -----------------------------------------------------------
+  /// Pull a student's screen back to the class page.
+  ///
+  /// With a participant id it reaches that one student; without, every student
+  /// gets it. Either way it carries the page to land on, so the student does
+  /// not have to wait for the next class page change to notice.
+  Future<void> _takeControlEndpoint(HttpRequest request) async {
+    if (request.method != 'POST') {
+      return _json(request, 405, {'ok': false, 'error': 'POST only'});
+    }
+    final body = await _readJson(request);
+    if (!_checkTeacher(body)) {
+      return _json(request, 403, {'ok': false, 'error': 'Permission denied'});
+    }
+    final pid = body['participantId'] as String? ?? '';
+    final frame = jsonEncode({
+      'type': 'take_control',
+      'sessionId': _session?['id'] ?? '',
+      if (pid.isNotEmpty) 'participantId': pid,
+      'page': _page,
+      'totalPages': _totalPages,
+    });
+    var sent = 0;
+    if (pid.isEmpty) {
+      _socketsById.forEach((id, socket) {
+        if (id == pid) return;
+        try {
+          socket.sink.add(frame);
+          sent++;
+        } catch (_) {/* that student just left */}
+      });
+    } else {
+      final socket = _socketsById[pid];
+      if (socket != null) {
+        try {
+          socket.sink.add(frame);
+          sent = 1;
+        } catch (_) {/* that student just left */}
+      }
+    }
+    return _json(request, 200, {'ok': true, 'notified': sent});
+  }
 
+  // --- websocket -----------------------------------------------------------
   Future<void> _websocket(HttpRequest request) async {
     final sessionId = request.uri.queryParameters['session'] ?? '';
     final name = request.uri.queryParameters['name'] ?? 'Student';
@@ -307,6 +356,7 @@ class ClasscastHost {
     final pid = isTeacher ? '' : 'ws-${DateTime.now().microsecondsSinceEpoch}';
     if (!isTeacher) {
       _participants[pid] = {'id': pid, 'name': name, 'device': device};
+      _socketsById[pid] = channel;
       _broadcast({
         'type': 'participant_joined',
         'sessionId': sessionId,
@@ -347,6 +397,7 @@ class ClasscastHost {
           'name': name,
           'device': message['message'] ?? '',
         };
+        _socketsById[pid] = channel;
         channel.sink.add(jsonEncode(_snapshotEvent('session_state')));
         _broadcast({
           'type': 'participant_joined',
@@ -397,6 +448,7 @@ class ClasscastHost {
   void _onClose(WebSocketChannel channel, String pid, String sessionId) {
     _sockets.remove(channel);
     if (pid.isEmpty || !_participants.containsKey(pid)) return;
+    _socketsById.remove(pid);
     _participants.remove(pid);
     _raisedHands.remove(pid);
     _broadcast({

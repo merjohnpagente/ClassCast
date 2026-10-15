@@ -28,6 +28,7 @@ class SyncProtocol {
   static const pageApi = '/api/page';
   static const pauseApi = '/api/pause';
   static const endApi = '/api/end';
+  static const takeControlApi = '/api/take-control';
   static const shareApi = '/api/document';
   static const filesRoot = '/files';
   static const webJoinPrefix = '/s/';

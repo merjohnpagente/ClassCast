@@ -73,6 +73,12 @@ class TeacherHostClient {
   Future<bool> setPaused(ClassroomSession s, bool paused) =>
       _serial(() => _post(s, SyncProtocol.pauseApi, {'paused': paused}));
 
+  /// Pull [participantId] back to the class page, or everyone when it is null.
+  Future<bool> takeControl(ClassroomSession s, {String? participantId}) =>
+      _serial(() => _post(s, SyncProtocol.takeControlApi, {
+        if (participantId != null) 'participantId': participantId,
+      }));
+
   Future<bool> endSession(ClassroomSession s) =>
       _serial(() => _post(s, SyncProtocol.endApi, const {}));
 
