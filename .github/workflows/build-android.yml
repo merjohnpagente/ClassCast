@@ -119,18 +119,20 @@ jobs:
 
       - name: Force a CameraX that works on Android 11-15
         run: |
-          # mobile_scanner 5.2.3 bundles CameraX 1.3.3 (2023). On Android
-          # 14/15 devices that version frequently fails to bind the camera and
-          # the scanner reports "No camera found or failed to open camera"
-          # even with the permission granted — which is exactly the symptom we
-          # were chasing. 1.4.x carries the vendor fixes for those devices.
+          # mobile_scanner 5.2.3 bundles CameraX 1.3.3 (2023) with ML Kit
+          # 17.2. On Android 14/15 that pair frequently fails to bind the
+          # camera ("No camera found or failed to open camera") even with the
+          # permission granted, and ML Kit 17.2 throws a null pointer against
+          # CameraX 1.4. These pins are the matching pair.
+          #
+          # configureEach, not afterEvaluate: appended at the end of the file
+          # the projects are already evaluated, and afterEvaluate is a hard
+          # error there. The injected block below carries no comments because
+          # the file may be Kotlin DSL, where # is a syntax error.
           FILE=android/build.gradle.kts
           [ -f "$FILE" ] || FILE=android/build.gradle
           cat >> "$FILE" <<'EOF'
 
-          # Applied lazily: `afterEvaluate` cannot run at the end of this file
-          # (the projects are already evaluated by then, which is a hard error),
-          # while configureEach registers the rule whenever a configuration is.
           subprojects {
               configurations.configureEach {
                   resolutionStrategy {
@@ -143,7 +145,7 @@ jobs:
               }
           }
           EOF
-          tail -16 "$FILE"
+          tail -14 "$FILE"
 
       - name: Install Android SDK 36
         run: |
