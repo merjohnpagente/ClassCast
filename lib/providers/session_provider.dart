@@ -107,6 +107,23 @@ class SessionProvider extends ChangeNotifier {
   List<Participant> _participants = [];
   List<Participant> get participants => List.unmodifiable(_participants);
 
+  /// Students who have a hand up, newest last. A raised hand that the teacher
+  /// never sees is a broken feature, so this is surfaced in the roster and as
+  /// a badge on the presentation screen.
+  final Map<String, String> _raisedHands = {};
+  Map<String, String> get raisedHands => Map.unmodifiable(_raisedHands);
+
+  /// Page each student is currently on, so the teacher can see that someone
+  /// browsed ahead or fell behind without taking the class page from them.
+  final Map<String, int> _studentPages = {};
+  Map<String, int> get studentPages => Map.unmodifiable(_studentPages);
+
+  /// Clear a raised hand (the student answered, or it was dismissed).
+  void lowerHand(String participantId) {
+    if (_raisedHands.remove(participantId) == null) return;
+    notifyListeners();
+  }
+
   bool _loaded = false;
   bool get isLoaded => _loaded;
 
@@ -390,7 +407,26 @@ class SessionProvider extends ChangeNotifier {
       case SyncEventType.participantLeft:
         if (event.participantId != null) {
           removeParticipant(event.participantId!);
+          _raisedHands.remove(event.participantId!);
+          _studentPages.remove(event.participantId!);
         }
+        break;
+      case SyncEventType.handRaised:
+        if (event.participantId != null) {
+          _raisedHands[event.participantId!] =
+              event.participantName ?? 'Student';
+        }
+        notifyListeners();
+        break;
+      case SyncEventType.handLowered:
+        if (event.participantId != null) _raisedHands.remove(event.participantId!);
+        notifyListeners();
+        break;
+      case SyncEventType.studentPageChanged:
+        if (event.participantId != null && event.page != null) {
+          _studentPages[event.participantId!] = event.page!;
+        }
+        notifyListeners();
         break;
       case SyncEventType.join:
       case SyncEventType.sessionState:

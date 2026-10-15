@@ -102,9 +102,18 @@ class _TeacherPresentationScreenState
                   background: AppColors.successBg),
             ),
           IconButton(
-            tooltip: 'Students',
+            tooltip: sessions.raisedHands.isEmpty
+                ? 'Students'
+                : '${sessions.raisedHands.length} hand(s) raised',
             icon: Badge(
-              label: Text('${sessions.connectedCount}'),
+              isLabelVisible: sessions.raisedHands.isNotEmpty,
+              label: Text('${sessions.raisedHands.length}'),
+              child: sessions.raisedHands.isEmpty
+                  ? Badge(
+                      label: Text('${sessions.connectedCount}'),
+                      child: const Icon(Icons.people_outline),
+                    )
+                  : const Icon(Icons.pan_tool),
               child: const Icon(Icons.people_outline),
             ),
             onPressed: () => _showStudents(context, sessions),
@@ -476,6 +485,17 @@ class _TeacherPresentationScreenState
             const SizedBox(width: 8),
             Text('${students.length} connected',
                 style: const TextStyle(fontWeight: FontWeight.w700)),
+            const Spacer(),
+            if (sessions.raisedHands.isNotEmpty)
+              Row(
+                children: [
+                  const Icon(Icons.pan_tool, size: 14, color: AppColors.warning),
+                  const SizedBox(width: 4),
+                  Text('${sessions.raisedHands.length} hand(s)',
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.warning)),
+                ],
+              ),
           ],
         ),
         const SizedBox(height: 6),
@@ -484,7 +504,15 @@ class _TeacherPresentationScreenState
             padding: const EdgeInsets.symmetric(vertical: 3),
             child: Row(
               children: [
-                const Icon(Icons.circle, size: 8, color: AppColors.success),
+                Icon(
+                  sessions.raisedHands.containsKey(student.id)
+                      ? Icons.pan_tool
+                      : Icons.circle,
+                  size: sessions.raisedHands.containsKey(student.id) ? 14 : 8,
+                  color: sessions.raisedHands.containsKey(student.id)
+                      ? AppColors.warning
+                      : AppColors.success,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -494,6 +522,19 @@ class _TeacherPresentationScreenState
                     style: const TextStyle(fontSize: 13),
                   ),
                 ),
+                // Where this student is, when the teacher let them browse.
+                if (sessions.studentPages[student.id] != null)
+                  Text('p${sessions.studentPages[student.id]}',
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.muted)),
+                if (sessions.raisedHands.containsKey(student.id))
+                  IconButton(
+                    tooltip: 'Lower hand',
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 16,
+                    icon: const Icon(Icons.check, color: AppColors.success),
+                    onPressed: () => sessions.lowerHand(student.id),
+                  ),
                 if (student.deviceType.isNotEmpty)
                   Text(student.deviceType,
                       style: const TextStyle(

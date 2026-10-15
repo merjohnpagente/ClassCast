@@ -324,7 +324,7 @@ class _QrScanPageState extends State<_QrScanPage> {
                 : 'Use the front camera',
             icon: Icon(
               _usingFrontCamera
-                  ? Icons.camerarear_outlined
+                  ? Icons.flip_camera_android_outlined
                   : Icons.camera_front_outlined,
               color: Colors.white,
             ),

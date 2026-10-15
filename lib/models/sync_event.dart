@@ -10,6 +10,18 @@ enum SyncEventType {
   participantJoined,
   participantLeft,
   connectionStatus,
+
+  /// A student raised their hand. Goes the other way too: student -> host ->
+  /// teacher, so the teacher sees it without losing control of the page.
+  handRaised,
+
+  /// The teacher lowered a student's hand (or the student did).
+  handLowered,
+
+  /// A student turned a page on their own screen (only when the teacher
+  /// allows it). The teacher sees where that student is — it does not take
+  /// the class page away from them.
+  studentPageChanged,
 }
 
 extension SyncEventTypeWire on SyncEventType {
@@ -31,6 +43,12 @@ extension SyncEventTypeWire on SyncEventType {
         return 'participant_left';
       case SyncEventType.connectionStatus:
         return 'connection_status';
+      case SyncEventType.handRaised:
+        return 'hand_raised';
+      case SyncEventType.handLowered:
+        return 'hand_lowered';
+      case SyncEventType.studentPageChanged:
+        return 'student_page_changed';
     }
   }
 
@@ -52,6 +70,12 @@ extension SyncEventTypeWire on SyncEventType {
         return SyncEventType.participantLeft;
       case 'connection_status':
         return SyncEventType.connectionStatus;
+      case 'hand_raised':
+        return SyncEventType.handRaised;
+      case 'hand_lowered':
+        return SyncEventType.handLowered;
+      case 'student_page_changed':
+        return SyncEventType.studentPageChanged;
       default:
         return null;
     }

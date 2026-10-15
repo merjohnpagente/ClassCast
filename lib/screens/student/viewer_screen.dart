@@ -197,6 +197,19 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
     return PageSwitcher(identity: 'page-${active.page}', child: viewer);
   }
 
+  /// Reports a self-driven page turn to the teacher.
+  ///
+  /// Only when the teacher allowed student navigation; the teacher sees where
+  /// this student is, but the class page stays the teacher's.
+  void _reportLocalPage(int page) {
+    if (page == _lastReportedPage) return;
+    _lastReportedPage = page;
+    final sync = context.read<SyncProvider>();
+    if (sync.snapshot?.allowStudentNav ?? false) sync.reportPage(page);
+  }
+
+  int _lastReportedPage = -1;
+
   Widget _footer(BuildContext context, ClassroomSession active) {
     final canNav = active.allowStudentNav;
     final canDownload = active.allowDownload;
@@ -207,7 +220,11 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
           icon: const Icon(Icons.chevron_left),
           onPressed: !canNav || active.page <= 1
               ? null
-              : () => _pdf.previousPage(),
+              : () {
+                  final next = active.page - 1;
+                  _pdf.previousPage();
+                  _reportLocalPage(next);
+                },
         ),
         Expanded(
           child: Text(
@@ -227,7 +244,20 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
                   (active.totalPages > 0 &&
                       active.page >= active.totalPages)
               ? null
-              : () => _pdf.nextPage(),
+              : () {
+                  final next = active.page + 1;
+                  _pdf.nextPage();
+                  _reportLocalPage(next);
+                },
+        ),
+        // Raise a hand: the teacher sees it straight away on their screen.
+        IconButton(
+          tooltip: sync.handRaised ? 'Lower hand' : 'Raise hand',
+          icon: Icon(
+            sync.handRaised ? Icons.pan_tool : Icons.pan_tool_outlined,
+            color: sync.handRaised ? AppColors.warning : null,
+          ),
+          onPressed: () => sync.setHandRaised(!sync.handRaised),
         ),
         IconButton(
           tooltip: 'Full screen',

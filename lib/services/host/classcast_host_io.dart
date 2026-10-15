@@ -34,6 +34,9 @@ class ClasscastHost {
   int _totalPages = 0;
   bool _syncPaused = false;
   final Map<String, Map<String, dynamic>> _participants = {};
+
+  /// Students with a raised hand, so a fresh teacher connection still sees it.
+  final Set<String> _raisedHands = {};
   final Set<WebSocketChannel> _sockets = {};
 
   bool get running => _server != null;
@@ -331,28 +334,71 @@ class ClasscastHost {
     } catch (_) {
       return;
     }
-    // Students must not drive the presentation: only `join` frames are
-    // accepted. Teacher control goes through the REST API with the teacher key.
-    if (message['type'] != 'join' || pid.isEmpty) return;
+    // Students must not drive the presentation: the class page is teacher
+    // control only, over REST with the teacher key. They may, however, *ask*
+    // for attention and report where they are, and those have to reach the
+    // teacher's screen — a hand raised that the teacher never sees is a
+    // broken feature.
     final name = message['participantName'] as String? ?? 'Student';
-    _participants[pid] = {
-      'id': pid,
-      'name': name,
-      'device': message['message'] ?? '',
-    };
-    channel.sink.add(jsonEncode(_snapshotEvent('session_state')));
-    _broadcast({
-      'type': 'participant_joined',
-      'sessionId': sessionId,
-      'participantId': pid,
-      'participantName': name,
-    });
+    switch (message['type']) {
+      case 'join':
+        _participants[pid] = {
+          'id': pid,
+          'name': name,
+          'device': message['message'] ?? '',
+        };
+        channel.sink.add(jsonEncode(_snapshotEvent('session_state')));
+        _broadcast({
+          'type': 'participant_joined',
+          'sessionId': sessionId,
+          'participantId': pid,
+          'participantName': name,
+        });
+        return;
+      case 'raise_hand':
+        if (pid.isEmpty) return;
+        _raisedHands.add(pid);
+        _broadcast({
+          'type': 'hand_raised',
+          'sessionId': sessionId,
+          'participantId': pid,
+          'participantName': _participants[pid]?['name'] ?? name,
+        });
+        return;
+      case 'lower_hand':
+        if (pid.isEmpty) return;
+        _raisedHands.remove(pid);
+        _broadcast({
+          'type': 'hand_lowered',
+          'sessionId': sessionId,
+          'participantId': pid,
+          'participantName': _participants[pid]?['name'] ?? name,
+        });
+        return;
+      case 'student_page':
+        if (pid.isEmpty) return;
+        final page = (message['page'] as num?)?.toInt();
+        if (page == null) return;
+        // Reported, not applied: the teacher sees where this student is.
+        _broadcast({
+          'type': 'student_page_changed',
+          'sessionId': sessionId,
+          'participantId': pid,
+          'participantName': _participants[pid]?['name'] ?? name,
+          'page': page,
+          'totalPages': _totalPages,
+        });
+        return;
+      default:
+        return;
+    }
   }
 
   void _onClose(WebSocketChannel channel, String pid, String sessionId) {
     _sockets.remove(channel);
     if (pid.isEmpty || !_participants.containsKey(pid)) return;
     _participants.remove(pid);
+    _raisedHands.remove(pid);
     _broadcast({
       'type': 'participant_left',
       'sessionId': sessionId,
