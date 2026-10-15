@@ -126,6 +126,14 @@ class _SplashScreenState extends State<SplashScreen> {
                     color: AppColors.muted,
                   ),
                 ),
+                const SizedBox(height: 6),
+                Text(
+                  'By MerjDev',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AppColors.muted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           ),

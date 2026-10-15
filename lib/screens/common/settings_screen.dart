@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/app_state.dart';
 import '../../providers/session_provider.dart';
@@ -159,7 +161,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     color: AppColors.primary),
                 title: Text('ClassCast Offline'),
                 subtitle: Text(
-                    'Share. Present. Learn.\nVersion 1.0.0 · works without internet.'),
+                    'Share. Present. Learn.\nDeveloped by MerjDev\nVersion 1.0.0 · works without internet.'),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.code, color: AppColors.primary),
+                title: const Text('GitHub'),
+                subtitle: const Text('merjohnpagente'),
+                trailing: const Icon(Icons.open_in_new, size: 18),
+                onTap: () => _openExternal(
+                  'Could not open the browser on this device.',
+                  Uri.parse('https://github.com/merjohnpagente'),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(
+                    Icons.volunteer_activism_outlined,
+                    color: AppColors.primary),
+                title: const Text('Buy me a coffee'),
+                subtitle: const Text('GCash 0915 043 5696'),
+                trailing: const Icon(Icons.copy_all_outlined, size: 18),
+                onTap: _copyGcash,
               ),
               const Divider(height: 1),
               ListTile(
@@ -188,6 +210,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 24),
         ],
       ),
+    );
+  }
+
+  /// Opening an external link must never be able to crash the settings page:
+  /// a phone with no browser, or a browser that refuses the intent, is normal
+  /// enough that the user gets a sentence instead of a red screen.
+  Future<void> _openExternal(String failure, Uri uri) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) throw StateError('launchUrl returned false');
+    } catch (_) {
+      messenger.showSnackBar(SnackBar(content: Text(failure)));
+    }
+  }
+
+  /// Copying the number is the only reliable way to reach a wallet: there is
+  /// no universal deep link, so the number travels and the user pastes it.
+  Future<void> _copyGcash() async {
+    const number = '09150435696';
+    await Clipboard.setData(const ClipboardData(text: number));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('GCash number copied — 0915 043 5696')),
     );
   }
 
