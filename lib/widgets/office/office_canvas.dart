@@ -132,25 +132,31 @@ class _OfficeCanvasState extends State<OfficeCanvas> {
 
         return KeyedSubtree(
           key: _surface,
-          child: InteractiveViewer(
-            transformationController: _transform,
-            minScale: 1,
-            maxScale: widget.maxScale,
-            // Slack around the page so a zoomed-in edge can still be dragged
-            // back into view.
-            boundaryMargin: const EdgeInsets.all(120),
-            // Wheel and trackpad now zoom too. A teacher working from a
-            // laptop had nothing but a double click before.
-            trackpadScrollCausesScale: true,
-            scaleFactor: 200,
-            child: GestureDetector(
-              onDoubleTapDown: (d) => _pendingTap = d.localPosition,
-              onDoubleTap: () {
-                final tap = _pendingTap;
-                _pendingTap = null;
-                if (tap != null) handleDoubleTap(_toGlobal(tap));
-              },
-              child: FittedBox(fit: BoxFit.fill, child: page),
+          child: Center(
+            // The page is fitted to the viewport and centred, with slack around
+            // it, so a zoomed-in edge can still be dragged back into view.
+            child: SizedBox(
+              width: width,
+              height: height,
+              child: InteractiveViewer(
+                transformationController: _transform,
+                minScale: 1,
+                maxScale: widget.maxScale,
+                boundaryMargin: const EdgeInsets.all(120),
+                // Wheel and trackpad now zoom too. A teacher working from a
+                // laptop had nothing but a double click before.
+                trackpadScrollCausesScale: true,
+                scaleFactor: 200,
+                child: GestureDetector(
+                  onDoubleTapDown: (d) => _pendingTap = d.globalPosition,
+                  onDoubleTap: () {
+                    final tap = _pendingTap;
+                    _pendingTap = null;
+                    if (tap != null) handleDoubleTap(tap);
+                  },
+                  child: FittedBox(fit: BoxFit.fill, child: page),
+                ),
+              ),
             ),
           ),
         );
@@ -159,14 +165,6 @@ class _OfficeCanvasState extends State<OfficeCanvas> {
   }
 
   Offset? _pendingTap;
-
-  /// The surface is fitted by its parent, so the canvas needs the global
-  /// position to turn the tap into a viewport point.
-  Offset _toGlobal(Offset local) {
-    final box = _surface.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null) return Offset.zero;
-    return box.localToGlobal(local);
-  }
 
   double get _doubleTapScale => widget.maxScale > 2.5 ? 2.5 : widget.maxScale;
 }

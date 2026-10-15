@@ -280,7 +280,7 @@ class _DocumentViewerState extends State<DocumentViewer>
                 boundaryMargin: const EdgeInsets.all(80),
                 trackpadScrollCausesScale: true,
                 child: GestureDetector(
-                  onDoubleTapDown: (d) => _pendingTap = d.localPosition,
+                  onDoubleTapDown: (d) => _pendingTap = d.globalPosition,
                   onDoubleTap: () {
                     final tap = _pendingTap;
                     _pendingTap = null;
