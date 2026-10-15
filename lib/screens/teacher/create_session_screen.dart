@@ -79,7 +79,8 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
           padding: EdgeInsets.all(context.pagePadding),
           children: [
             if (!created) ...[
-              Form(
+              FadeIn(
+                child: Form(
                 key: _form,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -168,6 +169,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                           color: AppColors.muted, fontSize: 12),
                     ),
                   ],
+                ),
                 ),
               ),
             ] else ...[

@@ -68,7 +68,7 @@ class _OfficeCanvasState extends State<OfficeCanvas> {
     final zoomedIn = _transform.value.getMaxScaleOnAxis() > 1.05;
     _transform.value = zoomedIn
         ? Matrix4.identity()
-        : (Matrix4.identity()..scale(_doubleTapScale));
+        : Matrix4.diagonal3Values(_doubleTapScale, _doubleTapScale, 1);
   }
 
   double get _doubleTapScale =>
