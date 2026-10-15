@@ -105,16 +105,22 @@ class _TeacherPresentationScreenState
             tooltip: sessions.raisedHands.isEmpty
                 ? 'Students'
                 : '${sessions.raisedHands.length} hand(s) raised',
+            // One badge, both numbers: students connected, and how many have a
+            // hand up right now.
             icon: Badge(
-              isLabelVisible: sessions.raisedHands.isNotEmpty,
-              label: Text('${sessions.raisedHands.length}'),
-              child: sessions.raisedHands.isEmpty
-                  ? Badge(
-                      label: Text('${sessions.connectedCount}'),
-                      child: const Icon(Icons.people_outline),
-                    )
-                  : const Icon(Icons.pan_tool),
-              child: const Icon(Icons.people_outline),
+              isLabelVisible: true,
+              label: Text(sessions.raisedHands.isEmpty
+                  ? '${sessions.connectedCount}'
+                  : '${sessions.connectedCount} · '
+                      '${sessions.raisedHands.length} raised'),
+              child: Icon(
+                sessions.raisedHands.isEmpty
+                    ? Icons.people_outline
+                    : Icons.pan_tool,
+                color: sessions.raisedHands.isEmpty
+                    ? null
+                    : AppColors.warning,
+              ),
             ),
             onPressed: () => _showStudents(context, sessions),
           ),

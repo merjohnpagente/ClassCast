@@ -152,6 +152,12 @@ class SyncProvider extends ChangeNotifier {
           _link = LinkState.ended;
           notifyListeners();
           break;
+        case SyncEventType.handRaised:
+        case SyncEventType.handLowered:
+        case SyncEventType.studentPageChanged:
+          // The teacher mirrors these on their own screen; the student UI
+          // only needs its own hand state, tracked locally.
+          break;
         case SyncEventType.participantJoined:
         case SyncEventType.participantLeft:
         case SyncEventType.join:
@@ -159,6 +165,37 @@ class SyncProvider extends ChangeNotifier {
           break;
       }
     });
+  }
+
+  /// Whether this student currently has a hand up.
+  bool _handRaised = false;
+  bool get handRaised => _handRaised;
+
+  /// Raise or lower this student's hand. The teacher sees it immediately.
+  bool setHandRaised(bool raised) {
+    if (_sessionId.isEmpty) return false;
+    final sent = _client.send(SyncEvent(
+      type: raised ? SyncEventType.handRaised : SyncEventType.handLowered,
+      sessionId: _sessionId,
+      participantName: _studentName,
+    ));
+    if (sent) {
+      _handRaised = raised;
+      notifyListeners();
+    }
+    return sent;
+  }
+
+  /// Tell the teacher which page this student is on. Reported, never applied:
+  /// a student browsing ahead does not drag the class with them.
+  void reportPage(int page) {
+    if (_sessionId.isEmpty) return;
+    _client.send(SyncEvent(
+      type: SyncEventType.studentPageChanged,
+      sessionId: _sessionId,
+      participantName: _studentName,
+      page: page,
+    ));
   }
 
   Future<void> leave() async {
@@ -170,6 +207,7 @@ class SyncProvider extends ChangeNotifier {
     _snapshot = null;
     _hasDocument = false;
     _syncPaused = false;
+    _handRaised = false;
     _error = null;
     await _eventSub?.cancel();
     _eventSub = null;

@@ -136,6 +136,10 @@ jobs:
                           force("androidx.camera:camera-camera2:1.4.2")
                           force("androidx.camera:camera-lifecycle:1.4.2")
                           force("androidx.camera:camera-view:1.4.2")
+                          // ML Kit's barcode scanner has to match CameraX: the
+                          // 17.2 build the plugin ships throws a null-pointer
+                          // inside the analyzer against CameraX 1.4.
+                          force("com.google.mlkit:barcode-scanning:17.3.0")
                       }
                   }
               }
