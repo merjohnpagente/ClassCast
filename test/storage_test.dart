@@ -33,6 +33,8 @@ void main() {
     store = _MemoryStore();
     setLocalStoreOverride(store);
   });
+  // (The override above also drops the cached shared store, so each test
+  // really does start on a clean database.)
 
   tearDown(() => setLocalStoreOverride(null));
 

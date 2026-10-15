@@ -121,7 +121,14 @@ class PrefsLocalStore implements LocalStore {
 LocalStore? _override;
 
 /// Swap the store implementation (used by tests).
-void setLocalStoreOverride(LocalStore? store) => _override = store;
+///
+/// Clearing [_shared] matters: the instance is cached on first use, so without
+/// this an override installed after that point would be silently ignored and
+/// the test would read another test's leftovers.
+void setLocalStoreOverride(LocalStore? store) {
+  _override = store;
+  _shared = null;
+}
 
 /// SQLite where supported, SharedPreferences elsewhere.
 LocalStore createLocalStore() {
