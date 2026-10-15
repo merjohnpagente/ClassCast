@@ -10,7 +10,9 @@ import 'package:flutter/material.dart';
 /// the difference is only when a tab is first built.
 class LazyTabStack extends StatefulWidget {
   final int index;
-  final List<WidgetBuilder> builders;
+
+  /// One builder per tab, called the first time that tab is opened.
+  final List<Widget Function()> builders;
 
   const LazyTabStack({
     super.key,

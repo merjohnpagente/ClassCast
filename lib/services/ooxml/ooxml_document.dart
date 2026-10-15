@@ -61,7 +61,7 @@ class OoxmlLoader {
   ///
   /// Called when a session ends: a photo-heavy deck holds its images as raw
   /// bytes, and six of those stay resident until the app is killed.
-  static void clearCache() => instance.clear();
+  void clear() => _cache.clear();
 
   /// Opens the file from the teacher's device, falling back to the bytes the
   /// teacher host serves to students. Null means "cannot open", and the caller

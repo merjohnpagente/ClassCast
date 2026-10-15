@@ -228,7 +228,7 @@ class SessionProvider extends ChangeNotifier {
     await ClasscastHost.instance.stop();
     // Parsed decks hold their images as raw bytes. Six of them stayed resident
     // for the rest of the day because nothing ever released the cache.
-    OoxmlLoader.clearCache();
+    OoxmlLoader.instance.clear();
     final ended = ending.copyWith(isActive: false);
     await _store.saveSession(ended);
     _recent = await _store.loadRecent();
