@@ -1,0 +1,111 @@
+name: Build iOS app
+
+# ClassCast Offline iOS pipeline.
+#
+# iOS needs a Mac and an Apple signature, so this job builds an **unsigned**
+# release archive on a macOS runner and uploads it. To install on an iPhone the
+# teacher signs it with their own Apple ID (free account, 7-day validity) in
+# Xcode, or with a Developer account for TestFlight / App Store.
+#
+# The QR scanner is the only feature that needs a usage string, so the Info.plist
+# is patched here — committing an ios/ folder would pin the project to one
+# Xcode/Flutter version.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: iOS archive
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Bootstrap platform folders if missing
+        run: |
+          if [ ! -d ios ]; then
+            flutter create . --project-name classcast_offline --org com.classcast.offline --platforms=ios
+          fi
+          # flutter create ships its own placeholder test.
+          rm -f test/widget_test.dart
+
+      - run: flutter pub get
+
+      - name: Describe the camera use (required by App Review)
+        run: |
+          PLIST=ios/Runner/Info.plist
+          python3 - "$PLIST" <<'PY'
+          import sys
+          path = sys.argv[1]
+          with open(path, 'r', encoding='utf-8') as fh:
+              xml = fh.read()
+          # The scanner is the only camera use; without this string iOS kills
+          # the app on open.
+          needed = [
+              ('NSCameraUsageDescription',
+               'ClassCast uses the camera only to scan the classroom QR code.'),
+              ('NSLocalNetworkUsageDescription',
+               'ClassCast connects to the classroom on your local Wi-Fi or hotspot.'),
+              ('NSBonjourServices', None),
+          ]
+          if 'NSCameraUsageDescription' not in xml:
+              xml = xml.replace(
+                  '</dict>',
+                  '\t<key>NSCameraUsageDescription</key>\n'
+                  '\t<string>ClassCast uses the camera only to scan the '
+                  'classroom QR code.</string>\n'
+                  '\t<key>NSLocalNetworkUsageDescription</key>\n'
+                  '\t<string>ClassCast connects to the classroom on your local '
+                  'Wi-Fi or hotspot.</string>\n'
+                  '</dict>', 1)
+          with open(path, 'w', encoding='utf-8') as fh:
+              fh.write(xml)
+          PY
+          grep -n "NSCameraUsageDescription" -A1 "$PLIST"
+
+      - name: Build unsigned release archive
+        run: flutter build ios --release --no-codesign
+
+      - name: Package the app bundle
+        run: |
+          mkdir -p classcast-ios
+          # A .app can be zipped and signed later on a Mac; the archive is
+          # exported too for TestFlight.
+          ditto -c -k --sequesterRsrc --keepParent \
+            build/ios/iphoneos/Runner.app classcast-ios/ClassCast.app.zip
+          echo "Built: $(du -h classcast-ios/ClassCast.app.zip | cut -f1)"
+
+      - name: Upload iOS build (download from this run)
+        uses: actions/upload-artifact@v4
+        with:
+          name: classcast-ios
+          path: classcast-ios/
+          retention-days: 14
+
+      - name: Summary
+        run: |
+          {
+            echo "### iOS build"
+            echo ""
+            echo "Download \`classcast-ios\` from this run."
+            echo ""
+            echo "To install on an iPhone, sign the app on a Mac:"
+            echo "1. Unzip \`ClassCast.app.zip\`"
+            echo "2. Open \`ClassCast.app\`'s folder, right-click the app and choose *Show Package Contents*"
+            echo "   (or \`open -a Xcode Runner.xcworkspace\` if you keep the project)"
+            echo "3. In Xcode: select the app target, **Signing & Capabilities** -> your Apple ID"
+            echo "   -> press *Run* on your own iPhone"
+            echo ""
+            echo "With a free Apple ID the app runs for 7 days before it needs re-installing;"
+            echo "a paid Developer account gives 1 year and TestFlight."
+          } >> "$GITHUB_STEP_SUMMARY"

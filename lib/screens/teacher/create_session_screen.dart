@@ -72,7 +72,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     final created = _sessionId != null && active != null;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Session')),
+      appBar: AppBar(title: const Text('Start a class')),
       body: ContentWidth(
         maxWidth: 640,
         child: ListView(
@@ -85,7 +85,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('Session name',
+                    Text('Class name',
                         style: theme.textTheme.labelLarge?.copyWith(
                           fontWeight: FontWeight.w600,
                         )),
@@ -159,11 +159,12 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                                   strokeWidth: 2.5,
                                   color: Colors.white),
                             )
-                          : const Text('Start Session'),
+                          : const Text('Start class'),
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Works fully offline — no cloud account needed.',
+                      'No internet needed — students join over your '
+                      'hotspot or the same Wi-Fi.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                           color: AppColors.muted, fontSize: 12),
@@ -227,10 +228,10 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                           crossAxisAlignment:
                               CrossAxisAlignment.start,
                           children: [
-                            const Text('Session live',
+                            const Text('Class is live',
                                 style: TextStyle(
                                     fontWeight: FontWeight.w700)),
-                            Text('Session ID: ${active.id}',
+                            Text('Join code: ${active.id}',
                                 style: const TextStyle(
                                     color: AppColors.inkSecondary)),
                             if (sessions.hostAddress.isNotEmpty)
@@ -244,7 +245,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Copy session ID',
+                        tooltip: 'Copy join code',
                         icon: const Icon(Icons.copy, size: 18),
                         onPressed: () async {
                           await Clipboard.setData(
@@ -268,7 +269,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                     port: active.port,
                     sessionId: active.id),
                 address: active.joinAddress.isEmpty
-                    ? 'Start hotspot to show the address'
+                    ? 'Turn on your hotspot to get an address'
                     : active.joinAddress,
                 sessionId: active.id,
                 // Large enough for students to scan from their desks.
@@ -281,7 +282,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                         builder: (_) =>
                             const TeacherPresentationScreen())),
                 icon: const Icon(Icons.present_to_all),
-                label: const Text('Open Presentation'),
+                label: const Text('Show to class'),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(

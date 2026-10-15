@@ -78,7 +78,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 color: AppColors.ink,
               )),
           Text(
-            'Host an offline classroom',
+            'Start a class, share files, present.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: AppColors.muted,
             ),
@@ -138,7 +138,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
               _quickAction(context,
                   icon: Icons.people,
                   label:
-                      '${sessions.connectedCount} Students',
+                      '${sessions.connectedCount} connected',
                   onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(
                             builder: (_) =>
@@ -146,11 +146,11 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                       )),
               _quickAction(context,
                   icon: Icons.folder,
-                  label: 'Documents',
+                  label: 'Files',
                   onTap: widget.onOpenFiles),
               _quickAction(context,
                   icon: Icons.qr_code_2,
-                  label: 'QR Code',
+                  label: 'QR to join',
                   onTap: active == null
                       ? null
                       : () => _showQrSheet(context, active)),
@@ -339,8 +339,8 @@ class TeacherDashboardSessionList extends StatelessWidget {
     if (items.isEmpty) {
       return const EmptyState(
         icon: Icons.history,
-        title: 'No recent sessions',
-        subtitle: 'Your past classrooms will appear here.',
+        title: 'No past classes yet',
+        subtitle: 'Classes you teach show up here, ready to revive.',
       );
     }
     // Every recent session is a menu: revive it, edit it, or delete it. This

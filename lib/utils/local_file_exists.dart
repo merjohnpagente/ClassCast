@@ -1,3 +1,5 @@
+import 'local_file.dart';
+
 /// Whether a local file is still there.
 ///
 /// Used by the library store: a picked file lives in the app's cache folder,

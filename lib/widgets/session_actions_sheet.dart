@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../models/classroom_session.dart';
+import '../models/shared_document.dart';
 import '../providers/app_state.dart';
 import '../providers/library_provider.dart';
 import '../providers/session_provider.dart';
