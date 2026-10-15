@@ -13,6 +13,7 @@ import '../../widgets/motion.dart';
 import '../../widgets/office/office_document_scroll_view.dart';
 import '../../widgets/state_cards.dart';
 import '../../widgets/status_bits.dart';
+import 'student_preview_screen.dart';
 import 'students_screen.dart';
 
 /// Teacher presentation controller. Mobile: preview top, controls bottom.
@@ -350,6 +351,16 @@ class _TeacherPresentationScreenState
                       tooltip: 'Bring every student back to this page',
                       icon: const Icon(Icons.my_location),
                       onPressed: () => sessions.takeControl(),
+                    ),
+                    IconButton(
+                      tooltip: 'See what the students see',
+                      icon: const Icon(Icons.visibility_outlined),
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              StudentPreviewScreen(session: active),
+                        ),
+                      ),
                     ),
                     FilledButton.icon(
                       onPressed: () => sessions.endSession(),

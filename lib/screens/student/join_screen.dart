@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -32,9 +34,14 @@ class _JoinScreenState extends State<JoinScreen> {
   @override
   void initState() {
     super.initState();
-    SessionStore().loadStudentName().then((saved) {
-      if (saved != null && mounted) _name.text = saved;
-    });
+    // A throw here used to surface as an unhandled async error on the join
+    // screen. A missing saved name is not worth an error report.
+    unawaited(SessionStore()
+        .loadStudentName()
+        .then((saved) {
+          if (saved != null && mounted) _name.text = saved;
+        })
+        .catchError((_) {}));
   }
 
   @override

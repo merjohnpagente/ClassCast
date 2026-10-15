@@ -87,9 +87,23 @@ class ShareDocumentScreen extends StatelessWidget {
             FilledButton.icon(
               onPressed: active == null
                   ? null
-                  : () {
-                      sessions.shareDocument(doc);
-                      Navigator.of(context).push(
+                  : () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final nav = Navigator.of(context);
+                      // The host can refuse — the file may have been cleared
+                      // from the phone, or the session may have ended. Saying
+                      // nothing left the teacher believing everyone had it.
+                      final ok = await sessions.shareDocument(doc);
+                      if (!ok) {
+                        messenger.showSnackBar(const SnackBar(
+                          content: Text(
+                              'The students could not be sent this file. Check '
+                              'that the session is still running and the file '
+                              'is still on this device.'),
+                        ));
+                        return;
+                      }
+                      nav.push(
                         MaterialPageRoute(
                             builder: (_) =>
                                 const TeacherPresentationScreen()),

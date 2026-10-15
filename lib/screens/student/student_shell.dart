@@ -5,6 +5,7 @@ import '../../providers/app_state.dart';
 import '../../providers/sync_provider.dart';
 import '../../services/classcast_client.dart';
 import '../../widgets/app_scaffold.dart';
+import '../../widgets/lazy_tab_stack.dart';
 import '../common/network_help_screen.dart';
 import '../common/settings_screen.dart';
 import 'join_screen.dart';
@@ -72,19 +73,19 @@ class _StudentShellState extends State<StudentShell> {
             label: const Text('Leave'),
           ),
       ],
-      body: IndexedStack(
+      body: LazyTabStack(
         index: _index,
-        children: [
-          JoinScreen(
-            onJoined: () =>
-                setState(() => _index = presenting ? 1 : _index),
-          ),
-          presenting
+        builders: [
+          () => JoinScreen(
+                onJoined: () =>
+                    setState(() => _index = presenting ? 1 : _index),
+              ),
+          () => presenting
               ? const StudentViewerScreen()
               : StudentWaitingScreen(
                   onLeave: () => setState(() => _index = 0),
                 ),
-          const _StudentConnectionTab(),
+          () => const _StudentConnectionTab(),
         ],
       ),
     );

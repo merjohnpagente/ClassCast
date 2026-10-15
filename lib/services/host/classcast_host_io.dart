@@ -376,7 +376,7 @@ class ClasscastHost {
   // --- websocket -----------------------------------------------------------
   Future<void> _websocket(HttpRequest request) async {
     final sessionId = request.uri.queryParameters['session'] ?? '';
-    final name = request.uri.queryParameters['name'] ?? 'Student';
+    final name = _cleanName(request.uri.queryParameters['name']);
     final device = request.uri.queryParameters['device'] ?? '';
     final claimsTeacher = request.uri.queryParameters['role'] == 'teacher';
     // Validate before the upgrade: a wrong or ended session must never see a
@@ -438,7 +438,7 @@ class ClasscastHost {
     // for attention and report where they are, and those have to reach the
     // teacher's screen — a hand raised that the teacher never sees is a
     // broken feature.
-    final name = message['participantName'] as String? ?? 'Student';
+    final name = _cleanName(message['participantName'] as String?);
     switch (message['type']) {
       case 'join':
         _participants[pid] = {
@@ -636,14 +636,42 @@ class ClasscastHost {
       try {
         socket.sink.add(frame);
       } catch (_) {
+        // A sink that failed to accept is dead. Removing it from the set is
+        // not enough — the underlying socket stayed open, and one dead
+        // connection per dead student adds up over a school day.
         _sockets.remove(socket);
+        _forgetSocket(socket);
+        try {
+          socket.sink.close();
+        } catch (_) {/* already gone */}
       }
     }
   }
 
+  /// Drops every map entry pointing at [socket], so a dead connection cannot
+  /// linger as a stale target for take control.
+  void _forgetSocket(WebSocketChannel socket) {
+    _socketsById.removeWhere((_, value) => identical(value, socket));
+  }
+
+  /// A roster name comes straight off the wire, so it gets bounded: one
+  /// student cannot fill the teacher's screen with a megabyte of text or
+  /// impersonate another entry with stray whitespace.
+  static String _cleanName(String? raw) {
+    final trimmed = (raw ?? '').trim();
+    if (trimmed.isEmpty) return 'Student';
+    return trimmed.length <= 32 ? trimmed : trimmed.substring(0, 32);
+  }
+
   Future<Map<String, dynamic>> _readJson(HttpRequest request) async {
     try {
-      final text = await utf8.decoder.bind(request).join();
+      // Every control endpoint takes a handful of short strings. Reading a
+      // body without a cap let a device on the hotspot make the teacher's
+      // phone buffer an arbitrarily large request.
+      final text = await utf8.decoder
+          .bind(request)
+          .take(_maxBodyBytes)
+          .join();
       if (text.isEmpty) return {};
       final decoded = jsonDecode(text);
       return decoded is Map ? Map<String, dynamic>.from(decoded) : {};
@@ -651,6 +679,10 @@ class ClasscastHost {
       return {};
     }
   }
+
+  /// 64 KB is far above any real control frame and far below anything that
+  /// could hurt the phone.
+  static const int _maxBodyBytes = 64 * 1024;
 
   Future<void> _json(
     HttpRequest request,

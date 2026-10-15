@@ -57,7 +57,11 @@ class OoxmlLoader {
   /// Parsed document already in memory for this source, if any.
   OoxmlDocument? peek(String source) => _cache[source];
 
-  void clear() => _cache.clear();
+  /// Drops everything parsed so far.
+  ///
+  /// Called when a session ends: a photo-heavy deck holds its images as raw
+  /// bytes, and six of those stay resident until the app is killed.
+  static void clearCache() => instance.clear();
 
   /// Opens the file from the teacher's device, falling back to the bytes the
   /// teacher host serves to students. Null means "cannot open", and the caller

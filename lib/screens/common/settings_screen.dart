@@ -260,35 +260,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _editPort(BuildContext context, AppState app) {
-    final ctrl =
-        TextEditingController(text: '${app.serverPort}');
+    final ctrl = TextEditingController(text: '${app.serverPort}');
+    String? error;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Server port'),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-              hintText: '8080'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setInner) => AlertDialog(
+          title: const Text('Server port'),
+          content: TextField(
+            controller: ctrl,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              hintText: '8080',
+              errorText: error,
+            ),
           ),
-          FilledButton(
-            onPressed: () {
-              final p = int.tryParse(ctrl.text.trim());
-              if (p != null && p >= 1024 && p <= 65535) {
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final p = int.tryParse(ctrl.text.trim());
+                // Closing on a bad value told the teacher nothing about why
+                // their change was ignored.
+                if (p == null || p < 1024 || p > 65535) {
+                  setInner(() => error = 'Enter a port between 1024 and 65535.');
+                  return;
+                }
                 app.setServerPort(p);
-              }
-              Navigator.of(ctx).pop();
-            },
-            child: const Text('Save'),
-          ),
-        ],
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
       ),
-    );
+    ).whenComplete(ctrl.dispose);
   }
 }

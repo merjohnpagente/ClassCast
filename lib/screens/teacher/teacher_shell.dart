@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/app_state.dart';
 import '../../widgets/app_scaffold.dart';
+import '../../widgets/lazy_tab_stack.dart';
 import 'create_session_screen.dart';
 import 'teacher_dashboard.dart';
 import '../common/files_screen.dart';
@@ -58,17 +59,17 @@ class _TeacherShellState extends State<TeacherShell> {
           ),
         ),
       ],
-      body: IndexedStack(
+      body: LazyTabStack(
         index: _index,
-        children: [
-          TeacherDashboard(
-            onOpenSessions: () => setState(() => _index = 1),
-            onOpenFiles: () => setState(() => _index = 2),
-            onOpenSettings: () => setState(() => _index = 3),
-          ),
-          const _SessionsTab(),
-          const FilesScreen(sharing: true),
-          const SettingsScreen(roleLabel: 'Teacher'),
+        builders: [
+          () => TeacherDashboard(
+                onOpenSessions: () => setState(() => _index = 1),
+                onOpenFiles: () => setState(() => _index = 2),
+                onOpenSettings: () => setState(() => _index = 3),
+              ),
+          () => const _SessionsTab(),
+          () => const FilesScreen(sharing: true),
+          () => const SettingsScreen(roleLabel: 'Teacher'),
         ],
       ),
     );

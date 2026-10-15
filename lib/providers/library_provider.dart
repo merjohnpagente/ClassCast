@@ -36,7 +36,15 @@ class LibraryProvider extends ChangeNotifier {
   /// "with its document" and the teacher had to re-pick the file each lesson.
   /// Entries whose file has been cleared from the cache are pruned here rather
   /// than left in the list to fail when tapped.
-  Future<void> load() async {
+  Future<void>? _loading;
+
+  /// Idempotent: the role screen and the Files tab both ask for this, and two
+  /// concurrent read-modify-writes against the same row lose documents.
+  Future<void> load() {
+    return _loading ??= _loadOnce().whenComplete(() => _loading = null);
+  }
+
+  Future<void> _loadOnce() async {
     try {
       _items = await _store.pruneMissing();
       _error = null;

@@ -10,6 +10,7 @@ import '../models/participant.dart';
 import '../models/shared_document.dart';
 import '../models/sync_event.dart';
 import '../services/host/classcast_host.dart';
+import '../services/ooxml/ooxml_document.dart';
 import '../services/session_store.dart';
 import '../services/sync_protocol.dart';
 import '../services/teacher_host_client.dart';
@@ -225,6 +226,9 @@ class SessionProvider extends ChangeNotifier {
     // Stop serving: the classroom is over, and leaving a listener running
     // would keep the camera-era battery drain going for no reason.
     await ClasscastHost.instance.stop();
+    // Parsed decks hold their images as raw bytes. Six of them stayed resident
+    // for the rest of the day because nothing ever released the cache.
+    OoxmlLoader.clearCache();
     final ended = ending.copyWith(isActive: false);
     await _store.saveSession(ended);
     _recent = await _store.loadRecent();
@@ -240,8 +244,11 @@ class SessionProvider extends ChangeNotifier {
     _openHostEvents(_active!);
   }
 
-  void shareDocument(SharedDocument doc, {int totalPages = 0}) {
-    if (_active == null) return;
+  /// Shares [doc] with the class. Returns false when the host refused it, so
+  /// the screen can say so instead of showing the class an empty page.
+  Future<bool> shareDocument(SharedDocument doc, {int totalPages = 0}) async {
+    final active = _active;
+    if (active == null) return false;
     final pages = totalPages > 0 ? totalPages : doc.pageCount;
     // The host keys the file off its name, so it must match what is in the
     // shared directory exactly.
@@ -260,12 +267,12 @@ class SessionProvider extends ChangeNotifier {
       totalPages: pages,
     );
     notifyListeners();
-    unawaited(_host.shareDocument(
+    return await _host.shareDocument(
       _active!,
       documentId: doc.id,
       documentName: fileName,
       totalPages: pages,
-    ));
+    );
   }
 
   void clearDocument() {
@@ -338,7 +345,7 @@ class SessionProvider extends ChangeNotifier {
     unawaited(_host.startSession(session));
     _openHostEvents(session);
     if (document != null) {
-      shareDocument(document, totalPages: document.pageCount);
+      unawaited(shareDocument(document, totalPages: document.pageCount));
     }
     return session;
   }

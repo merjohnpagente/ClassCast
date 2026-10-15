@@ -205,13 +205,15 @@ class _FilesScreenState extends State<FilesScreen> {
       onOpen: () =>
           context.read<LibraryProvider>().select(doc),
       onShare: sharingToActive
-          ? () {
-              sessions.shareDocument(doc);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                    content: Text(
-                        'Sharing ${doc.name}.${doc.extension}')),
-              );
+          ? () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final ok = await sessions.shareDocument(doc);
+              messenger.showSnackBar(SnackBar(
+                content: Text(ok
+                    ? 'Sharing ${doc.name}.${doc.extension}'
+                    : 'Could not send ${doc.name}.${doc.extension} to the '
+                        'class — check the session is still running.'),
+              ));
             }
           : null,
       onRemove: () =>

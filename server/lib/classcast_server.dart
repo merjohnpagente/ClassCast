@@ -15,6 +15,24 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// Authoritative classroom state on the teacher host.
 ///
+/// 64 KB is far above any real control frame and far below anything that
+/// could hurt the machine.
+const int kMaxBodyBytes = 64 * 1024;
+
+/// Ceiling on a file the server will read into memory to derive a page count.
+const int kMaxDerivedBytes = 64 * 1024 * 1024;
+
+/// Stops pulling once [limit] bytes have been seen, so a body of any size
+/// cannot be buffered whole.
+Stream<List<int>> _cappedBytes(Stream<List<int>> source, int limit) async* {
+  var seen = 0;
+  await for (final chunk in source) {
+    seen += chunk.length;
+    if (seen > limit) return;
+    yield chunk;
+  }
+}
+
 /// Single-session prototype (multi-session is a Phase-4 extension).
 /// All teacher controls require [teacherKey]; students can only
 /// join + read + receive broadcasts.
@@ -546,6 +564,9 @@ router.post('/api/end', (Request req) async {
       if (!p.isWithin(root, target)) return null;
       final file = File(target);
       if (!file.existsSync()) return null;
+      // The PDF path is capped; this one was not, and it is read synchronously
+      // inside an async handler, so one huge deck blocked the whole server.
+      if (file.lengthSync() > kMaxDerivedBytes) return null;
       return file.readAsBytesSync();
     } catch (_) {
       return null;
@@ -565,7 +586,12 @@ router.post('/api/end', (Request req) async {
 
   Future<Map<String, dynamic>> _readJson(Request req) async {
     try {
-      final text = await req.readAsString();
+      // Control frames are a handful of short strings. Reading without a cap
+      // let anything on the classroom network make this machine buffer an
+      // arbitrarily large body.
+      final bytes = await _cappedBytes(req.read(), kMaxBodyBytes)
+          .fold<List<int>>(<int>[], (a, b) => a..addAll(b));
+      final text = utf8.decode(bytes, allowMalformed: true);
       if (text.isEmpty) return {};
       return Map<String, dynamic>.from(jsonDecode(text) as Map);
     } catch (_) {
