@@ -67,7 +67,10 @@ void main() {
       Uri.parse('ws://127.0.0.1:$port/ws?session=$sessionId&name=Ana&device=Android'),
     );
     final inbox = StreamQueue<dynamic>(student.stream);
-    addTearDown(student.sink.close);
+    addTearDown(() async {
+      inbox.cancel();
+      await student.sink.close();
+    });
 
     // The host greets a new socket with the current state.
     final hello = SyncProtocol.decode(await inbox.next);
@@ -170,4 +173,7 @@ class StreamQueue<T> {
     _pending = completer;
     return completer.future;
   }
+
+  /// Stop listening, so a test can end without a live subscription.
+  Future<void> cancel() async => _subscription?.cancel();
 }

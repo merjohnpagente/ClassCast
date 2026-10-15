@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 /// How far a document can be zoomed in, in either direction.
@@ -156,9 +155,9 @@ class DocumentZoom extends ChangeNotifier {
     anim.addListener(() {
       final t = from + (target - from) * anim.value;
       transform.value = Matrix4.identity()
-        ..translate(dx, dy)
-        ..scale(t)
-        ..translate(-dx, -dy);
+        ..translateByDouble(dx, dy, 0, 1)
+        ..scaleByDouble(t, t, 1, 1)
+        ..translateByDouble(-dx, -dy, 0, 1);
       notifyListeners();
     });
     anim.forward().whenComplete(() {
