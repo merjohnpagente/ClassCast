@@ -5,6 +5,7 @@ import '../../services/ooxml/xlsx_workbook.dart';
 import '../../theme/app_colors.dart';
 import '../state_cards.dart';
 import 'docx_page_view.dart';
+import '../document_zoom.dart';
 import 'office_canvas.dart';
 import 'office_document_scroll_view.dart';
 import 'pptx_slide_view.dart';
@@ -50,14 +51,25 @@ class OfficeDocumentView extends StatefulWidget {
   State<OfficeDocumentView> createState() => _OfficeDocumentViewState();
 }
 
-class _OfficeDocumentViewState extends State<OfficeDocumentView> {
+class _OfficeDocumentViewState extends State<OfficeDocumentView>
+    with SingleTickerProviderStateMixin {
   Future<OoxmlDocument?>? _pending;
   int _reported = 0;
+
+  /// Owned here, above the pages, because each page used to have its own
+  /// transform: zooming into a diagram and then turning the page lost it.
+  late final DocumentZoom _zoom = DocumentZoom(this);
 
   @override
   void initState() {
     super.initState();
     _pending = _load();
+  }
+
+  @override
+  void dispose() {
+    _zoom.dispose();
+    super.dispose();
   }
 
   @override
@@ -122,11 +134,21 @@ class _OfficeDocumentViewState extends State<OfficeDocumentView> {
         if (widget.viewMode == OfficeViewMode.scroll) {
           return OfficeDocumentScrollView(
             document: document,
+            zoom: _zoom,
             page: widget.page,
             onPageChanged: widget.onPageChanged,
           );
         }
-        return _render(document);
+        return Stack(
+          children: [
+            Positioned.fill(child: _render(document)),
+            Positioned(
+              right: 10,
+              bottom: 10,
+              child: DocumentZoomBar(target: _zoom.target),
+            ),
+          ],
+        );
       },
     );
   }
@@ -146,11 +168,11 @@ class _OfficeDocumentViewState extends State<OfficeDocumentView> {
       case OoxmlFormat.powerpoint:
         final deck = document.deck;
         if (deck == null) return const SizedBox.shrink();
-        return PptxSlideView(deck: deck, page: widget.page);
+        return PptxSlideView(deck: deck, page: widget.page, zoom: _zoom);
       case OoxmlFormat.word:
         final word = document.word;
         if (word == null) return const SizedBox.shrink();
-        return DocxPageView(document: word, page: widget.page);
+        return DocxPageView(document: word, page: widget.page, zoom: _zoom);
       case OoxmlFormat.excel:
         final book = document.workbook;
         if (book == null) return const SizedBox.shrink();
@@ -168,6 +190,7 @@ class _OfficeDocumentViewState extends State<OfficeDocumentView> {
           );
         }
         return XlsxSheetView(
+          zoom: _zoom,
           sheet: located.sheet,
           page: located.pageInSheet,
           firstRowNumber: (located.pageInSheet - 1) * kRowsPerSheetPage + 1,

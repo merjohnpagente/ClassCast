@@ -7,6 +7,7 @@ import '../models/doc_types.dart';
 import '../models/shared_document.dart';
 import '../theme/app_colors.dart';
 import '../utils/local_file.dart';
+import 'document_zoom.dart';
 import 'office/office_document_view.dart';
 import 'office/office_document_scroll_view.dart';
 import 'state_cards.dart';
@@ -20,7 +21,7 @@ import 'state_cards.dart';
 ///   deck, a worksheet or a spreadsheet straight from the phone.
 /// - Image / text → rendered directly.
 /// - Anything else → an honest panel instead of a blank screen.
-class DocumentViewer extends StatelessWidget {
+class DocumentViewer extends StatefulWidget {
   final SharedDocument doc;
   final PdfViewerController controller;
 
@@ -57,6 +58,38 @@ class DocumentViewer extends StatelessWidget {
     this.onPageChanged,
     this.showConversionPanel = false,
   });
+
+  @override
+  State<DocumentViewer> createState() => _DocumentViewerState();
+}
+
+class _DocumentViewerState extends State<DocumentViewer>
+    with SingleTickerProviderStateMixin {
+  /// Zoom for the formats this widget draws itself. PDF zooms through
+  /// Syncfusion and Office through the canvas, so only images land here.
+  late final DocumentZoom _imageZoom = DocumentZoom(this);
+
+  @override
+  void dispose() {
+    _imageZoom.dispose();
+    super.dispose();
+  }
+
+  SharedDocument get doc => widget.doc;
+
+  PdfViewerController get controller => widget.controller;
+
+  String? get remoteUrl => widget.remoteUrl;
+
+  int get page => widget.page;
+
+  ValueChanged<int>? get onPageCount => widget.onPageCount;
+
+  OfficeViewMode get viewMode => widget.viewMode;
+
+  ValueChanged<int>? get onPageChanged => widget.onPageChanged;
+
+  bool get showConversionPanel => widget.showConversionPanel;
 
   @override
   Widget build(BuildContext context) {
@@ -128,10 +161,24 @@ class DocumentViewer extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.large),
         child: Container(
           decoration: box,
-          child: SfPdfViewer.network(
-            remoteUrl!,
-            controller: controller,
-            canShowScrollHead: false,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: SfPdfViewer.network(
+                  remoteUrl!,
+                  controller: controller,
+                  canShowScrollHead: false,
+                  // 3x was not enough to read fine print on a projector; the
+                  // Office canvas has always allowed 6x.
+                  maxZoomLevel: kZoomMax,
+                ),
+              ),
+              Positioned(
+                right: 10,
+                bottom: 10,
+                child: _PdfZoomBar(controller),
+              ),
+            ],
           ),
         ),
       );
@@ -151,10 +198,22 @@ class DocumentViewer extends StatelessWidget {
           // `.memory` rather than `.file`: it is the one constructor that
           // exists on mobile *and* web, so students in a browser get a real
           // document instead of a compile error.
-          child: SfPdfViewer.memory(
-            bytes,
-            controller: controller,
-            canShowScrollHead: false,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: SfPdfViewer.memory(
+                  bytes,
+                  controller: controller,
+                  canShowScrollHead: false,
+                  maxZoomLevel: kZoomMax,
+                ),
+              ),
+              Positioned(
+                right: 10,
+                bottom: 10,
+                child: _PdfZoomBar(controller),
+              ),
+            ],
           ),
         ),
       ),
@@ -196,12 +255,53 @@ class DocumentViewer extends StatelessWidget {
 
   /// Pinch or drag to zoom a photo — a teacher regularly needs to show one
   /// corner of an image to the whole room.
-  Widget _zoomable(Widget child) => InteractiveViewer(
-        minScale: 1,
-        maxScale: 6,
-        boundaryMargin: const EdgeInsets.all(80),
-        child: child,
-      );
+  /// Pinch, drag, double tap into a spot, and the same bar every other format
+  /// uses. A teacher regularly needs to show one corner of a photo to the whole
+  /// room, and pinch alone needs two hands.
+  Widget _zoomable(Widget child) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        void handleDoubleTap(Offset position) {
+          final box = context.findRenderObject() as RenderBox?;
+          if (box == null) return;
+          _imageZoom.toggleZoomAt(
+            box.globalToLocal(position),
+            Size(constraints.maxWidth, constraints.maxHeight),
+          );
+        }
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: InteractiveViewer(
+                transformationController: _imageZoom.transform,
+                minScale: kZoomMin,
+                maxScale: kZoomMax,
+                boundaryMargin: const EdgeInsets.all(80),
+                trackpadScrollCausesScale: true,
+                child: GestureDetector(
+                  onDoubleTapDown: (d) => _pendingTap = d.localPosition,
+                  onDoubleTap: () {
+                    final tap = _pendingTap;
+                    _pendingTap = null;
+                    if (tap != null) handleDoubleTap(tap);
+                  },
+                  child: child,
+                ),
+              ),
+            ),
+            Positioned(
+              right: 10,
+              bottom: 10,
+              child: DocumentZoomBar(target: _imageZoom.target),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Offset? _pendingTap;
 
   Widget _text(BoxDecoration box) {
     final path = doc.localPath;
@@ -314,6 +414,20 @@ class _MissingFile extends StatelessWidget {
 /// Modern Office files are rendered by the app, so what lands here is either a
 /// legacy binary Office file, an explicitly gated document, or something the
 /// host could not convert.
+/// Zoom control for a PDF, driven through Syncfusion's own zoom level.
+///
+/// PDF zooms through Syncfusion's pipeline and Office through ours, so the
+/// bar needs the adapter rather than the canvas transform.
+class _PdfZoomBar extends StatelessWidget {
+  final PdfViewerController controller;
+
+  const _PdfZoomBar(this.controller);
+
+  @override
+  Widget build(BuildContext context) =>
+      DocumentZoomBar(target: PdfZoomTarget(controller));
+}
+
 class _ConversionPanel extends StatelessWidget {
   final SharedDocument doc;
   final BoxDecoration box;

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/ooxml/docx_document.dart';
+import '../document_zoom.dart';
 import 'office_canvas.dart';
 
 /// Draws one page of a Word document on the shared [OfficeCanvas].
@@ -13,16 +14,21 @@ class DocxPageView extends StatelessWidget {
   final DocxDocument document;
   final int page;
 
+  /// Zoom shared across pages, so turning a page keeps the zoom level.
+  final DocumentZoom? zoom;
+
   const DocxPageView({
     super.key,
     required this.document,
     required this.page,
+    this.zoom,
   });
 
   @override
   Widget build(BuildContext context) {
     final blocks = document.blocksOfPage(page);
     return OfficeCanvas(
+      zoom: zoom,
       widthPt: kPageWidthPt,
       heightPt: kPageHeightPt,
       child: Padding(

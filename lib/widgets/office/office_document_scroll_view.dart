@@ -28,11 +28,16 @@ class OfficeDocumentScrollView extends StatefulWidget {
   final int page;
   final ValueChanged<int>? onPageChanged;
 
+  /// Shared with the page view, so switching between page and scroll mode
+  /// keeps the zoom the teacher already set.
+  final DocumentZoom? zoom;
+
   const OfficeDocumentScrollView({
     super.key,
     required this.document,
     required this.page,
     this.onPageChanged,
+    this.zoom,
   });
 
   @override
@@ -124,7 +129,7 @@ class _OfficeDocumentScrollViewState extends State<OfficeDocumentScrollView> {
         final height = width <= 0 ? 0.0 : width / ratio;
         _pageHeightPt = height;
         WidgetsBinding.instance.addPostFrameCallback((_) => _applyJump());
-        return Scrollbar(
+        final list = Scrollbar(
           controller: _controller,
           thumbVisibility: true,
           child: ListView.builder(
@@ -140,6 +145,28 @@ class _OfficeDocumentScrollViewState extends State<OfficeDocumentScrollView> {
               ),
             ),
           ),
+        );
+        final zoom = widget.zoom;
+        // Scroll mode had no zoom at all, which made a dense Word page
+        // impossible to read on a phone.
+        if (zoom == null) return list;
+        return Stack(
+          children: [
+            InteractiveViewer(
+              transformationController: zoom.transform,
+              minScale: 1,
+              maxScale: kZoomMax,
+              boundaryMargin: const EdgeInsets.all(120),
+              trackpadScrollCausesScale: true,
+              scaleFactor: 200,
+              child: list,
+            ),
+            Positioned(
+              right: 10,
+              bottom: 10,
+              child: DocumentZoomBar(target: zoom.target),
+            ),
+          ],
         );
       },
     );

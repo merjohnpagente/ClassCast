@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../document_zoom.dart';
+
 /// Upper bound on the pixel width an embedded image is decoded at.
 ///
 /// Plenty for a phone screen, and it is the difference between a photo-heavy
@@ -43,6 +45,11 @@ class OfficeCanvas extends StatefulWidget {
   /// projected slide without turning the page into an abstract.
   final double maxScale;
 
+  /// Shared zoom state, owned above the pages so turning a page does not
+  /// throw the zoom away. Null gives this canvas its own, which is what a
+  /// one-off page wants.
+  final DocumentZoom? zoom;
+
   const OfficeCanvas({
     super.key,
     required this.widthPt,
@@ -50,6 +57,7 @@ class OfficeCanvas extends StatefulWidget {
     required this.child,
     this.background = Colors.white,
     this.maxScale = 6,
+    this.zoom,
   });
 
   @override
@@ -57,30 +65,18 @@ class OfficeCanvas extends StatefulWidget {
 }
 
 class _OfficeCanvasState extends State<OfficeCanvas> {
-  final TransformationController _transform = TransformationController();
+  final TransformationController _ownTransform = TransformationController();
+  final GlobalKey _surface = GlobalKey();
+
+  /// The shared zoom when one was handed in, this canvas's own otherwise.
+  TransformationController get _transform =>
+      widget.zoom?.transform ?? _ownTransform;
 
   @override
   void dispose() {
-    _transform.dispose();
+    _ownTransform.dispose();
     super.dispose();
   }
-
-  /// Back to "whole page" — the escape hatch for a zoomed-in teacher.
-  void _reset() {
-    _transform.value = Matrix4.identity();
-  }
-
-  /// Double tap: jump between "whole page" and a readable close-up. The
-  /// teacher is usually mid-lesson with one hand, so this has to be one tap.
-  void _toggleZoom() {
-    final zoomedIn = _transform.value.getMaxScaleOnAxis() > 1.05;
-    _transform.value = zoomedIn
-        ? Matrix4.identity()
-        : Matrix4.diagonal3Values(_doubleTapScale, _doubleTapScale, 1);
-  }
-
-  double get _doubleTapScale =>
-      widget.maxScale > 2.5 ? 2.5 : widget.maxScale;
 
   @override
   Widget build(BuildContext context) {
@@ -114,76 +110,63 @@ class _OfficeCanvasState extends State<OfficeCanvas> {
           ),
         );
 
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            Center(
-              child: SizedBox(
-                width: width,
-                height: height,
-                child: InteractiveViewer(
-                  transformationController: _transform,
-                  minScale: 1,
-                  maxScale: widget.maxScale,
-                  // Slack around the page so a zoomed-in edge can still be
-                  // dragged back into view.
-                  boundaryMargin: const EdgeInsets.all(120),
-                  // Trackpad / mouse wheel pans the page on laptop and web,
-                  // and a double tap zooms on touch — without it nobody
-                  // discovers that the document can be zoomed at all.
-                  trackpadScrollCausesScale: false,
-                  scaleFactor: 240,
-                  child: GestureDetector(
-                    onDoubleTap: _toggleZoom,
-                    child: FittedBox(fit: BoxFit.fill, child: page),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              right: 8,
-              bottom: 8,
-              child: _resetButton(),
-            ),
-          ],
-        );
-      },
-    );
-  }
+        // The tap position is needed in the page's own coordinates so a
+        // double tap can zoom into the spot that was actually touched.
+        void handleDoubleTap(Offset position) {
+          final box = _surface.currentContext?.findRenderObject() as RenderBox?;
+          if (box == null) {
+            _transform.value = Matrix4.identity();
+            return;
+          }
+          final local = box.globalToLocal(position);
+          final shared = widget.zoom;
+          if (shared != null) {
+            shared.toggleZoomAt(local, available);
+            return;
+          }
+          final zoomedIn = _transform.value.getMaxScaleOnAxis() > 1.05;
+          _transform.value = zoomedIn
+              ? Matrix4.identity()
+              : Matrix4.diagonal3Values(_doubleTapScale, _doubleTapScale, 1);
+        }
 
-  Widget _resetButton() {
-    return ValueListenableBuilder<Matrix4>(
-      valueListenable: _transform,
-      builder: (context, matrix, _) {
-        final zoomed = matrix.getMaxScaleOnAxis() > 1.01;
-        if (!zoomed) return const SizedBox.shrink();
-        return Material(
-          color: Colors.black.withAlpha(140),
-          borderRadius: BorderRadius.circular(20),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: _reset,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.zoom_out_map, size: 16, color: Colors.white),
-                  SizedBox(width: 6),
-                  Text(
-                    'Fit page',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
+        return KeyedSubtree(
+          key: _surface,
+          child: InteractiveViewer(
+            transformationController: _transform,
+            minScale: 1,
+            maxScale: widget.maxScale,
+            // Slack around the page so a zoomed-in edge can still be dragged
+            // back into view.
+            boundaryMargin: const EdgeInsets.all(120),
+            // Wheel and trackpad now zoom too. A teacher working from a
+            // laptop had nothing but a double click before.
+            trackpadScrollCausesScale: true,
+            scaleFactor: 200,
+            child: GestureDetector(
+              onDoubleTapDown: (d) => _pendingTap = d.localPosition,
+              onDoubleTap: () {
+                final tap = _pendingTap;
+                _pendingTap = null;
+                if (tap != null) handleDoubleTap(_toGlobal(tap));
+              },
+              child: FittedBox(fit: BoxFit.fill, child: page),
             ),
           ),
         );
       },
     );
   }
+
+  Offset? _pendingTap;
+
+  /// The surface is fitted by its parent, so the canvas needs the global
+  /// position to turn the tap into a viewport point.
+  Offset _toGlobal(Offset local) {
+    final box = _surface.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return Offset.zero;
+    return box.localToGlobal(local);
+  }
+
+  double get _doubleTapScale => widget.maxScale > 2.5 ? 2.5 : widget.maxScale;
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/ooxml/xlsx_workbook.dart';
+import '../document_zoom.dart';
 import 'office_canvas.dart';
 
 /// Height of one rendered sheet page, in points. The scroll view needs the
@@ -17,11 +18,15 @@ class XlsxSheetView extends StatelessWidget {
   final int page;
   final int firstRowNumber;
 
+  /// Zoom shared across pages, so turning a page keeps the zoom level.
+  final DocumentZoom? zoom;
+
   const XlsxSheetView({
     super.key,
     required this.sheet,
     required this.page,
     required this.firstRowNumber,
+    this.zoom,
   });
 
   @override
@@ -30,6 +35,7 @@ class XlsxSheetView extends StatelessWidget {
     final headerHeight = kSheetRowHeightPt;
 
     return OfficeCanvas(
+      zoom: zoom,
       widthPt: kSheetPageWidthPt,
       heightPt: kSheetPageRenderedHeightPt,
       child: Column(

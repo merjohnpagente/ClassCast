@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../services/ooxml/pptx_deck.dart';
+import '../document_zoom.dart';
 import 'office_canvas.dart';
 
 /// Draws one PowerPoint slide on the shared [OfficeCanvas].
@@ -13,10 +14,14 @@ class PptxSlideView extends StatelessWidget {
   final PptxDeck deck;
   final int page;
 
+  /// Zoom shared across pages, so turning a page keeps the zoom level.
+  final DocumentZoom? zoom;
+
   const PptxSlideView({
     super.key,
     required this.deck,
     required this.page,
+    this.zoom,
   });
 
   @override
@@ -24,6 +29,7 @@ class PptxSlideView extends StatelessWidget {
     final slides = deck.slides;
     if (slides.isEmpty) {
       return OfficeCanvas(
+        zoom: zoom,
         widthPt: deck.slideWidthPt,
         heightPt: deck.slideHeightPt,
         child: const Center(child: Text('This deck has no slides.')),
@@ -33,6 +39,7 @@ class PptxSlideView extends StatelessWidget {
     final slide = slides[index];
 
     return OfficeCanvas(
+      zoom: zoom,
       widthPt: deck.slideWidthPt,
       heightPt: deck.slideHeightPt,
       background: Color(slide.background),
