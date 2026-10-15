@@ -20,12 +20,7 @@ dependencies:
   qr_flutter: ^4.1.0
   mobile_scanner: ^5.2.3
   file_picker: ^13.1.0
-  # network_info_plus 8.1+ and device_info_plus 13.x pull different win32
-  # majors, and device_info_plus 13.x needs an iOS SDK the CI runner does not
-  # have (it calls NSProcessInfo.isiOSAppOnVision). Both are pinned to the
-  # newest pair that builds everywhere; only getWifiIP/getWifiName are used.
-  network_info_plus: '>=7.0.0 <8.1.0'
-  device_info_plus: '>=12.1.0 <13.0.0'
+  network_info_plus: ^8.2.2
   uuid: ^4.5.1
   archive: ^4.0.9
   xml: ^7.0.1

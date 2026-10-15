@@ -75,6 +75,38 @@ jobs:
           PY
           grep -n "NSCameraUsageDescription" -A1 "$PLIST"
 
+      - name: Patch a plugin that needs a newer iOS SDK
+        run: |
+          # device_info_plus 13.x calls NSProcessInfo.isiOSAppOnVision behind an
+          # "@available(iOS 26.1)" guard, but the selector must exist at compile
+          # time and the runner SDK does not have it, so the build dies inside
+          # the plugin. Asking the runtime instead compiles everywhere and
+          # behaves identically on a device new enough to have the selector.
+          FILE=$(find "$HOME/.pub-cache/hosted" -name FPPDeviceInfoPlusPlugin.m | head -1)
+          if [ -z "$FILE" ]; then
+            echo "device_info_plus not present, nothing to patch"
+            exit 0
+          fi
+          python3 - "$FILE" <<'PY'
+          import sys
+          path = sys.argv[1]
+          with open(path, "r", encoding="utf-8") as fh:
+              src = fh.read()
+          old = ('if (@available(iOS 26.1, *)) {'
+                 'isiOSAppOnVision = [NSNumber numberWithBool:[info isiOSAppOnVision]];'
+                 '}')
+          new = ('if ([info respondsToSelector:NSSelectorFromString(@"isiOSAppOnVision")]) {'
+                 'isiOSAppOnVision = [NSNumber numberWithBool:'
+                 '[info valueForKey:@"isiOSAppOnVision"]];'
+                 '}')
+          if old in src:
+              with open(path, "w", encoding="utf-8") as fh:
+                  fh.write(src.replace(old, new))
+              print("patched", path)
+          else:
+              print("already fine upstream, no patch needed")
+          PY
+
       - name: Build unsigned release archive
         run: flutter build ios --release --no-codesign
 
