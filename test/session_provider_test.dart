@@ -38,7 +38,7 @@ void main() {
 
   test('refreshing stored sessions leaves the live roster alone', () async {
     await sessions.createSession(name: 'Physics', subject: 'Optics');
-    sessions.applyEvent(_joined('stu-1', 'Ana'));
+    sessions.applyEvent(_joined(sessions, 'stu-1', 'Ana'));
 
     expect(sessions.participants.map((p) => p.name), ['Ana']);
 
@@ -52,7 +52,7 @@ void main() {
 
   test('a raised hand and a reported page reach the teacher', () async {
     await sessions.createSession(name: 'Physics');
-    sessions.applyEvent(_joined('stu-1', 'Ana'));
+    sessions.applyEvent(_joined(sessions, 'stu-1', 'Ana'));
     sessions.applyEvent(SyncEvent(
       type: SyncEventType.handRaised,
       sessionId: sessions.active!.id,
@@ -85,7 +85,7 @@ void main() {
 
   test('ending a session clears the roster', () async {
     await sessions.createSession(name: 'Physics');
-    sessions.applyEvent(_joined('stu-1', 'Ana'));
+    sessions.applyEvent(_joined(sessions, 'stu-1', 'Ana'));
     expect(sessions.participants, hasLength(1));
 
     await sessions.endSession();
@@ -95,9 +95,12 @@ void main() {
   });
 }
 
-SyncEvent _joined(String id, String name) => SyncEvent(
+/// A student joining the session that is actually running — applyEvent drops
+/// anything for another session id, which is what made an earlier version of
+/// this file pass the wrong way round.
+SyncEvent _joined(SessionProvider sessions, String id, String name) => SyncEvent(
       type: SyncEventType.participantJoined,
-      sessionId: 'CLASS-1',
+      sessionId: sessions.active!.id,
       participantId: id,
       participantName: name,
     );
