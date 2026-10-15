@@ -26,9 +26,33 @@
   slide/page counting at pick time, permission-gated downloads, and an honest
   panel for files the device genuinely cannot open (Office 97-2003 binaries).
 - QR join payload (`classcast://join?...`) + parser for QR / URL / bare ID.
-- Unit tests: doc types, sync wire format, join parsing, validators, and the
-  OOXML parsers (real zipped fixtures for pptx/docx/xlsx).
-- GitHub Actions: analyze + test + release APK + web build.
+- Unit tests: doc types, sync wire format, join parsing, validators, the
+  OOXML parsers (real zipped fixtures for pptx/docx/xlsx), both hosts'
+  protocol and file rules, storage round-trips, and the session provider's
+  roster state machine.
+
+## Classroom controls
+
+- **Teacher takes control back**: a targeted `POST /api/take-control` reaches
+  one student (or the whole room) and holds that screen on the class page until
+  the class page moves again. Per-student button in the roster, plus one in the
+  toolbar for everyone.
+- **Student view preview**: the teacher can open exactly what the class sees —
+  the same viewer, built from the same snapshot, not a mock-up.
+- **Live roster**: names on join, removed on leave, raised hands, and the page
+  each student is on when they are allowed to browse.
+
+## Durability and honesty
+
+- Documents are **copied into app-owned storage** when picked, so the library
+  survives a restart and Android clearing its cache.
+- The library keeps multi-picks, keeps entries it cannot verify, and reports a
+  store it could not read instead of showing an empty list.
+- The teacher key is random, persisted with the session, and required for the
+  control endpoints, the teacher socket, and every document download; a share
+  URL carries a token and stops working the moment the document is unshared.
+- Anything the app cannot do is said plainly: a refused share, a failed pick, a
+  host that could not start, a file that vanished.
 
 ## Still TODO (per spec phases)
 
@@ -40,6 +64,7 @@
 - **Phase 5:** optional server-side conversion for the legacy binary formats
   (`.ppt` / `.doc` / `.xls`) that no device can render; advanced XLS
   (charts, formulas, multiple print areas).
-- **Phase 6:** Android-hosted teacher server (platform channels, foreground
-  service, storage permissions), advanced offline cache, full screen
-  mirroring (explicitly out of scope for document-casting builds).
+- **Phase 6:** advanced offline cache, participant presence timeouts, and full
+  screen mirroring (explicitly out of scope for document-casting builds).
+  The Android-hosted teacher server itself already exists — `ClasscastHost`
+  runs the HTTP + WebSocket classroom inside the teacher's phone.
