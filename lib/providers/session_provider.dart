@@ -10,6 +10,7 @@ import '../models/participant.dart';
 import '../models/shared_document.dart';
 import '../models/sync_event.dart';
 import '../services/host/classcast_host.dart';
+import '../services/network_service.dart';
 import '../services/ooxml/ooxml_document.dart';
 import '../services/session_store.dart';
 import '../services/sync_protocol.dart';
@@ -183,10 +184,33 @@ class SessionProvider extends ChangeNotifier {
 
     // Register the session on the host so students can join it, and listen
     // for the roster events it broadcasts back.
-    unawaited(_host.startSession(session));
+    //
+    // Awaited, and its result acted on: this used to be fire-and-forget, so a
+    // host that refused the session left the teacher staring at a QR code that
+    // no student could ever join, with nothing to indicate why.
+    final registered = await _host.startSession(session);
+    if (registered) {
+      _hostReachable = true;
+      _hostError = null;
+    } else {
+      _hostReachable = false;
+      _hostError = 'Students cannot reach this device. The classroom server '
+          'did not accept the session.';
+      notifyListeners();
+    }
     _openHostEvents(session);
     return session;
   }
+
+  /// Whether the last control call to the classroom server succeeded.
+  bool _hostReachable = true;
+  String? _hostError;
+
+  /// True once the session has been registered and control calls work.
+  bool get classroomReady => _hostReachable;
+
+  /// Why the classroom server could not be reached, if that is the case.
+  String? get classroomError => _hostError;
 
   /// Starts the in-app host, restarting it if the port changed.
   Future<void> _startHost(ClassroomSession session) async {
@@ -239,9 +263,31 @@ class SessionProvider extends ChangeNotifier {
 
   void setNetwork({required String hostIp, required int port}) {
     if (_active == null) return;
-    _active = _active!.copyWith(hostIp: hostIp, port: port);
+    final active = _active!;
+    final changed = active.hostIp != hostIp || active.port != port;
+    _active = active.copyWith(hostIp: hostIp, port: port);
     notifyListeners();
+    if (!changed) return;
+    // A different address means a different network. Re-announce the session
+    // there, or the QR and the roster keep pointing at an address that no
+    // longer exists — which is what happened after switching from Wi-Fi to a
+    // hotspot mid-lesson.
+    unawaited(_host.startSession(_active!));
     _openHostEvents(_active!);
+  }
+
+  /// Re-reads this device's address and tells the host about it.
+  ///
+  /// Worth calling whenever the teacher is about to show a QR: turning the
+  /// hotspot on after starting the session changes the address from the Wi-Fi
+  /// one to the hotspot one, and nothing else notices.
+  Future<bool> refreshNetwork() async {
+    final active = _active;
+    if (active == null) return false;
+    final ip = await NetworkService().localIp();
+    if (ip.isEmpty) return false;
+    setNetwork(hostIp: ip, port: active.port);
+    return true;
   }
 
   /// Shares [doc] with the class. Returns false when the host refused it, so

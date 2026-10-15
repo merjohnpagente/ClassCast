@@ -103,6 +103,19 @@ jobs:
               src = src.replace(
                   "<application",
                   '    <uses-feature android:name="android.hardware.camera" android:required="false"/>\n    <application', 1)
+          # The classroom server speaks plain HTTP on a local network, and
+          # Android blocks cleartext by default from API 28. Without this the
+          # student's app cannot reach the teacher's phone at all, and the
+          # teacher's own control calls to its own server are blocked too —
+          # the QR scans, nothing happens.
+          if "usesCleartextTraffic" not in src:
+              src = re.sub(
+                  r"<application\b",
+                  '<application android:usesCleartextTraffic="true"',
+                  src,
+                  count=1,
+              )
+              print("cleartext enabled for the classroom LAN server")
           open(path, "w", encoding="utf-8").write(src)
           print("permissions patched")
           PY

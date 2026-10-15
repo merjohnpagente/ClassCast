@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
@@ -34,6 +36,17 @@ class _TeacherPresentationScreenState
   /// Page-by-page or continuous scroll. Both keep the class in step: in scroll
   /// mode the page nearest the top is broadcast as the teacher scrolls.
   OfficeViewMode _viewMode = OfficeViewMode.pages;
+
+  @override
+  void initState() {
+    super.initState();
+    // Teachers usually switch the hotspot on *after* starting the session, so
+    // the address in the QR is stale by the time they open the presentation.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(context.read<SessionProvider>().refreshNetwork());
+    });
+  }
 
   @override
   void dispose() {
@@ -74,11 +87,13 @@ class _TeacherPresentationScreenState
         actions: [
           // Honest about delivery: if the host is not reachable, the teacher
           // is presenting locally only and students are NOT in sync.
-          if (!sessions.hostReachable)
+          if (!sessions.hostReachable || !sessions.classroomReady)
             Padding(
               padding: const EdgeInsets.only(right: 4),
               child: StatusChip(
-                label: 'Host offline',
+                label: sessions.classroomError == null
+                    ? 'Host offline'
+                    : 'Not sharing',
                 icon: Icons.cloud_off,
                 color: AppColors.error,
                 background: AppColors.errorBg,

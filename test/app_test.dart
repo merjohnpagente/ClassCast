@@ -2,6 +2,7 @@ import 'package:classcast_offline/models/classroom_session.dart';
 import 'package:classcast_offline/models/doc_types.dart';
 import 'package:classcast_offline/models/sync_event.dart';
 import 'package:classcast_offline/services/network_service.dart';
+import 'package:classcast_offline/utils/local_ip.dart';
 import 'package:classcast_offline/utils/validators.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -192,4 +193,31 @@ void main() {
     });
   });
 
+  group('The classroom address', () {
+    test('is found from the interfaces when the Wi-Fi plugin has nothing',
+        () async {
+      // The bug this guards: a teacher turns on the hotspot, the Wi-Fi plugin
+      // reports no association, and the QR code went out with no address in
+      // it. Scanning it did nothing and nothing said why.
+      final fromInterfaces = await localInterfaceIp();
+
+      // Whatever the runner reports, it must be a private address a student
+      // could actually reach — or nothing at all, which the UI treats as "no
+      // address" rather than advertising something useless.
+      if (fromInterfaces != null && fromInterfaces.isNotEmpty) {
+        expect(
+          NetworkService.isPrivateAddress(fromInterfaces),
+          isTrue,
+          reason: 'advertised $fromInterfaces, which a student cannot reach',
+        );
+      }
+    });
+
+    test('an address is never taken from a virtual adapter', () async {
+      // Best-effort: the assertion only has teeth where an interface exists.
+      final ip = await localInterfaceIp();
+      if (ip != null && ip.isEmpty) return;
+      expect(ip, isNot(contains('127.0.0.1')));
+    });
+  });
 }

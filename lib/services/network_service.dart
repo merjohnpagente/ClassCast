@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:network_info_plus/network_info_plus.dart';
 
+import '../utils/local_ip.dart';
+
 /// Local-network helpers for the offline classroom.
 ///
 /// Never reports "Connected" until a real host answers:
@@ -10,8 +12,13 @@ import 'package:network_info_plus/network_info_plus.dart';
 class NetworkService {
   final NetworkInfo _info = NetworkInfo();
 
-  /// Actual device IP on the local Wi-Fi (e.g. `192.168.43.1`).
-  /// Returns '' when unavailable (mobile data off / Wi-Fi off / web).
+  /// Actual device IP on the local network (e.g. `192.168.43.1`).
+  ///
+  /// Tries the Wi-Fi plugin first, then walks the interfaces. The fallback is
+  /// not a nicety: when the phone is *serving* the network — a hotspot, which
+  /// is how a teacher brings a room online — the plugin has no Wi-Fi
+  /// association to report and answers null, so the QR code had no address in
+  /// it and no student could ever join.
   Future<String> localIp() async {
     try {
       final ip = await _info.getWifiIP();
@@ -20,10 +27,16 @@ class NetworkService {
       // cannot be typed into a QR code by a student, so it is rejected here
       // rather than advertised and failing for everyone.
       if (isPrivateAddress(ip)) return ip!;
-      return '';
     } catch (_) {
-      return '';
+      // Fall through to the interface walk below.
     }
+    try {
+      final viaInterface = await localInterfaceIp();
+      if (isPrivateAddress(viaInterface)) return viaInterface!;
+    } catch (_) {
+      // Nothing more to try.
+    }
+    return '';
   }
 
   /// True for addresses a student on the same network could actually reach:
