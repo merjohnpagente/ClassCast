@@ -22,10 +22,6 @@ dependencies:
   file_picker: ^13.1.0
   network_info_plus: ^8.2.2
   uuid: ^4.5.1
-  # Pinned: device_info_plus 13.x calls NSProcessInfo.isiOSAppOnVision, which
-  # does not exist in the Xcode SDK on the CI runner and fails the iOS build
-  # inside the plugin. 12.x is the newest line that compiles there.
-  device_info_plus: '>=12.1.0 <13.0.0'
   archive: ^4.0.9
   xml: ^7.0.1
   syncfusion_flutter_pdfviewer: ^33.2.13

@@ -22,7 +22,9 @@ permissions:
 jobs:
   build:
     name: iOS archive
-    runs-on: macos-14
+    # macos-15 ships the Xcode/SDK that device_info_plus 13.x compiles
+    # against; the macos-14 image fails inside that plugin.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
