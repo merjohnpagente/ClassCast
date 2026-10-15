@@ -211,6 +211,7 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
   int _lastReportedPage = -1;
 
   Widget _footer(BuildContext context, ClassroomSession active) {
+    final sync = context.watch<SyncProvider>();
     final canNav = active.allowStudentNav;
     final canDownload = active.allowDownload;
     return Row(
