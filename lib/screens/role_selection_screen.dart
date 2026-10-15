@@ -132,12 +132,9 @@ class _RoleCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // The arrow nudges on press: the card's "you can go here" cue.
-              Pressable(
-                onTap: onTap,
-                scale: 1.06,
-                child: const Icon(Icons.chevron_right, color: AppColors.muted),
-              ),
+              // Decoration only: a second tap handler here would fire the
+              // same callback twice and push the route twice.
+              const Icon(Icons.chevron_right, color: AppColors.muted),
             ],
           ),
         ),
