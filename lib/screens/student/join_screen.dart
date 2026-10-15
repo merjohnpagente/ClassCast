@@ -363,10 +363,10 @@ class _QrScanPageState extends State<_QrScanPage> {
             controller: _ctrl,
             fit: BoxFit.cover,
             onDetect: _onDetect,
-            placeholderBuilder: (_, __) => const Center(
+            placeholderBuilder: (context) => const Center(
               child: CircularProgressIndicator(color: Colors.white),
             ),
-            errorBuilder: (context, error, child) {
+            errorBuilder: (context, error) {
               // Scheduled exactly once: errorBuilder runs on every rebuild
               // while the camera is down, and every scheduling would otherwise
               // queue another camera restart.
