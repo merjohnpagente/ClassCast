@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import 'motion.dart';
 
 /// Reusable empty / loading / error states with icon, short text, recovery.
 class EmptyState extends StatelessWidget {
@@ -25,7 +26,8 @@ class EmptyState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
+        child: FadeIn(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
@@ -51,10 +53,11 @@ class EmptyState extends StatelessWidget {
                 ),
                 textAlign: TextAlign.center),
             if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               FilledButton(onPressed: onAction, child: Text(actionLabel!)),
             ],
           ],
+          ),
         ),
       ),
     );
@@ -111,7 +114,8 @@ class ErrorState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
+        child: FadeIn(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
@@ -138,10 +142,11 @@ class ErrorState extends StatelessWidget {
                 ),
                 textAlign: TextAlign.center),
             if (onRetry != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               OutlinedButton(onPressed: onRetry, child: Text(retryLabel)),
             ],
           ],
+          ),
         ),
       ),
     );

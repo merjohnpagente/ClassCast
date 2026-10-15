@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../widgets/motion.dart';
 import '../utils/responsive.dart';
 import '../widgets/app_logo.dart';
 
@@ -26,7 +27,7 @@ class RoleSelectionScreen extends StatelessWidget {
             padding: EdgeInsets.all(context.pagePadding),
             children: [
               const SizedBox(height: 24),
-              const Center(child: AppLogo(size: 72)),
+              const FadeIn(child: Center(child: AppLogo(size: 72))),
               const SizedBox(height: 12),
               Text('ClassCast',
                   textAlign: TextAlign.center,
@@ -47,18 +48,24 @@ class RoleSelectionScreen extends StatelessWidget {
                     color: AppColors.muted,
                   )),
               const SizedBox(height: 24),
-              _RoleCard(
-                icon: Icons.school,
-                title: 'Teacher',
-                subtitle: 'Host a classroom and present',
-                onTap: onTeacher,
+              FadeIn(
+                delay: Motion.stagger(1),
+                child: _RoleCard(
+                  icon: Icons.school_outlined,
+                  title: 'Teacher',
+                  subtitle: 'Start a classroom and present',
+                  onTap: onTeacher,
+                ),
               ),
               const SizedBox(height: 12),
-              _RoleCard(
-                icon: Icons.person,
-                title: 'Student',
-                subtitle: 'Join with QR or session ID',
-                onTap: onStudent,
+              FadeIn(
+                delay: Motion.stagger(2),
+                child: _RoleCard(
+                  icon: Icons.person_outline,
+                  title: 'Student',
+                  subtitle: 'Join by QR code or session ID',
+                  onTap: onStudent,
+                ),
               ),
               const SizedBox(height: 24),
               Text(
@@ -92,10 +99,9 @@ class _RoleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        onTap: onTap,
+    return Pressable(
+      onTap: onTap,
+      child: Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -107,8 +113,7 @@ class _RoleCard extends StatelessWidget {
                   color: AppColors.primarySoft,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(icon,
-                    color: AppColors.primary, size: 28),
+                child: Icon(icon, color: AppColors.primary, size: 28),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -116,19 +121,23 @@ class _RoleCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(title,
-                        style:
-                            theme.textTheme.titleMedium?.copyWith(
+                        style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                           color: AppColors.ink,
                         )),
+                    const SizedBox(height: 2),
                     Text(subtitle,
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: AppColors.muted)),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right,
-                  color: AppColors.muted),
+              // The arrow nudges on press: the card's "you can go here" cue.
+              Pressable(
+                onTap: onTap,
+                scale: 1.06,
+                child: const Icon(Icons.chevron_right, color: AppColors.muted),
+              ),
             ],
           ),
         ),
