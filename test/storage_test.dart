@@ -136,6 +136,7 @@ void main() {
       // This is the bug the library had: toJson never wrote localPath, so after
       // a restart every entry read back with no path and pruneMissing deleted
       // the whole library on the next launch.
+      final library = LibraryStore();
       await library.save(SharedDocument(
         id: 'doc-1',
         name: 'Lesson',

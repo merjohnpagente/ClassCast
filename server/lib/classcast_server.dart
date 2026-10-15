@@ -197,7 +197,7 @@ router.post('/api/end', (Request req) async {
     // the core feature, so it is always allowed; `allowDownload` only gates
     // the *rest* of the shared folder. (Note: anything a student can render,
     // they can also save — this is a classroom courtesy switch, not DRM.)
-    Future<Response> serveFile(String requestedName) async {
+    Future<Response> serveFile(String requestedName, String? presented) async {
       // The session must be running and the request must carry the token the
       // snapshot handed out, so typing the filename on the classroom Wi-Fi is
       // not enough to read what the teacher is showing.
@@ -205,7 +205,7 @@ router.post('/api/end', (Request req) async {
       if (_session == null || token.isEmpty) {
         return Response.forbidden('No session is running');
       }
-      if (req.url.queryParameters['t'] != token) {
+      if (presented != token) {
         return Response.forbidden('Not allowed');
       }
       final raw = Uri.decodeComponent(requestedName);
@@ -266,7 +266,8 @@ router.post('/api/end', (Request req) async {
         .add((req) {
           const prefix = 'files/';
           if (req.url.path.startsWith(prefix)) {
-            return serveFile(req.url.path.substring(prefix.length));
+            return serveFile(req.url.path.substring(prefix.length),
+                req.url.queryParameters['t']);
           }
           return Response.notFound('not found');
         });

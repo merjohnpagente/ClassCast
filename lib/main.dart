@@ -16,7 +16,7 @@ Future<void> main() async {
   // say-nothing panel instead.
   ErrorWidget.builder = kDebugMode
       ? (details) => _errorPanel(details.exceptionAsString())
-      : (details) => const _errorPanel(null);
+      : (details) => _errorPanel(null);
 
   runApp(
     MultiProvider(

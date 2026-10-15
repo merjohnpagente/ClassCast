@@ -35,7 +35,7 @@ Future<String?> localFileReadString(String path) async {
 Future<bool> localFileExistsImpl(String path) async {
   if (path.isEmpty) return false;
   try {
-    return File(path).exists();
+    return await File(path).exists();
   } catch (_) {
     return false;
   }

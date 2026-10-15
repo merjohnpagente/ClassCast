@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -48,7 +47,7 @@ class DocumentService {
         type: FileType.custom,
         allowedExtensions: allowedExtensions,
       );
-      files = picked ?? const [];
+      files = picked ?? <PlatformFile>[];
     } catch (e) {
       throw FilePickException('The files could not be opened: $e');
     }
@@ -119,15 +118,9 @@ class DocumentService {
       return 0;
     }
   }
+}
 
-  /// Runs in the background isolate. Returns the page count, 0 when unreadable.
-  static int _pageCountIn(String? extension, Uint8List? bytes) {
-    if (bytes == null || bytes.isEmpty) return 0;
-    final parsed =
-        OoxmlLoader.parseBytes(extension: extension ?? '', bytes: bytes);
-    return parsed?.pageCount ?? 0;
-  }
-
+/// Runs in the background isolate. Returns the page count, 0 when unreadable.
   /// Short, honest guidance shown on the Share screen.
   static String? conversionNotice(SharedDocument doc) {
     switch (doc.status) {
@@ -175,4 +168,16 @@ class FilePickException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// Runs in the background isolate. Returns the page count, 0 when unreadable.
+///
+/// Top level because `compute` needs a plain function that can cross the
+/// isolate boundary with sendable arguments only.
+int _pageCountIn(Map<String, Object?> message) {
+  final bytes = message['bytes'] as Uint8List?;
+  final extension = message['extension'] as String? ?? '';
+  if (bytes == null || bytes.isEmpty) return 0;
+  final parsed = OoxmlLoader.parseBytes(extension: extension, bytes: bytes);
+  return parsed?.pageCount ?? 0;
 }
