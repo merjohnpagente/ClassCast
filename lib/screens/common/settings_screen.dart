@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -37,11 +39,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _load() async {
     final net = NetworkService();
     // The plugin answers through a platform channel, and a channel that never
-    // answers left this tab on "Checking…" for good. A timeout turns that into
-    // an honest "not available" instead of an eternal spinner.
-    final ip = await net.localIp().timeout(_networkTimeout, onTimeout: () => '');
-    final wifi =
-        await net.wifiName().timeout(_networkTimeout, onTimeout: () => '');
+    // answers left this tab on "Checking…" for good. A deadline turns that into
+    // an honest "not available" instead of an eternal spinner — and it is
+    // cancelled on dispose so it never outlives the screen.
+    _probe?.cancel();
+    _probe = Timer(_networkTimeout, () {
+      if (!mounted) return;
+      setState(() => _loading = false);
+    });
+    final ip = await net.localIp();
+    final wifi = await net.wifiName();
+    _probe?.cancel();
+    _probe = null;
     if (!mounted) return;
     setState(() {
       _ip = ip;
@@ -50,7 +59,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
+  Timer? _probe;
   static const _networkTimeout = Duration(seconds: 4);
+
+  @override
+  void dispose() {
+    _probe?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

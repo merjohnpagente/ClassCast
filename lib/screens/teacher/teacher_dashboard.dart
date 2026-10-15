@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -73,12 +75,26 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     _loadIp();
   }
 
+  Timer? _probe;
+
+  @override
+  void dispose() {
+    _probe?.cancel();
+    super.dispose();
+  }
+
   Future<void> _loadIp() async {
     // Same reason as the settings tab: a platform channel that never answers
-    // left the dashboard reading "Checking network…" indefinitely.
-    final ip = await NetworkService()
-        .localIp()
-        .timeout(const Duration(seconds: 4), onTimeout: () => '');
+    // left the dashboard reading "Checking network…" indefinitely. Cancelled
+    // on dispose so the deadline never outlives the screen.
+    _probe?.cancel();
+    _probe = Timer(const Duration(seconds: 4), () {
+      if (!mounted) return;
+      setState(() => _probingIp = false);
+    });
+    final ip = await NetworkService().localIp();
+    _probe?.cancel();
+    _probe = null;
     if (!mounted) return;
     final sessions = context.read<SessionProvider>();
     setState(() {
