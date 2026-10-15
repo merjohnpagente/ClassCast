@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -31,7 +33,9 @@ class _FilesScreenState extends State<FilesScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<LibraryProvider>().load();
+      // Restores the saved library from SQLite; the screen's loading state
+      // covers the round-trip.
+      unawaited(context.read<LibraryProvider>().load());
     });
   }
 

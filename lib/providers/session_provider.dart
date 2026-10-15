@@ -251,6 +251,69 @@ class SessionProvider extends ChangeNotifier {
     unawaited(_host.clearDocument(_active!));
   }
 
+  /// Save an edited session (rename, subject, settings) and persist it, so the
+  /// recent list shows the change and the change survives a restart.
+  Future<void> updateSession(ClassroomSession updated) async {
+    if (updated.id.isEmpty) return;
+    if (_active?.id == updated.id) {
+      _active = updated;
+    }
+    await _store.saveSession(updated);
+    _recent = await _store.loadRecent();
+    notifyListeners();
+    // A live session also lives on the host: push the new name/settings there.
+    if (_active?.id == updated.id) {
+      unawaited(_host.startSession(_active!));
+    }
+  }
+
+  /// Delete a session from the recent list (and end it if it was live).
+  Future<void> deleteSession(String id) async {
+    if (_active?.id == id) {
+      await endSession();
+    }
+    await _store.removeSession(id);
+    _recent = await _store.loadRecent();
+    notifyListeners();
+  }
+
+  /// Bring an ended session back to life with the **same session id**, so a
+  /// printed QR code or a saved session id works again. The roster and the
+  /// page start fresh, and an optional document from the teacher's library is
+  /// re-shared so the class continues where it left off.
+  Future<ClassroomSession?> reviveSession(
+    ClassroomSession old, {
+    required String hostIp,
+    required int port,
+    SharedDocument? document,
+  }) async {
+    if (old.id.isEmpty) return null;
+    if (_active != null) await endSession();
+    final session = old.copyWith(
+      hostIp: hostIp,
+      port: port,
+      isActive: true,
+      createdAt: DateTime.now(),
+      teacherKey: _uuid.v4().substring(0, 8),
+      page: 1,
+      syncPaused: false,
+      documentId: () => null,
+      documentName: () => null,
+      documentUrl: () => null,
+    );
+    _active = session;
+    await _store.saveSession(session);
+    _recent = await _store.loadRecent();
+    notifyListeners();
+    await _startHost(session);
+    unawaited(_host.startSession(session));
+    _openHostEvents(session);
+    if (document != null) {
+      shareDocument(document, totalPages: document.pageCount);
+    }
+    return session;
+  }
+
   /// Publish the real page count of the shared document.
   ///
   /// The app only learns how many slides or pages a file has once it has been

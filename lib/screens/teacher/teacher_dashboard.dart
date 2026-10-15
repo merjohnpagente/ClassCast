@@ -7,6 +7,7 @@ import '../../providers/session_provider.dart';
 import '../../services/network_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/motion.dart';
+import '../../widgets/session_actions_sheet.dart';
 import '../../widgets/qr_card.dart';
 import '../../widgets/session_card.dart';
 import '../../widgets/state_cards.dart';
@@ -342,12 +343,19 @@ class TeacherDashboardSessionList extends StatelessWidget {
         subtitle: 'Your past classrooms will appear here.',
       );
     }
+    // Every recent session is a menu: revive it, edit it, or delete it. This
+    // is the teacher's way back into yesterday's class without starting over.
     return Column(
       children: [
         for (final s in items.take(5))
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: SessionCard(session: s),
+            // SessionCard has its own tap handling; wrapping it in another
+            // gesture detector would fire the action twice.
+            child: SessionCard(
+              session: s,
+              onTap: () => showSessionActions(context, s),
+            ),
           ),
       ],
     );
