@@ -128,24 +128,23 @@ jobs:
           [ -f "$FILE" ] || FILE=android/build.gradle
           cat >> "$FILE" <<'EOF'
 
+          # Applied lazily: `afterEvaluate` cannot run at the end of this file
+          # (the projects are already evaluated by then, which is a hard error),
+          # while configureEach registers the rule whenever a configuration is.
           subprojects {
-              afterEvaluate {
-                  configurations.all {
-                      resolutionStrategy {
-                          force("androidx.camera:camera-core:1.4.2")
-                          force("androidx.camera:camera-camera2:1.4.2")
-                          force("androidx.camera:camera-lifecycle:1.4.2")
-                          force("androidx.camera:camera-view:1.4.2")
-                          // ML Kit's barcode scanner has to match CameraX: the
-                          // 17.2 build the plugin ships throws a null-pointer
-                          // inside the analyzer against CameraX 1.4.
-                          force("com.google.mlkit:barcode-scanning:17.3.0")
-                      }
+              configurations.configureEach {
+                  resolutionStrategy {
+                      force("androidx.camera:camera-core:1.4.2")
+                      force("androidx.camera:camera-camera2:1.4.2")
+                      force("androidx.camera:camera-lifecycle:1.4.2")
+                      force("androidx.camera:camera-view:1.4.2")
+                      force("com.google.mlkit:barcode-scanning:17.3.0")
                   }
               }
           }
           EOF
-          tail -15 "$FILE"
+          tail -16 "$FILE"
+
       - name: Install Android SDK 36
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
