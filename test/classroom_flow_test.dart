@@ -92,7 +92,12 @@ void main() {
     });
     expect(moved.statusCode, 200);
 
-    final relayed = await inbox.next.timeout(const Duration(seconds: 3));
+    // The socket also carries the re-greeting and the join announcement, so
+    // wait for the frame that actually carries the class page.
+    final relayed = await inbox.nextWhere(
+      (frame) => SyncProtocol.decode(frame)?.page != null,
+      const Duration(seconds: 3),
+    );
     final event = SyncProtocol.decode(relayed);
     expect(event, isNotNull, reason: 'the student socket must carry the page');
     expect(event!.sessionId, sessionId);
@@ -143,35 +148,58 @@ void main() {
   });
 }
 
-/// Minimal queue over a socket stream, so a test can await frames in
-/// order without pulling in a package.
+/// Minimal queue over a socket stream, so a test can await frames in order
+/// without pulling in a package.
+///
+/// Frames that arrive while nobody is waiting are kept, not dropped — which is
+/// the whole point of a queue, and the reason an earlier version of this file
+/// timed out waiting for a broadcast it had silently thrown away.
 class StreamQueue<T> {
-  StreamQueue(this._stream) {
-    _subscription = _stream.listen((event) {
-      if (_items.isEmpty) {
-        _pending?.complete(event);
-        _pending = null;
-      } else {
-        _items.add(event);
-      }
-    }, onError: (Object error, StackTrace stack) {
-      if (_pending != null && !_pending!.isCompleted) {
-        _pending!.completeError(error, stack);
-        _pending = null;
+  StreamQueue(Stream<T> stream) {
+    _subscription = stream.listen(_push, onError: (Object error, StackTrace stack) {
+      final pending = _pending;
+      _pending = null;
+      if (pending != null && !pending.isCompleted) {
+        pending.completeError(error, stack);
       }
     });
   }
 
-  final Stream<T> _stream;
   final List<T> _items = [];
   StreamSubscription<T>? _subscription;
   Completer<T>? _pending;
+
+  void _push(T event) {
+    final pending = _pending;
+    if (pending != null && !pending.isCompleted) {
+      _pending = null;
+      pending.complete(event);
+      return;
+    }
+    _items.add(event);
+  }
 
   Future<T> get next {
     if (_items.isNotEmpty) return Future<T>.value(_items.removeAt(0));
     final completer = Completer<T>();
     _pending = completer;
     return completer.future;
+  }
+
+  /// The next frame matching [test], skipping the ones that do not.
+  Future<T> nextWhere(
+    bool Function(T frame) test,
+    Duration limit,
+  ) async {
+    final deadline = DateTime.now().add(limit);
+    while (true) {
+      final remaining = deadline.difference(DateTime.now());
+      if (remaining.isNegative) {
+        throw TimeoutException('No matching frame within $limit', limit);
+      }
+      final frame = await next.timeout(remaining);
+      if (test(frame)) return frame;
+    }
   }
 
   /// Stop listening, so a test can end without a live subscription.
