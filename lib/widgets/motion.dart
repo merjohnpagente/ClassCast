@@ -44,19 +44,31 @@ class _FadeInState extends State<FadeIn>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: widget.duration,
+    duration: widget.delay + widget.duration,
   );
+
+  /// The delay is an *interval on one controller*, never a `Future.delayed`:
+  /// a real timer outlives the widget, which leaks in production and fails the
+  /// widget tests with "a Timer is still pending".
+  late final Animation<double> _curve = CurvedAnimation(
+    parent: _controller,
+    curve: Interval(
+      _delayFraction,
+      1,
+      curve: Curves.easeOutCubic,
+    ),
+  );
+
+  double get _delayFraction {
+    final total = (widget.delay + widget.duration).inMicroseconds;
+    if (total <= 0) return 0;
+    return (widget.delay.inMicroseconds / total).clamp(0.0, 0.99);
+  }
 
   @override
   void initState() {
     super.initState();
-    if (widget.delay == Duration.zero) {
-      _controller.forward();
-    } else {
-      Future<void>.delayed(widget.delay, () {
-        if (mounted) _controller.forward();
-      });
-    }
+    _controller.forward();
   }
 
   @override
@@ -67,16 +79,12 @@ class _FadeInState extends State<FadeIn>
 
   @override
   Widget build(BuildContext context) {
-    final animation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutCubic,
-    );
     return AnimatedBuilder(
-      animation: animation,
+      animation: _curve,
       builder: (context, child) => Opacity(
-        opacity: animation.value,
+        opacity: _curve.value,
         child: Transform.translate(
-          offset: Offset(0, widget.rise * (1 - animation.value)),
+          offset: Offset(0, widget.rise * (1 - _curve.value)),
           child: child,
         ),
       ),
