@@ -237,6 +237,14 @@ class _QrScanPageState extends State<_QrScanPage> {
   bool _done = false;
   bool _torchOn = false;
 
+  /// The back camera would not open even though the permission is granted, so
+  /// the page switches to the front camera by itself once. A QR can be
+  /// scanned with either lens; leaving the student on a black screen is not
+  /// an option.
+  bool _otherLensAttempted = false;
+  bool _fallbackScheduled = false;
+  bool _usingFrontCamera = false;
+
   @override
   void initState() {
     super.initState();
@@ -263,6 +271,40 @@ class _QrScanPageState extends State<_QrScanPage> {
       Navigator.of(context).pop(value.trim());
       return;
     }
+  }
+
+  /// A clean restart: stop first, then start. Calling start() on a half-open
+  /// camera only produces "already started" errors, which is why a plain retry
+  /// never worked.
+  Future<void> _restartCamera() async {
+    try {
+      await _ctrl.stop();
+    } catch (_) {/* not running is fine */}
+    try {
+      await _ctrl.start();
+    } catch (_) {/* the error panel stays and says why */}
+  }
+
+  /// Switches to the front camera once, automatically, when the back camera
+  /// will not open for a reason other than a denied permission.
+  void _tryOtherLens(MobileScannerException error) {
+    if (_otherLensAttempted ||
+        _done ||
+        error.errorCode == MobileScannerErrorCode.permissionDenied) {
+      return;
+    }
+    // One attempt, ever: a second failure means the phone really has no
+    // usable camera, and hammering start() only produces new errors.
+    _otherLensAttempted = true;
+    _usingFrontCamera = true;
+    () async {
+      try {
+        await _ctrl.stop();
+        await _ctrl.switchCamera();
+        await _ctrl.start();
+      } catch (_) {/* the error panel stays and says why */}
+      if (mounted) setState(() {});
+    }();
   }
 
   @override
@@ -303,7 +345,18 @@ class _QrScanPageState extends State<_QrScanPage> {
             placeholderBuilder: (_, __) => const Center(
               child: CircularProgressIndicator(color: Colors.white),
             ),
-            errorBuilder: (context, error, child) => _cameraError(error),
+            errorBuilder: (context, error, child) {
+              // Scheduled exactly once: errorBuilder runs on every rebuild
+              // while the camera is down, and every scheduling would otherwise
+              // queue another camera restart.
+              if (!_fallbackScheduled && !_done) {
+                _fallbackScheduled = true;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _tryOtherLens(error);
+                });
+              }
+              return _cameraError(error);
+            },
             overlayBuilder: (context, constraints) => _scanOverlay(context),
           ),
           SafeArea(
@@ -313,7 +366,9 @@ class _QrScanPageState extends State<_QrScanPage> {
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Text(
-                    'Point the camera at the QR code on the teacher screen.',
+                    _usingFrontCamera
+                        ? 'Front camera — hold the phone facing the QR code.'
+                        : 'Point the camera at the QR code on the teacher screen.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Colors.white,
@@ -378,6 +433,19 @@ class _QrScanPageState extends State<_QrScanPage> {
         : 'Type the session ID instead — it is on the teacher screen.';
   }
 
+  /// Machine-readable detail for the error panel. A report that only says
+  /// "camera unavailable" cannot be fixed; a report that says
+  /// "noCamera: No camera found or failed to open camera" can.
+  static String _errorLine(MobileScannerException error) {
+    final code = error.errorCode.name;
+    final message = error.errorDetails?.message;
+    final buffer = StringBuffer('Error: $code');
+    if (message != null && message.trim().isNotEmpty) {
+      buffer.write(' — ${message.trim()}');
+    }
+    return buffer.toString();
+  }
+
   /// Honest failure state: the camera may be blocked by permissions or
   /// unavailable on this device. Always offer manual entry as a fallback.
   Widget _cameraError(MobileScannerException error) {
@@ -415,22 +483,28 @@ class _QrScanPageState extends State<_QrScanPage> {
                 style: const TextStyle(
                     color: Colors.white70, fontSize: 14, height: 1.45),
               ),
+              // The technical detail, in small print: without the error code
+              // every future "camera does not work" report is a dead end.
+              const SizedBox(height: 10),
+              Text(
+                _errorLine(error),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    color: Colors.white38, fontSize: 11, height: 1.4),
+              ),
               const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // A camera that failed once often works on a second try:
-                  // the student may have just granted the permission.
+                  // A camera that failed once often works after a clean
+                  // stop-then-start: the student may have just granted the
+                  // permission, or the other lens finished waking up.
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,
                       side: const BorderSide(color: Colors.white54),
                     ),
-                    onPressed: () async {
-                      try {
-                        await _ctrl.start();
-                      } catch (_) {/* still unavailable */}
-                    },
+                    onPressed: _restartCamera,
                     icon: const Icon(Icons.refresh, size: 18),
                     label: const Text('Try again'),
                   ),
