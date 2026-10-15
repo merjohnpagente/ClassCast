@@ -43,11 +43,10 @@ class DocumentService {
   Future<List<SharedDocument>> pickMultiple() async {
     final List<PlatformFile> files;
     try {
-      final picked = await FilePicker.pickFiles(
+      files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: allowedExtensions,
       );
-      files = picked ?? <PlatformFile>[];
     } catch (e) {
       throw FilePickException('The files could not be opened: $e');
     }
@@ -118,9 +117,7 @@ class DocumentService {
       return 0;
     }
   }
-}
 
-/// Runs in the background isolate. Returns the page count, 0 when unreadable.
   /// Short, honest guidance shown on the Share screen.
   static String? conversionNotice(SharedDocument doc) {
     switch (doc.status) {

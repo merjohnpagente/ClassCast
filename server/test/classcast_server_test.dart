@@ -320,17 +320,22 @@ void main() {
 
     test('other files still require download permission', () async {
       final [id, key] = await startSession(allowDownload: false);
+      writeFile('lesson.pdf', '%PDF-1.4');
       writeFile('answerkey.pdf', '%PDF-1.4');
-      final url = await shareAndUrl(key, 'answerkey.pdf');
-      final res = await call('GET', url);
+      // Share the lesson, then ask for a different file with that token.
+      final url = await shareAndUrl(key, 'lesson.pdf');
+      final query = url.substring(url.indexOf('?'));
+      final res = await call('GET', '/files/answerkey.pdf$query');
       expect(res.statusCode, 403);
     });
 
     test('download permission unlocks the rest of the folder', () async {
       final [id, key] = await startSession(allowDownload: true);
+      writeFile('lesson.pdf', '%PDF-1.4');
       writeFile('answerkey.pdf', '%PDF-1.4');
-      final url = await shareAndUrl(key, 'answerkey.pdf');
-      final res = await call('GET', url);
+      final url = await shareAndUrl(key, 'lesson.pdf');
+      final query = url.substring(url.indexOf('?'));
+      final res = await call('GET', '/files/answerkey.pdf$query');
       expect(res.statusCode, 200);
       expect(res.headers['content-disposition'], 'attachment');
     });
