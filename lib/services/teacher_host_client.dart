@@ -22,6 +22,13 @@ class TeacherHostClient {
   bool lastCallOk = true;
   String? lastError;
 
+  /// Forget the outcome of the last call. Ending a session tears the host down
+  /// on purpose, so the failure that follows is not something to show.
+  void clearLastStatus() {
+    lastCallOk = true;
+    lastError = null;
+  }
+
   /// Invoked after every completed call so the teacher UI can repaint its
   /// host-status chip.
   void Function()? onStatusChanged;

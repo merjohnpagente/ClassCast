@@ -102,10 +102,13 @@ class ClasscastClient {
         message: device,
       )));
       _attempt = 0;
-      _setState(LinkState.live);
       _sub?.cancel();
       _sub = _channel!.stream.listen(
         (frame) {
+          // "Live" means the host answered, not that we asked. connect()
+          // returns a channel object immediately, so marking it live here
+          // showed a green "live" chip to students who were not connected.
+          if (_state != LinkState.live) _setState(LinkState.live);
           final event = SyncProtocol.decode(frame);
           if (event != null && !_events.isClosed) _events.add(event);
         },

@@ -23,48 +23,56 @@ class LibraryStore {
           .map((e) => SharedDocument.fromJson(
               Map<String, dynamic>.from(e as Map)))
           .toList();
-    } catch (_) {
-      return [];
+    } catch (e) {
+      // An unreadable row must not masquerade as "you have no documents":
+      // the teacher re-picks files they already have, and this time they see
+      // an error instead of an empty list that looks deliberate.
+      throw LibraryReadException(e);
     }
   }
 
   /// Adds or replaces a document, newest first, capped so the list stays a
   /// working set rather than an archive nobody prunes.
-  Future<void> save(SharedDocument doc) async {
-    if (doc.id.isEmpty) return;
-    try {
-      final current = await load();
-      final updated = [
-        doc,
-        ...current.where((d) => d.id != doc.id),
-      ].take(60).toList();
-      await _write(updated);
-    } catch (_) {/* best-effort cache */}
-  }
+  Future<void> save(SharedDocument doc) => saveAll([doc]);
 
+  /// Adds every document in [docs], keeping the ones already stored.
+  ///
+  /// This used to overwrite the whole library with just the new batch, so
+  /// picking three files erased sixty.
   Future<void> saveAll(List<SharedDocument> docs) async {
-    try {
-      await _write(docs.take(60).toList());
-    } catch (_) {/* ignore */}
+    final incoming =
+        docs.where((d) => d.id.isNotEmpty).toList(growable: false);
+    if (incoming.isEmpty) return;
+    final current = await load();
+    final ids = incoming.map((d) => d.id).toSet();
+    final merged = [
+      ...incoming,
+      ...current.where((d) => !ids.contains(d.id)),
+    ].take(60).toList();
+    await _write(merged);
   }
 
   Future<void> remove(String id) async {
-    try {
-      final current = await load();
-      await _write(current.where((d) => d.id != id).toList());
-    } catch (_) {/* ignore */}
+    final current = await load();
+    await _write(current.where((d) => d.id != id).toList());
   }
 
   /// Drops entries whose file is gone.
   ///
   /// Showing a library full of files that cannot be opened is worse than an
-  /// empty one: the teacher picks a document and nothing happens.
+  /// empty one: the teacher picks a document and nothing happens. An entry with
+  /// no path at all is kept, not deleted: it is a record of a document the
+  /// teacher may still have elsewhere, and dropping it is what emptied the
+  /// library on every single launch.
   Future<List<SharedDocument>> pruneMissing() async {
     final current = await load();
     final kept = <SharedDocument>[];
     for (final doc in current) {
       final path = doc.localPath;
-      if (path == null || path.isEmpty) continue;
+      if (path == null || path.isEmpty) {
+        kept.add(doc);
+        continue;
+      }
       if (await localFileExists(path)) kept.add(doc);
     }
     if (kept.length != current.length) await _write(kept);
@@ -75,4 +83,15 @@ class LibraryStore {
         _key,
         jsonEncode(docs.map((d) => d.toJson()).toList()),
       );
+}
+
+/// The stored library could not be read at all, so the teacher is told instead
+/// of being shown an empty library that looks like a deliberate answer.
+class LibraryReadException implements Exception {
+  final Object cause;
+
+  const LibraryReadException(this.cause);
+
+  @override
+  String toString() => 'The saved library could not be read: $cause';
 }

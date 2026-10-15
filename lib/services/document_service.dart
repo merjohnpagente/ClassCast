@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/doc_types.dart';
@@ -28,21 +31,34 @@ class DocumentService {
       );
       if (file == null) return null;
       return await _toDoc(file);
-    } catch (_) {
-      return null;
+    } on FilePickException catch (e) {
+      // A plugin crash or a denied SAF prompt used to return null, which is
+      // indistinguishable from the teacher cancelling: they tap Add and
+      // nothing happens with no explanation.
+      throw FilePickException(e.message);
+    } catch (e) {
+      throw FilePickException('The file could not be opened: $e');
     }
   }
 
   Future<List<SharedDocument>> pickMultiple() async {
+    final List<PlatformFile> files;
     try {
-      final files = await FilePicker.pickFiles(
+      final picked = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: allowedExtensions,
       );
-      return await Future.wait(files.map(_toDoc));
-    } catch (_) {
-      return [];
+      files = picked ?? const [];
+    } catch (e) {
+      throw FilePickException('The files could not be opened: $e');
     }
+    // One at a time, on purpose: Future.wait parsed N Office files at once and
+    // several of them at once is what froze the UI on a real deck.
+    final docs = <SharedDocument>[];
+    for (final file in files) {
+      docs.add(await _toDoc(file));
+    }
+    return docs;
   }
 
   Future<SharedDocument> _toDoc(PlatformFile f) async {
@@ -55,8 +71,16 @@ class DocumentService {
     try {
       size = await f.xFile.length();
     } catch (_) {/* size is best-effort */}
-    final path = f.path;
     final status = SupportedFiles.statusFor(ext);
+
+    // The picked path is a cache path. Copy first: by the time the teacher
+    // opens this in tomorrow's lesson the cache entry may already be gone, and
+    // a library entry pointing at nothing is the whole bug this fixes.
+    final picked = f.path;
+    final stored = picked == null || picked.isEmpty
+        ? null
+        : await localFileCopyIntoAppStorage(picked, name);
+    final path = stored ?? picked;
 
     return SharedDocument(
       id: 'doc-${_uuid.v4().substring(0, 8)}',
@@ -68,7 +92,9 @@ class DocumentService {
       status: status,
       // Counting slides / pages / printed sheet pages up front lets the session
       // sync a real total instead of an unknown one.
-      pageCount: SupportedFiles.rendersOnDevice(ext) && size <= _maxCountBytes
+      pageCount: SupportedFiles.rendersOnDevice(ext) &&
+              path != null &&
+              size <= _maxCountBytes
           ? await _countPages(ext, path)
           : 0,
       localPath: path,
@@ -77,11 +103,28 @@ class DocumentService {
 
   /// Slides / pages / printed sheet pages of an Office file. 0 when it cannot
   /// be read, which the UI already treats as "unknown total".
+  ///
+  /// Runs on a background isolate: inflating a 64 MB archive and parsing its
+  /// XML on the UI thread is what made picking a deck feel like a freeze.
   static Future<int> _countPages(String extension, String? path) async {
     if (path == null || path.isEmpty) return 0;
     final bytes = await localFileReadBytes(path);
     if (bytes == null || bytes.isEmpty) return 0;
-    final parsed = OoxmlLoader.parseBytes(extension: extension, bytes: bytes);
+    try {
+      return await compute(_pageCountIn, <String, Object?>{
+        'extension': extension,
+        'bytes': bytes,
+      });
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Runs in the background isolate. Returns the page count, 0 when unreadable.
+  static int _pageCountIn(String? extension, Uint8List? bytes) {
+    if (bytes == null || bytes.isEmpty) return 0;
+    final parsed =
+        OoxmlLoader.parseBytes(extension: extension ?? '', bytes: bytes);
     return parsed?.pageCount ?? 0;
   }
 
@@ -121,4 +164,15 @@ class DocumentService {
         return 'Office';
     }
   }
+}
+
+/// Picking failed for a reason the teacher needs to hear. Cancelling is not an
+/// error and returns null; this is everything else.
+class FilePickException implements Exception {
+  final String message;
+
+  const FilePickException(this.message);
+
+  @override
+  String toString() => message;
 }

@@ -14,6 +14,10 @@ class ClasscastHost {
   String get advertisedIp => '';
   String get joinUrl => '';
 
+  /// No web host exists, so the one reason it "failed" is fixed.
+  String? get lastStartError =>
+      'The browser cannot host a classroom. Use the app on a phone or laptop.';
+
   Future<bool> start({
     required int port,
     String advertisedIp = '',

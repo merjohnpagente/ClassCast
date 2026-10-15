@@ -103,6 +103,9 @@ class ClassroomSession {
         'page': page,
         'totalPages': totalPages,
         'syncPaused': syncPaused,
+        // A restored session with no key is a session the teacher cannot
+        // control: every host call comes back 403.
+        'teacherKey': teacherKey,
       };
 
   factory ClassroomSession.fromJson(Map<String, dynamic> json) {
@@ -125,6 +128,7 @@ class ClassroomSession {
       page: (json['page'] as num?)?.toInt() ?? 1,
       totalPages: (json['totalPages'] as num?)?.toInt() ?? 0,
       syncPaused: json['syncPaused'] as bool? ?? false,
+      teacherKey: json['teacherKey'] as String? ?? '',
     );
   }
 }

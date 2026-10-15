@@ -57,6 +57,7 @@ class SessionProvider extends ChangeNotifier {
         sessionId: s.id,
         name: 'Teacher',
         role: 'teacher',
+        teacherKey: s.teacherKey,
       ));
       _hostSocket = channel;
       _hostEvents = channel.stream.listen((frame) {
@@ -88,6 +89,8 @@ class SessionProvider extends ChangeNotifier {
   /// this honestly instead of implying students are in sync.
   bool get hostReachable => _host.lastCallOk;
   String? get hostError => _host.lastError;
+
+  void _clearHostStatus() => _host.clearLastStatus();
 
   /// True when this device is serving the classroom itself.
   ///
@@ -132,9 +135,12 @@ class SessionProvider extends ChangeNotifier {
       .length;
 
   /// Load sessions saved on this device (SQLite). No sample data.
+  ///
+  /// The live roster is deliberately left alone: this refreshes what is stored
+  /// on disk, and clearing `_participants` here made every connected student
+  /// vanish from the teacher's screen for the rest of the lesson.
   Future<void> load() async {
     _recent = await _store.loadRecent();
-    _participants = [];
     _loaded = true;
     notifyListeners();
   }
@@ -208,8 +214,14 @@ class SessionProvider extends ChangeNotifier {
   Future<void> endSession() async {
     if (_active == null) return;
     final ending = _active!;
-    unawaited(_host.endSession(ending));
     _closeHostEvents();
+    // Let the "session ended" frame actually leave before the server goes
+    // away. Firing it unawaited and stopping the host underneath it made a
+    // normal, successful End paint a red "host offline" chip.
+    try {
+      await _host.endSession(ending);
+    } catch (_) {/* the server may already be gone; that is not an error */}
+    _clearHostStatus();
     // Stop serving: the classroom is over, and leaving a listener running
     // would keep the camera-era battery drain going for no reason.
     await ClasscastHost.instance.stop();

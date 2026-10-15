@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:mime/mime.dart';
@@ -27,6 +28,9 @@ class ClasscastServer {
   String _teacherKey = '';
   String _documentId = '';
   String _documentName = '';
+
+  /// Unguessable part of the download URL, regenerated for every share.
+  String _documentToken = '';
   int _page = 1;
   int _totalPages = 0;
   bool _syncPaused = false;
@@ -125,6 +129,7 @@ class ClasscastServer {
       if (body['clear'] == true) {
         _documentId = '';
         _documentName = '';
+        _documentToken = '';
         _totalPages = 0;
         _page = 1;
         _broadcast(_snapshotEvent('document_changed'));
@@ -145,6 +150,7 @@ class ClasscastServer {
       }
       _documentId = body['documentId'] as String? ?? '';
       _documentName = name;
+      _documentToken = _code();
       final declared = (body['totalPages'] as num?)?.toInt() ?? 0;
       // The teacher app does not know a freshly picked file's page count
       // yet, so derive it here rather than showing students "Page 3" with no
@@ -177,6 +183,11 @@ router.post('/api/end', (Request req) async {
         'sessionId': _session?['id'] ?? '',
       });
       _session = null;
+      // Ending the session must end the sharing too. The socket is still
+      // listening, so a student who kept the URL could otherwise keep pulling
+      // the document long after the teacher ended the class.
+      _documentName = '';
+      _documentToken = '';
       return _json(200, {'ok': true});
     });
 
@@ -187,6 +198,16 @@ router.post('/api/end', (Request req) async {
     // the *rest* of the shared folder. (Note: anything a student can render,
     // they can also save — this is a classroom courtesy switch, not DRM.)
     Future<Response> serveFile(String requestedName) async {
+      // The session must be running and the request must carry the token the
+      // snapshot handed out, so typing the filename on the classroom Wi-Fi is
+      // not enough to read what the teacher is showing.
+      final token = _documentToken;
+      if (_session == null || token.isEmpty) {
+        return Response.forbidden('No session is running');
+      }
+      if (req.url.queryParameters['t'] != token) {
+        return Response.forbidden('Not allowed');
+      }
       final raw = Uri.decodeComponent(requestedName);
       if (!_isSafeRelativeName(raw)) return Response.notFound('not found');
       final root = p.normalize(filesDir);
@@ -267,9 +288,17 @@ router.post('/api/end', (Request req) async {
       if (sessionId.isEmpty || sessionId != _session!['id']) {
         return Response.forbidden('Unknown session');
       }
+      // `?role=teacher` is a claim; without the key it is not a subscription to
+      // the whole roster.
+      final claimsTeacher = params['role'] == 'teacher';
+      final isTeacher =
+          claimsTeacher && _teacherKey.isNotEmpty && params['key'] == _teacherKey;
+      if (claimsTeacher && !isTeacher) {
+        return Response.forbidden('Teacher key required');
+      }
       return webSocketHandler(
         (WebSocketChannel channel, String? _) =>
-            _onConnect(channel, params, isTeacher: params['role'] == 'teacher'),
+            _onConnect(channel, params, isTeacher: isTeacher),
       )(req);
     };
   }
@@ -381,8 +410,9 @@ router.post('/api/end', (Request req) async {
   String? _documentUrl() {
     if (_documentName.isEmpty) return null;
     final encoded = Uri.encodeComponent(_documentName);
-    if (advertisedIp.isEmpty) return '/files/$encoded';
-    return 'http://$advertisedIp:$port/files/$encoded';
+    final suffix = _documentToken.isEmpty ? '' : '?t=$_documentToken';
+    if (advertisedIp.isEmpty) return '/files/$encoded$suffix';
+    return 'http://$advertisedIp:$port/files/$encoded$suffix';
   }
 
   bool _checkTeacher(Map<String, dynamic> body) {
@@ -550,11 +580,12 @@ router.post('/api/end', (Request req) async {
     );
   }
 
+  /// Six characters sliced out of the clock were guessable from the time a
+  /// session started; this is the one credential on every control endpoint.
   String _code() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    final rnd = DateTime.now().millisecondsSinceEpoch;
-    return List.generate(
-        6, (i) => chars[(rnd >> (i * 3)) % chars.length]).join();
+    final rnd = Random.secure();
+    return List.generate(8, (i) => chars[rnd.nextInt(chars.length)]).join();
   }
 
   Future<HttpServer> serve() async {

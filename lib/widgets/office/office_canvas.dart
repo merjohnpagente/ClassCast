@@ -2,6 +2,14 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+/// Upper bound on the pixel width an embedded image is decoded at.
+///
+/// Plenty for a phone screen, and it is the difference between a photo-heavy
+/// deck costing a few MB of bitmaps and a few hundred: without it every
+/// picture is decoded at full source resolution regardless of how small it is
+/// drawn, which is the main source of image-cache churn in scroll mode.
+const int kDecodeCapPx = 1600;
+
 /// Applies an opacity to an OOXML `0xAARRGGBB` colour.
 ///
 /// Written by hand rather than with `Color.withOpacity` / `withValues` so the

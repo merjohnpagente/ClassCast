@@ -37,7 +37,14 @@ class LibraryProvider extends ChangeNotifier {
   /// Entries whose file has been cleared from the cache are pruned here rather
   /// than left in the list to fail when tapped.
   Future<void> load() async {
-    _items = await _store.pruneMissing();
+    try {
+      _items = await _store.pruneMissing();
+      _error = null;
+    } on LibraryReadException {
+      // A store that cannot be read is not an empty library. Say so, so the
+      // teacher does not re-pick files they already have.
+      _error = 'The saved library could not be read on this device.';
+    }
     _loaded = true;
     notifyListeners();
   }
@@ -74,7 +81,16 @@ class LibraryProvider extends ChangeNotifier {
 
   Future<bool> pickAndAdd() async {
     _error = null;
-    final doc = await _docs.pickSingle();
+    final SharedDocument? doc;
+    try {
+      doc = await _docs.pickSingle();
+    } on FilePickException catch (e) {
+      // Silent before: the teacher tapped Add, nothing happened, and a denied
+      // storage permission looked exactly like a cancelled picker.
+      _error = e.message;
+      notifyListeners();
+      return false;
+    }
     if (doc == null) return false;
     if (doc.kind == DocKind.unknown) {
       _error = 'Unsupported file format.';
@@ -84,13 +100,26 @@ class LibraryProvider extends ChangeNotifier {
     _items = [doc, ..._items];
     _selected = doc;
     notifyListeners();
-    await _store.save(doc);
+    try {
+      await _store.save(doc);
+    } catch (e) {
+      // It is in the list but not on disk, so it will not survive a restart.
+      _error = 'Added, but could not be saved: it may be gone after restart.';
+      notifyListeners();
+    }
     return true;
   }
 
   Future<int> pickManyAndAdd() async {
     _error = null;
-    final docs = await _docs.pickMultiple();
+    final List<SharedDocument> docs;
+    try {
+      docs = await _docs.pickMultiple();
+    } on FilePickException catch (e) {
+      _error = e.message;
+      notifyListeners();
+      return 0;
+    }
     final good = docs.where((d) => d.kind != DocKind.unknown).toList();
     if (good.isEmpty && docs.isNotEmpty) {
       _error = 'Unsupported file format.';
@@ -99,7 +128,13 @@ class LibraryProvider extends ChangeNotifier {
     }
     _items = [...good, ..._items];
     notifyListeners();
-    await _store.saveAll(good);
+    try {
+      await _store.saveAll(good);
+    } catch (e) {
+      _error = 'Added, but could not be saved: they may be gone after '
+          'restart.';
+      notifyListeners();
+    }
     return good.length;
   }
 

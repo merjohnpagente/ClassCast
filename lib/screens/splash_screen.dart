@@ -26,7 +26,18 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer(const Duration(milliseconds: 1400), _finish);
+    // Wait for the splash to have actually been painted, then hold it long
+    // enough to read. A plain Timer from initState fires on wall-clock time: on
+    // a slow cold start it lands before the first frame, so the splash is
+    // never seen, or lands between frames and flashes for one frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _hold();
+    });
+  }
+
+  void _hold() {
+    if (_done) return;
+    _timer = Timer(const Duration(milliseconds: 1100), _finish);
   }
 
   void _finish() {
@@ -107,8 +118,8 @@ class _SplashScreenState extends State<SplashScreen> {
                         SizedBox(
                           width: 120,
                           child: TweenAnimationBuilder<double>(
-                            tween: Tween<double>(begin: 0, end: 1),
-                            duration: const Duration(milliseconds: 1250),
+                    tween: Tween<double>(begin: 0, end: 1),
+                    duration: const Duration(milliseconds: 1000),
                             curve: Curves.easeInOutCubic,
                             builder: (context, value, _) => ClipRRect(
                               borderRadius: BorderRadius.circular(2),

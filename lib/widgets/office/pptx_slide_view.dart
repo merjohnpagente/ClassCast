@@ -73,6 +73,9 @@ class PptxSlideView extends StatelessWidget {
     return Image.memory(
       data,
       fit: BoxFit.fill,
+      // Decoded at full source size otherwise, which is the main source of
+      // image-cache churn in scroll mode on a photo-heavy deck.
+      cacheWidth: kDecodeCapPx,
       gaplessPlayback: true,
       errorBuilder: (_, __, ___) =>
           const Icon(Icons.broken_image_outlined, size: 24),

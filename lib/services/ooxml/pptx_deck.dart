@@ -631,7 +631,8 @@ class _PptxReader {
     final blip = blipFill == null ? null : findDescendant(blipFill, 'blip');
     final rid = blip == null ? null : relAttr(blip, 'embed');
     // `r:link` is a linked (not embedded) image: there are no bytes to show.
-    final data = rid == null ? null : _pkg.relatedBytes(slidePart, rid);    if (data == null || data.isEmpty) return null;
+    final data = rid == null ? null : _pkg.relatedBytes(slidePart, rid);
+    if (data == null || data.isEmpty) return null;
     return PptxShape(
       type: PptxShapeType.picture,
       x: xform.mapX(rect.x),

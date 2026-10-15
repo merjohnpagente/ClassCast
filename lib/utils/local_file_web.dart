@@ -11,3 +11,20 @@ Future<Uint8List?> localFileReadBytes(String path) async => null;
 
 /// Always null: a browser cannot read a local path.
 Future<String?> localFileReadString(String path) async => null;
+
+/// Always false: a browser has nothing on disk to check.
+Future<bool> localFileExistsImpl(String path) async => false;
+
+/// Always null: a browser has no file sizes.
+Future<int?> localFileSize(String path) async => null;
+
+/// Always null: there is nowhere on a web page to copy a document to.
+Future<String?> localFilePersistentDir() async => null;
+
+/// Always null: a browser cannot copy a local file anywhere. The viewer falls
+/// back to the URL served by the teacher host.
+Future<String?> localFileCopyIntoAppStorage(
+  String sourcePath,
+  String fileName,
+) async =>
+    null;

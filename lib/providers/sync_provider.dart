@@ -109,9 +109,16 @@ class SyncProvider extends ChangeNotifier {
       _snapshot = snapshot;
       _syncPaused = snapshot.syncPaused;
       _hasDocument = snapshot.documentId != null;
+      bind();
+      // Only a snapshot proves the host is answering. Saying "live" when the
+      // fetch failed showed a green chip over a session that never connected;
+      // the client sets live itself on the first socket frame from here.
+      _link = LinkState.live;
+    } else {
+      _link = LinkState.offline;
+      _error = 'The teacher answered, but the session could not be read. '
+          'Try scanning the QR again.';
     }
-    bind();
-    _link = LinkState.live;
     notifyListeners();
     return true;
   }

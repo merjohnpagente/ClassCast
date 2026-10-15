@@ -70,6 +70,9 @@ class SharedDocument {
         'status': status.name,
         'pageCount': pageCount,
         'currentPage': currentPage,
+        // The path is what makes a library entry mean anything after a
+        // restart. Leaving it out silently empties the library on next launch.
+        'localPath': localPath,
         'remoteUrl': remoteUrl,
       };
 
@@ -102,6 +105,7 @@ class SharedDocument {
       status: status,
       pageCount: (json['pageCount'] as num?)?.toInt() ?? 0,
       currentPage: (json['currentPage'] as num?)?.toInt() ?? 1,
+      localPath: json['localPath'] as String?,
       remoteUrl: json['remoteUrl'] as String?,
     );
   }

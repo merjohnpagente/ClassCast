@@ -32,6 +32,10 @@ class OoxmlPackage {
 
   final Map<String, Uint8List> _parts;
 
+  /// Parsed XML by part name. A null value is a remembered failure, not a
+  /// miss, so a broken part is not re-parsed on every lookup.
+  final Map<String, XmlDocument?> _xmlCache = {};
+
   /// Opens a zip container. Returns null when the bytes are not a readable
   /// OOXML package (for example a legacy binary .ppt/.doc/.xls, which is an
   /// OLE compound file and not a zip).
@@ -43,12 +47,23 @@ class OoxmlPackage {
     } catch (_) {
       return null;
     }
+    // A zip can declare far less than it delivers. Squeezing a few KB into a
+    // few GB is a zip bomb, and the decoder inflates before we ever see the
+    // sizes, so the budget is checked as entries are read rather than trusted
+    // from the headers.
+    var inflated = 0;
+    var entries = 0;
+    const maxInflated = 256 * 1024 * 1024;
+    const maxEntries = 20000;
     final parts = <String, Uint8List>{};
     try {
       for (final file in archive) {
         if (!file.isFile) continue;
+        if (++entries > maxEntries) return null;
         final name = _normalize(file.name);
         if (name.isEmpty) continue;
+        inflated += file.content.length;
+        if (inflated > maxInflated) return null;
         parts[name] = file.content;
       }
     } catch (_) {
@@ -95,12 +110,24 @@ class OoxmlPackage {
   }
 
   /// Parsed XML for a part, or null when it is absent or malformed.
+  ///
+  /// Memoised on purpose. Without it a 60-slide deck re-parsed the same
+  /// layout, master and theme XML sixty times each, and every single image in
+  /// the deck re-parsed its `.rels` part — the dominant cost of opening one.
   XmlDocument? xml(String name) {
+    final cached = _xmlCache[name];
+    if (cached != null || _xmlCache.containsKey(name)) return cached;
     final raw = text(name);
-    if (raw == null || raw.isEmpty) return null;
+    if (raw == null || raw.isEmpty) {
+      _xmlCache[name] = null;
+      return null;
+    }
     try {
-      return XmlDocument.parse(raw);
+      final parsed = XmlDocument.parse(raw);
+      _xmlCache[name] = parsed;
+      return parsed;
     } catch (_) {
+      _xmlCache[name] = null;
       return null;
     }
   }

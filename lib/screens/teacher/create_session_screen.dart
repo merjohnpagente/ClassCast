@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/app_state.dart';
 import '../../providers/session_provider.dart';
+import '../../services/host/classcast_host.dart';
 import '../../services/network_service.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
@@ -204,8 +205,12 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Port ${active.port} is busy. Change the port in '
-                            'Settings, then start a new session.',
+                            // The host used to answer false for "port busy",
+                            // "no permission" and "no network" alike, so the
+                            // only advice given was sometimes the wrong one.
+                            ClasscastHost.instance.lastStartError ??
+                                'Port ${active.port} is busy. Change the port '
+                                    'in Settings, then start a new session.',
                             style: const TextStyle(
                                 color: AppColors.inkSecondary, fontSize: 14),
                           ),

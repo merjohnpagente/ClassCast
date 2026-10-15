@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -398,14 +397,5 @@ class _ConversionPanel extends StatelessWidget {
       default:
         return 'Office';
     }
-  }
-}
-
-/// Base64 helper for hosts that inline small documents over the socket.
-String? tryDecodeText(String value) {
-  try {
-    return utf8.decode(base64Decode(value));
-  } catch (_) {
-    return null;
   }
 }

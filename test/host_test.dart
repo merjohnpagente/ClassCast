@@ -80,17 +80,53 @@ void main() {
     final ok = await json(await send('POST', '/api/document',
         {'teacherKey': 'k2', 'documentName': 'lesson.pptx', 'totalPages': 3}));
     expect(ok['ok'], isTrue);
-    expect((ok['session'] as Map)['documentUrl'], contains('lesson.pptx'));
+    final url = (ok['session'] as Map)['documentUrl'] as String;
+    expect(url, contains('lesson.pptx'));
 
-    final file = await send('GET', '/files/lesson.pptx');
+    // A joined student gets this URL from the snapshot, token included.
+    final target = Uri.parse(url);
+    final file = await send(
+        'GET', '${target.path}?${target.query}');
     expect(file.statusCode, 200);
     expect(await file.transform(utf8.decoder).join(), 'PK-not-really-a-zip');
 
+    // Guessing the filename on the classroom Wi-Fi is not enough: the token is
+    // what makes the URL safe to hand out, so it is required.
+    final guessed = await send('GET', '/files/lesson.pptx');
+    expect(guessed.statusCode, 403);
+
     // Anything else on the phone stays private.
     final other = await send('GET', '/files/../../etc/passwd');
-    expect(other.statusCode, 404);
+    expect(other.statusCode, 403);
 
     dir.deleteSync(recursive: true);
+  });
+
+  test('unsharing stops serving the file, even to a kept URL', () async {
+    await send('POST', '/api/session', {'id': 'CLASS-U', 'teacherKey': 'k7'});
+    final dir = Directory.systemTemp.createTempSync('hostdoc');
+    final doc = File('${dir.path}/kept.pdf')..writeAsStringSync('%PDF-1.4');
+
+    host.registerDocument('kept.pdf', doc.path);
+    final ok = await json(await send('POST', '/api/document',
+        {'teacherKey': 'k7', 'documentName': 'kept.pdf'}));
+    final target = Uri.parse((ok['session'] as Map)['documentUrl'] as String);
+    expect((await send('GET', '${target.path}?${target.query}')).statusCode,
+        200);
+
+    host.clearDocument();
+    expect(
+        (await send('GET', '${target.path}?${target.query}')).statusCode, 403);
+
+    dir.deleteSync(recursive: true);
+  });
+
+  test('the teacher socket needs the key, so role=teacher is not a shortcut',
+      () async {
+    await send('POST', '/api/session',
+        {'id': 'CLASS-K', 'teacherKey': 'k5'});
+    final withoutKey = await send('GET', '/ws?session=CLASS-K&role=teacher');
+    expect(withoutKey.statusCode, 403);
   });
 
   test('a websocket is refused before the upgrade for a wrong session',

@@ -29,9 +29,6 @@ class SyncProtocol {
   static const pauseApi = '/api/pause';
   static const endApi = '/api/end';
   static const takeControlApi = '/api/take-control';
-  static const shareApi = '/api/document';
-  static const filesRoot = '/files';
-  static const webJoinPrefix = '/s/';
 
   /// Encode an event for the socket.
   static String encode(SyncEvent event) => jsonEncode(event.toJson());
@@ -50,14 +47,6 @@ class SyncProtocol {
     }
   }
 
-  /// Teacher-only events must carry a teacher key on the server.
-  /// Clients use this to avoid sending invalid control frames.
-  static bool isTeacherControl(SyncEventType type) {
-    return type == SyncEventType.pageChanged ||
-        type == SyncEventType.documentChanged ||
-        type == SyncEventType.sessionEnded;
-  }
-
   static Uri wsUri({
     required String host,
     required int port,
@@ -65,13 +54,17 @@ class SyncProtocol {
     String name = '',
     String device = '',
     String role = '',
+    String teacherKey = '',
   }) {
     final query = {
       'session': sessionId,
       if (name.isNotEmpty) 'name': name,
       if (device.isNotEmpty) 'device': device,
-      // 'teacher' subscribes to events without joining the student roster.
+      // 'teacher' subscribes to events without joining the student roster. It
+      // is a claim, so it carries the key: otherwise anyone on the hotspot
+      // could ask for the whole roster by adding this to the URL.
       if (role.isNotEmpty) 'role': role,
+      if (teacherKey.isNotEmpty) 'key': teacherKey,
     };
     return Uri(
       scheme: 'ws',

@@ -117,6 +117,19 @@ void main() {
       expect(s.syncPaused, isFalse);
       expect(s.documentUrl, isNull);
     });
+
+    test('the teacher key survives a save and reload', () {
+      // It used to be dropped, so a restored or edited session sent an empty
+      // key and the host answered 403 to every control call.
+      final live = ClassroomSession(
+        id: 'CLASS-101',
+        name: 'Physics',
+        createdAt: DateTime.parse('2026-01-01T09:00:00.000'),
+        teacherKey: 'AB3DEFGH',
+      );
+      final restored = ClassroomSession.fromJson(live.toJson());
+      expect(restored.teacherKey, 'AB3DEFGH');
+    });
   });
 
   group('Join parsing', () {

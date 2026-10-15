@@ -36,8 +36,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _load() async {
     final net = NetworkService();
-    final ip = await net.localIp();
-    final wifi = await net.wifiName();
+    // The plugin answers through a platform channel, and a channel that never
+    // answers left this tab on "Checking…" for good. A timeout turns that into
+    // an honest "not available" instead of an eternal spinner.
+    final ip = await net.localIp().timeout(_networkTimeout, onTimeout: () => '');
+    final wifi =
+        await net.wifiName().timeout(_networkTimeout, onTimeout: () => '');
     if (!mounted) return;
     setState(() {
       _ip = ip;
@@ -45,6 +49,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _loading = false;
     });
   }
+
+  static const _networkTimeout = Duration(seconds: 4);
 
   @override
   Widget build(BuildContext context) {

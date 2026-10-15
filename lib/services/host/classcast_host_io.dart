@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -30,18 +31,43 @@ class ClasscastHost {
   String _documentId = '';
   String _documentName = '';
   String _documentPath = '';
+
+  /// Unguessable part of the download URL, regenerated for every share.
+  String _fileToken = '';
   int _page = 1;
   int _totalPages = 0;
   bool _syncPaused = false;
   final Map<String, Map<String, dynamic>> _participants = {};
 
   /// Students with a raised hand, so a fresh teacher connection still sees it.
-  final Set<String> _raisedHands = {};
   final Set<WebSocketChannel> _sockets = {};
+
+  /// Why the last [start] failed, in a sentence the teacher can act on.
+  String? _lastStartError;
+  String? get lastStartError => _lastStartError;
 
   /// Socket per student id. The roster is a broadcast, but pulling one student
   /// back to the class page has to reach exactly that student and nobody else.
   final Map<String, WebSocketChannel> _socketsById = {};
+
+  /// Turns a bind failure into the one sentence that fits it. Everything else
+  /// falls back to the port message, which really is the most common cause.
+  static String _describeBindError(Object error) {
+    final text = error.toString();
+    if (text.contains('Failed to create socket')) {
+      return 'The device refused to open a network socket. Turn off any VPN or '
+          'private-DNS app and try again.';
+    }
+    if (text.contains('Permission denied')) {
+      return 'ClassCast was not allowed to use the network. Grant the network '
+          'permission for ClassCast, then try again.';
+    }
+    if (text.contains('No address') || text.contains('unavailable')) {
+      return 'This device has no usable network. Connect to Wi-Fi or turn on '
+          'the hotspot, then start the session again.';
+    }
+    return '';
+  }
 
   bool get running => _server != null;
   int get port => _port;
@@ -55,12 +81,16 @@ class ClasscastHost {
 
   /// Starts the host. Returns false when the port is taken or unavailable — the
   /// caller keeps showing the honest "students cannot reach you" state.
+  ///
+  /// [advertisedIp] is applied even when already running: switching from Wi-Fi
+  /// to a hotspot mid-lesson left students with an address that no longer
+  /// existed, with nothing to indicate why they stopped loading.
   Future<bool> start({
     required int port,
     String advertisedIp = '',
   }) async {
+    if (advertisedIp.isNotEmpty) _advertisedIp = advertisedIp;
     if (running) return true;
-    _advertisedIp = advertisedIp;
     try {
       _server = await HttpServer.bind(
         InternetAddress.anyIPv4,
@@ -68,10 +98,14 @@ class ClasscastHost {
         shared: false,
       );
       _port = _server!.port;
-    } catch (_) {
+    } catch (e) {
       _server = null;
+      // "Port is busy" was shown for every failure; a missing permission or a
+      // network that never came up needed a different sentence.
+      _lastStartError = _describeBindError(e);
       return false;
     }
+    _lastStartError = null;
     if (_advertisedIp.isEmpty) {
       _advertisedIp = await _resolveLanIp();
     }
@@ -105,14 +139,22 @@ class ClasscastHost {
 
   /// Makes the teacher's picked file readable by students. Only the file that is
   /// currently shared is served, so the rest of the phone stays private.
+  ///
+  /// A fresh unguessable token goes with it: the download URL travels to every
+  /// joined student, so anyone else on the hotspot who types the filename must
+  /// not be able to read the teacher's document.
   void registerDocument(String name, String path) {
     _documentName = name;
     _documentPath = path;
+    _fileToken = _code();
   }
 
   void clearDocument() {
     _documentName = '';
     _documentPath = '';
+    // Ending sharing must invalidate the old URL: a student who kept it must
+    // not still be able to pull the file after the teacher unshared it.
+    _fileToken = '';
   }
 
   Future<void> _handle(HttpRequest request) async {
@@ -313,13 +355,12 @@ class ClasscastHost {
     });
     var sent = 0;
     if (pid.isEmpty) {
-      _socketsById.forEach((id, socket) {
-        if (id == pid) return;
+      for (final socket in _socketsById.values) {
         try {
           socket.sink.add(frame);
           sent++;
         } catch (_) {/* that student just left */}
-      });
+      }
     } else {
       final socket = _socketsById[pid];
       if (socket != null) {
@@ -337,7 +378,7 @@ class ClasscastHost {
     final sessionId = request.uri.queryParameters['session'] ?? '';
     final name = request.uri.queryParameters['name'] ?? 'Student';
     final device = request.uri.queryParameters['device'] ?? '';
-    final isTeacher = request.uri.queryParameters['role'] == 'teacher';
+    final claimsTeacher = request.uri.queryParameters['role'] == 'teacher';
     // Validate before the upgrade: a wrong or ended session must never see a
     // snapshot or appear in the roster.
     if (_session == null) {
@@ -345,6 +386,14 @@ class ClasscastHost {
     }
     if (sessionId.isEmpty || sessionId != _session!['id']) {
       return await _text(request, 403, 'Unknown session');
+    }
+    // Asking for the teacher role is a claim, not a fact. Without the key it
+    // is refused, so `?role=teacher` is not a free roster subscription.
+    final isTeacher = claimsTeacher &&
+        request.uri.queryParameters['key'] == _teacherKey &&
+        _teacherKey.isNotEmpty;
+    if (claimsTeacher && !isTeacher) {
+      return await _text(request, 403, 'Teacher key required');
     }
 
     final socket = await WebSocketTransformer.upgrade(request);
@@ -408,7 +457,7 @@ class ClasscastHost {
         return;
       case 'raise_hand':
         if (pid.isEmpty) return;
-        _raisedHands.add(pid);
+        // The teacher tracks hands from the broadcast; the host keeps no copy.
         _broadcast({
           'type': 'hand_raised',
           'sessionId': sessionId,
@@ -418,7 +467,6 @@ class ClasscastHost {
         return;
       case 'lower_hand':
         if (pid.isEmpty) return;
-        _raisedHands.remove(pid);
         _broadcast({
           'type': 'hand_lowered',
           'sessionId': sessionId,
@@ -449,8 +497,7 @@ class ClasscastHost {
     _sockets.remove(channel);
     if (pid.isEmpty || !_participants.containsKey(pid)) return;
     _socketsById.remove(pid);
-    _participants.remove(pid);
-    _raisedHands.remove(pid);
+
     _broadcast({
       'type': 'participant_left',
       'sessionId': sessionId,
@@ -462,6 +509,14 @@ class ClasscastHost {
 
   Future<void> _serveFile(HttpRequest request, String requested) async {
     final name = Uri.decodeComponent(requested);
+    // The session must be running, and the request must carry the token the
+    // snapshot handed out. Without both, anyone on the hotspot who guessed the
+    // filename could read the teacher's document.
+    if (_session == null) return await _text(request, 403, 'No session');
+    if (_fileToken.isEmpty ||
+        request.uri.queryParameters['t'] != _fileToken) {
+      return await _text(request, 403, 'Not allowed');
+    }
     if (!_isServable(name)) return await _text(request, 404, 'not found');
     final file = File(_documentPath);
     final length = await file.length();
@@ -570,8 +625,9 @@ class ClasscastHost {
   String? _documentUrl() {
     if (_documentName.isEmpty) return null;
     final encoded = Uri.encodeComponent(_documentName);
-    if (_advertisedIp.isEmpty) return '/files/$encoded';
-    return 'http://$_advertisedIp:$_port/files/$encoded';
+    final suffix = _fileToken.isEmpty ? '' : '?t=$_fileToken';
+    if (_advertisedIp.isEmpty) return '/files/$encoded$suffix';
+    return 'http://$_advertisedIp:$_port/files/$encoded$suffix';
   }
 
   void _broadcast(Map<String, dynamic> event) {
@@ -617,12 +673,20 @@ class ClasscastHost {
     await request.response.close();
   }
 
+  /// The key a caller did not supply.
+  ///
+  /// This used to be six characters sliced out of the millisecond timestamp,
+  /// which is a function of one observable number: knowing roughly when the
+  /// session started left a few thousand candidates to try. `Random.secure()`
+  /// is not slower in any way a teacher can perceive.
   String _code() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    final rnd = DateTime.now().millisecondsSinceEpoch;
+    final rnd = _random ??= Random.secure();
     return List.generate(
-        6, (i) => chars[(rnd >> (i * 3)) % chars.length]).join();
+        8, (i) => chars[rnd.nextInt(chars.length)]).join();
   }
+
+  Random? _random;
 
   /// Picks the address students can actually reach.
   ///

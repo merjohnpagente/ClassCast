@@ -58,6 +58,15 @@ void main() {
     return [id, key];
   }
 
+  /// Shares a file and returns the "path?query" a joined student would use.
+  /// The token in it is what makes the URL safe to hand out.
+  Future<String> shareAndUrl(String key, String name) async {
+    final res = await body(await call('POST', '/api/document',
+        jsonEncode({'teacherKey': key, 'documentName': name})));
+    final url = Uri.parse((res['session'] as Map)['documentUrl'] as String);
+    return '${url.path}${url.query.isEmpty ? '' : '?${url.query}'}';
+  }
+
   void writeFile(String name, String contents) {
     File('${tmp.path}${Platform.pathSeparator}$name')
         .writeAsStringSync(contents);
@@ -296,25 +305,32 @@ void main() {
         () async {
       final [id, key] = await startSession(allowDownload: false);
       writeFile('lesson.pdf', '%PDF-1.4');
-      await call('POST', '/api/document',
-          jsonEncode({'teacherKey': key, 'documentName': 'lesson.pdf'}));
+      final url = await shareAndUrl(key, 'lesson.pdf');
 
-      final res = await call('GET', '/files/lesson.pdf');
+      final res = await call('GET', url);
+      expect(res.statusCode, 200);
+      expect(res.headers['content-disposition'], 'inline');
+
+      // Guessing the filename on the classroom network is not enough.
+      final guessed = await call('GET', '/files/lesson.pdf');
+      expect(guessed.statusCode, 403);
       expect(res.statusCode, 200);
       expect(res.headers['content-disposition'], 'inline');
     });
 
     test('other files still require download permission', () async {
-      await startSession(allowDownload: false);
+      final [id, key] = await startSession(allowDownload: false);
       writeFile('answerkey.pdf', '%PDF-1.4');
-      final res = await call('GET', '/files/answerkey.pdf');
+      final url = await shareAndUrl(key, 'answerkey.pdf');
+      final res = await call('GET', url);
       expect(res.statusCode, 403);
     });
 
     test('download permission unlocks the rest of the folder', () async {
-      await startSession(allowDownload: true);
+      final [id, key] = await startSession(allowDownload: true);
       writeFile('answerkey.pdf', '%PDF-1.4');
-      final res = await call('GET', '/files/answerkey.pdf');
+      final url = await shareAndUrl(key, 'answerkey.pdf');
+      final res = await call('GET', url);
       expect(res.statusCode, 200);
       expect(res.headers['content-disposition'], 'attachment');
     });
@@ -363,20 +379,26 @@ void main() {
 
   group('file safety', () {
     test('traversal outside the shared folder is blocked', () async {
-      await startSession(allowDownload: true);
+      final [id, key] = await startSession(allowDownload: true);
+      writeFile('lesson.pdf', '%PDF-1.4');
+      final url = await shareAndUrl(key, 'lesson.pdf');
+      final query = url.substring(url.indexOf('?'));
       for (final attempt in [
         '/files/..%2F..%2Fsecret.txt',
         '/files/../secret.txt',
         '/files/subdir/../../secret.txt',
       ]) {
-        final res = await call('GET', attempt);
+        final res = await call('GET', '$attempt$query');
         expect(res.statusCode, 404, reason: 'must block $attempt');
       }
     });
 
     test('a missing file is 404, not a crash', () async {
-      await startSession(allowDownload: true);
-      expect((await call('GET', '/files/nothing.pdf')).statusCode, 404);
+      final [id, key] = await startSession(allowDownload: true);
+      writeFile('lesson.pdf', '%PDF-1.4');
+      final url = await shareAndUrl(key, 'lesson.pdf');
+      final query = url.substring(url.indexOf('?'));
+      expect((await call('GET', '/files/nothing.pdf$query')).statusCode, 404);
     });
   });
 

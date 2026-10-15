@@ -85,7 +85,8 @@ class OoxmlLoader {
   static OoxmlDocument? parseBytes({
     required String extension,
     required Uint8List bytes,
-  }) {    final ext = extension.toLowerCase().replaceAll('.', '');
+  }) {
+    final ext = extension.toLowerCase().replaceAll('.', '');
     if (OoxmlFileTypes.powerpoint.contains(ext)) {
       final deck = PptxDeck.parse(bytes);
       return deck == null ? null : OoxmlDocument.powerpoint(deck);

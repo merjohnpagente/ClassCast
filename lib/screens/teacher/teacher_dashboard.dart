@@ -74,7 +74,11 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   }
 
   Future<void> _loadIp() async {
-    final ip = await NetworkService().localIp();
+    // Same reason as the settings tab: a platform channel that never answers
+    // left the dashboard reading "Checking network…" indefinitely.
+    final ip = await NetworkService()
+        .localIp()
+        .timeout(const Duration(seconds: 4), onTimeout: () => '');
     if (!mounted) return;
     final sessions = context.read<SessionProvider>();
     setState(() {

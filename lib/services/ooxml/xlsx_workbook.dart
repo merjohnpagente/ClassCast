@@ -24,6 +24,10 @@ const int kRowsPerSheetPage = 34;
 const int kMaxSheetColumns = 64;
 const int kMaxSheetRows = 4000;
 
+/// Ceiling on cells built across the whole workbook. Reached only by files
+/// nobody can read on a phone anyway; the point is not to run out of memory.
+const int kMaxWorkbookCells = 400000;
+
 /// Excel's day zero for the 1900 date system (offset for its leap-year bug).
 final DateTime _excelEpoch = DateTime.utc(1899, 12, 30);
 
@@ -101,7 +105,11 @@ class XlsxSheet {
 class XlsxWorkbook {
   final List<XlsxSheet> sheets;
 
-  const XlsxWorkbook({required this.sheets});
+  /// True when sheets were left out to stay inside the cell budget, so the UI
+  /// can say the workbook was clipped instead of implying it was all shown.
+  final bool clipped;
+
+  const XlsxWorkbook({required this.sheets, this.clipped = false});
 
   int get sheetCount => sheets.length;
 
@@ -185,19 +193,31 @@ class _XlsxReader {
     final rels = _pkg.relationships('xl/workbook.xml');
 
     final sheets = <XlsxSheet>[];
+    var clipped = false;
     final sheetsNode = findInDocument(workbook, 'sheets');
     if (sheetsNode != null) {
+      // A dense sheet is rows x columns of cells, and one workbook can hold
+      // many of them. Budgeting the whole workbook is what stops a real file
+      // from allocating millions of cells on a phone.
+      var budget = kMaxWorkbookCells;
       for (final sheet in childElements(sheetsNode, 'sheet')) {
         final name = attr(sheet, 'name') ?? 'Sheet';
         if (attr(sheet, 'state') == 'hidden') continue;
         final rid = relAttr(sheet, 'id');
         final part = rid == null ? null : rels[rid];
         if (part == null) continue;
+        if (budget <= 0) {
+          clipped = true;
+          continue;
+        }
         final parsed = _readSheet(part, name);
-        if (parsed != null) sheets.add(parsed);
+        if (parsed != null) {
+          sheets.add(parsed);
+          budget -= parsed.rowCount * kMaxSheetColumns;
+        }
       }
     }
-    return XlsxWorkbook(sheets: sheets);
+    return XlsxWorkbook(sheets: sheets, clipped: clipped);
   }
 
   void _readSharedStrings() {

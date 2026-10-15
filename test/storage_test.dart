@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:classcast_offline/models/classroom_session.dart';
 import 'package:classcast_offline/models/doc_types.dart';
 import 'package:classcast_offline/models/shared_document.dart';
@@ -130,10 +132,28 @@ void main() {
       expect(loaded.map((d) => d.id), ['doc-2']);
     });
 
-    test('entries whose file has vanished are pruned', () async {
+    test('a stored path survives a restart', () async {
+      // This is the bug the library had: toJson never wrote localPath, so after
+      // a restart every entry read back with no path and pruneMissing deleted
+      // the whole library on the next launch.
+      await library.save(SharedDocument(
+        id: 'doc-1',
+        name: 'Lesson',
+        extension: 'pdf',
+        kind: DocKind.pdf,
+        localPath: '/storage/documents/Lesson.pdf',
+      ));
+
+      final restored = await library.load();
+      expect(restored.single.localPath, '/storage/documents/Lesson.pdf');
+    });
+
+    test('entries whose file has vanished are pruned, real ones are kept',
+        () async {
       final library = LibraryStore();
-      // No path that exists on disk: this is what Android's cache clearing
-      // leaves behind, and it must not show up as a broken library entry.
+      final present = await _tempFile('present.pdf');
+      addTearDown(() => present.deleteSync());
+
       await library.save(SharedDocument(
         id: 'doc-1',
         name: 'Gone',
@@ -143,14 +163,58 @@ void main() {
       ));
       await library.save(SharedDocument(
         id: 'doc-2',
-        name: 'Also gone',
+        name: 'Present',
+        extension: 'pdf',
+        kind: DocKind.pdf,
+        localPath: present.path,
+      ));
+      await library.save(SharedDocument(
+        id: 'doc-3',
+        name: 'No path yet',
         extension: 'docx',
         kind: DocKind.word,
       ));
 
       final kept = await library.pruneMissing();
-      expect(kept, isEmpty);
-      expect(await library.load(), isEmpty);
+      expect(kept.map((d) => d.id), ['doc-2', 'doc-3']);
+      expect(await library.load(), hasLength(2));
+    });
+
+    test('saving several files keeps the ones already stored', () async {
+      // saveAll used to overwrite the library with just the new batch, so
+      // picking three files in one go erased everything before them.
+      final library = LibraryStore();
+      await library.save(SharedDocument(
+        id: 'doc-old',
+        name: 'Old',
+        extension: 'pdf',
+        kind: DocKind.pdf,
+      ));
+      await library.saveAll([
+        SharedDocument(
+            id: 'doc-a', name: 'A', extension: 'pdf', kind: DocKind.pdf),
+        SharedDocument(
+            id: 'doc-b', name: 'B', extension: 'pdf', kind: DocKind.pdf),
+      ]);
+
+      final ids = (await library.load()).map((d) => d.id).toSet();
+      expect(ids, {'doc-old', 'doc-a', 'doc-b'});
+    });
+
+    test('an unreadable store is reported, not silently emptied', () async {
+      final library = LibraryStore();
+      await store.write('classcast_library', '{not json');
+
+      expect(library.load, throwsA(isA<LibraryReadException>()));
     });
   });
+}
+
+/// A real file on disk, so "is it still there" is answered by the filesystem
+/// rather than by a hardcoded false.
+File _tempFile(String name) {
+  final dir = Directory.systemTemp.createTempSync('classcast_test');
+  final file = File('${dir.path}${Platform.pathSeparator}$name');
+  file.writeAsStringSync('%PDF-1.4');
+  return file;
 }

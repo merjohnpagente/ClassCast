@@ -56,6 +56,7 @@ class DocxPageView extends StatelessWidget {
               width: run.imageWidthPt > 0 ? run.imageWidthPt : 160,
               height: run.imageHeightPt > 0 ? run.imageHeightPt : 120,
               fit: BoxFit.contain,
+              cacheWidth: kDecodeCapPx,
               errorBuilder: (_, __, ___) =>
                   const Icon(Icons.broken_image_outlined, size: 24),
             ),
