@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:http/http.dart' as http;
 import 'package:network_info_plus/network_info_plus.dart';
 
@@ -13,10 +15,39 @@ class NetworkService {
   Future<String> localIp() async {
     try {
       final ip = await _info.getWifiIP();
-      return ip ?? '';
+      // A hotspot or router hands out a private address. Anything else (a
+      // carrier NAT address, a link-local one, or an emulator's 10.0.2.15)
+      // cannot be typed into a QR code by a student, so it is rejected here
+      // rather than advertised and failing for everyone.
+      if (isPrivateAddress(ip)) return ip!;
+      return '';
     } catch (_) {
       return '';
     }
+  }
+
+  /// True for addresses a student on the same network could actually reach:
+  /// RFC1918 private ranges. Hotspot (192.168.43.x) and home/school Wi-Fi
+  /// (192.168.0.x, 10.x, 172.16-31.x) are all covered.
+  static bool isPrivateAddress(String? ip) {
+    if (ip == null || ip.isEmpty) return false;
+    final parts = ip.split('.');
+    if (parts.length != 4) return false;
+    final octets = <int>[];
+    for (final part in parts) {
+      final value = int.tryParse(part);
+      if (value == null || value < 0 || value > 255) return false;
+      octets.add(value);
+    }
+    if (octets[0] == 127 || octets[0] == 169 && octets[1] == 254) return false;
+    if (octets[0] == 10) return true;
+    if (octets[0] == 192 && octets[1] == 168) return true;
+    if (octets[0] == 172 &&
+        octets[1] >= 16 &&
+        octets[1] <= 31) {
+      return true;
+    }
+    return false;
   }
 
   Future<String?> wifiName() async {
@@ -83,6 +114,54 @@ class NetworkService {
       return (host: '', port: 8080, sessionId: t);
     } catch (_) {
       return null;
+    }
+  }
+
+  /// One tap check for the teacher: is the address in the QR code actually
+  /// serving?
+  ///
+  /// Tries the advertised address rather than loopback, because "the server
+  /// is running" and "students can reach it" are two different questions — a
+  /// router with client isolation answers differently.
+  static Future<({bool reachable, String? message})> checkHost({
+    required String host,
+    required int port,
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    if (host.isEmpty || !isPrivateAddress(host)) {
+      return (
+        reachable: false,
+        message: 'No local address yet. Turn on your hotspot, or connect to '
+            'the classroom Wi-Fi.',
+      );
+    }
+    try {
+      final res = await http.get(Uri(
+        scheme: 'http',
+        host: host,
+        port: port,
+        path: '/api/ping',
+      )).timeout(timeout);
+      if (res.statusCode == 200) {
+        return (reachable: true, message: 'Reachable at http://$host:$port');
+      }
+      return (
+        reachable: false,
+        message: 'Port $port answered, but not ClassCast (code '
+            '${res.statusCode}).',
+      );
+    } on TimeoutException {
+      return (
+        reachable: false,
+        message: 'Nothing answered at $host:$port. Check the hotspot or '
+            'Wi-Fi, and that this is the teacher phone.',
+      );
+    } catch (_) {
+      return (
+        reachable: false,
+        message: 'Could not reach $host:$port. If students still cannot '
+            'join, the network may be blocking device-to-device traffic.',
+      );
     }
   }
 

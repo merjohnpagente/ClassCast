@@ -149,4 +149,34 @@ void main() {
       expect(Validators.studentName('', allowAnonymous: true), isNull);
     });
   });
+  group('LAN address selection', () {
+    test('accepts hotspot and home/school Wi-Fi addresses', () {
+      // Android hotspot.
+      expect(NetworkService.isPrivateAddress('192.168.43.1'), isTrue);
+      // Typical home/school router.
+      expect(NetworkService.isPrivateAddress('192.168.1.24'), isTrue);
+      expect(NetworkService.isPrivateAddress('10.0.0.5'), isTrue);
+      expect(NetworkService.isPrivateAddress('172.16.4.9'), isTrue);
+      expect(NetworkService.isPrivateAddress('172.31.255.1'), isTrue);
+    });
+
+    test('rejects addresses students could never reach', () {
+      expect(NetworkService.isPrivateAddress(null), isFalse);
+      expect(NetworkService.isPrivateAddress(''), isFalse);
+      expect(NetworkService.isPrivateAddress('127.0.0.1'), isFalse);
+      // Link-local: what you get with no real network.
+      expect(NetworkService.isPrivateAddress('169.254.10.1'), isFalse);
+      // 172.15 / 172.32 are outside the RFC1918 block.
+      expect(NetworkService.isPrivateAddress('172.15.0.1'), isFalse);
+      expect(NetworkService.isPrivateAddress('172.32.0.1'), isFalse);
+      // Not an address at all.
+      expect(NetworkService.isPrivateAddress('nope'), isFalse);
+      expect(NetworkService.isPrivateAddress('999.1.1.1'), isFalse);
+      // Emulator loopback alias — useless to a student.
+      expect(NetworkService.isPrivateAddress('10.0.2.15'), isTrue,
+          reason: 'private range, but the emulator alias; kept as-is so the '
+              'caller can report the address it actually got');
+    });
+  });
+
 }

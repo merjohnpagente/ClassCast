@@ -61,6 +61,20 @@ class NetworkHelpBody extends StatelessWidget {
         ),
         StepTile(
           step: 2,
+          icon: Icons.network_check,
+          title: isTeacher
+              ? 'Tap Check on the dashboard'
+              : 'Still not joining?',
+          subtitle: isTeacher
+              ? 'It asks your own phone whether students can reach it. Green '
+                  'means the address in the QR works; red tells you what to '
+                  'change.'
+              : 'Both phones must be on the same network — same hotspot or '
+                  'same Wi-Fi. Turn mobile data off so the phone does not '
+                  'leave that network.',
+        ),
+        StepTile(
+          step: 3,
           icon: Icons.qr_code_2,
           title: 'Scan the QR or enter the address',
           subtitle: isTeacher
@@ -68,7 +82,7 @@ class NetworkHelpBody extends StatelessWidget {
               : 'Tap “Scan QR Code” or type the local address and session ID from the teacher.',
         ),
         StepTile(
-          step: 3,
+          step: 4,
           icon: Icons.play_circle_outline,
           title: 'Join and view',
           subtitle:

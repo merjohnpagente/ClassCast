@@ -316,6 +316,27 @@ class _QrScanPageState extends State<_QrScanPage> {
         foregroundColor: Colors.white,
         title: const Text('Scan QR Code'),
         actions: [
+          // Manual lens switch: some devices expose only one usable camera to
+          // apps, and the automatic fallback should not be the only way out.
+          IconButton(
+            tooltip: _usingFrontCamera
+                ? 'Use the back camera'
+                : 'Use the front camera',
+            icon: Icon(
+              _usingFrontCamera
+                  ? Icons.camerarear_outlined
+                  : Icons.camera_front_outlined,
+              color: Colors.white,
+            ),
+            onPressed: () async {
+              try {
+                await _ctrl.stop();
+                await _ctrl.switchCamera();
+                await _ctrl.start();
+                setState(() => _usingFrontCamera = !_usingFrontCamera);
+              } catch (_) {/* the error panel says what happened */}
+            },
+          ),
           IconButton(
             tooltip: _torchOn ? 'Turn off flashlight' : 'Flashlight',
             icon: Icon(

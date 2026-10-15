@@ -39,6 +39,34 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   String _ip = '';
   bool _probingIp = true;
 
+  /// Result of the teacher's last "can students reach me?" check.
+  bool? _reachable;
+  String? _checkMessage;
+  bool _checking = false;
+
+  /// Pings the address that goes into the QR code, over the network rather
+  /// than loopback: "my server is up" and "students can reach it" are
+  /// different questions, and only one of them is ever on screen.
+  Future<void> _checkConnection() async {
+    setState(() {
+      _checking = true;
+      _reachable = null;
+      _checkMessage = null;
+    });
+    final port = context.read<AppState>().serverPort;
+    final sessions = context.read<SessionProvider>();
+    final host = sessions.active?.hostIp.isNotEmpty == true
+        ? sessions.active!.hostIp
+        : _ip;
+    final result = await NetworkService.checkHost(host: host, port: port);
+    if (!mounted) return;
+    setState(() {
+      _checking = false;
+      _reachable = result.reachable;
+      _checkMessage = result.message;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -93,7 +121,13 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             label: const Text('Create New Session'),
           ),
           const SizedBox(height: 12),
-          _networkCard(theme),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _networkCard(theme),
+              _connectionCheck(context),
+            ],
+          ),
           const SectionHeader(title: 'Active session'),
           if (active == null)
             EmptyState(
@@ -209,6 +243,35 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 ],
               ),
             ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Can students reach me?',
+                  icon: _checking
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          _reachable == true
+                              ? Icons.check_circle
+                              : Icons.network_check,
+                          color: _reachable == true
+                              ? AppColors.success
+                              : AppColors.primary,
+                        ),
+                  onPressed: _checking ? null : _checkConnection,
+                ),
+                Text(
+                  'Check',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AppColors.muted,
+                  ),
+                ),
+              ],
+            ),
             IconButton(
               tooltip: 'Connection guide',
               icon: const Icon(Icons.help_outline,
@@ -221,6 +284,36 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Honest one-liner under the network card: either it works, or exactly
+  /// what to change.
+  Widget _connectionCheck(BuildContext context) {
+    final message = _checkMessage;
+    if (message == null) return const SizedBox.shrink();
+    final ok = _reachable == true;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            ok ? Icons.check_circle_outline : Icons.info_outline,
+            size: 18,
+            color: ok ? AppColors.success : AppColors.warning,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: ok ? AppColors.success : AppColors.inkSecondary,
+                  ),
+            ),
+          ),
+        ],
       ),
     );
   }
