@@ -93,9 +93,11 @@ void main() {
     expect(moved.statusCode, 200);
 
     // The socket also carries the re-greeting and the join announcement, so
-    // wait for the frame that actually carries the class page.
+    // wait for the frame that actually carries the class page. Matching on the
+    // value rather than "has a page" matters: the opening snapshot already has
+    // page 1, and matching that proved nothing.
     final relayed = await inbox.nextWhere(
-      (frame) => SyncProtocol.decode(frame)?.page != null,
+      (frame) => SyncProtocol.decode(frame)?.page == 4,
       const Duration(seconds: 3),
     );
     final event = SyncProtocol.decode(relayed);
