@@ -43,6 +43,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Welcome back'), findsOneWidget);
     expect(find.text('Create New Session'), findsOneWidget);
+    // The dashboard waits on a network probe with a timeout, so the timer has
+    // to be allowed to fire or the test ends with a pending one.
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('tap Student opens join screen', (tester) async {

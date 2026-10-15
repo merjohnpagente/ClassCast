@@ -177,7 +177,8 @@ void main() {
       ));
 
       final kept = await library.pruneMissing();
-      expect(kept.map((d) => d.id), ['doc-2', 'doc-3']);
+      // Newest first, the way the library stores them.
+      expect(kept.map((d) => d.id), ['doc-3', 'doc-2']);
       expect(await library.load(), hasLength(2));
     });
 
