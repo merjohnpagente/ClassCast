@@ -246,7 +246,7 @@ class _TeacherPresentationScreenState
   Widget _previewPanel(BuildContext context) {
     return SessionDocumentPreview(
       viewMode: _viewMode,
-      builder: (context, page) => _preview(context, page),
+      builder: (context, sessions) => _preview(context, sessions.active?.page ?? 1),
     );
   }
 
