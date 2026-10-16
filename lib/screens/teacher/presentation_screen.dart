@@ -472,7 +472,7 @@ class _TeacherPresentationScreenState
             ],
           ),
         ),
-        const StatusChip.connected(),
+        StatusChip.connected(),
       ],
     );
   }

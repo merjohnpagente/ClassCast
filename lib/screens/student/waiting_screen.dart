@@ -66,11 +66,11 @@ class StudentWaitingScreen extends StatelessWidget {
               // thing a student wonders, but it sits under the explanation
               // instead of interrupting it.
               if (sync.link == LinkState.reconnecting)
-                const StatusChip.reconnecting()
+                StatusChip.reconnecting()
               else if (sync.link == LinkState.live)
-                const StatusChip.waiting()
+                StatusChip.waiting()
               else
-                const StatusChip.offline(),
+                StatusChip.offline(),
               const SizedBox(height: 8),
               TextButton.icon(
                 onPressed: () async {

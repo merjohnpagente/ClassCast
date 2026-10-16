@@ -162,14 +162,14 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
           ),
         ),
         if (sync.link == LinkState.reconnecting)
-          const StatusChip.reconnecting()
+          StatusChip.reconnecting()
         else if (sync.link == LinkState.live)
-          const StatusChip.live()
+          StatusChip.live()
         else
-          const StatusChip.offline(),
+          StatusChip.offline(),
         if (sync.syncPaused) ...[
           const SizedBox(width: 6),
-          const StatusChip.paused(),
+          StatusChip.paused(),
         ],
       ],
     );
