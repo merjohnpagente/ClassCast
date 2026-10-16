@@ -36,6 +36,16 @@ class OoxmlPackage {
   /// miss, so a broken part is not re-parsed on every lookup.
   final Map<String, XmlDocument?> _xmlCache = {};
 
+  /// `part → rId map` for its relationships. Memoised on the parsed map, not on
+  /// the XML: [xml] already stops the re-parse, but building the map is real
+  /// work too — one allocation per relationship, plus a `_normalize` and a
+  /// `_resolve` on each. `relatedBytes` calls this once per image, and in a
+  /// Word document `word/document.xml`'s relationships hold an entry per image
+  /// in the *whole* file, so a hundred inline pictures built the same two
+  /// hundred entry map a hundred times. A package is short-lived and dies with
+  /// its parse, so the cache costs nothing to keep.
+  final Map<String, Map<String, String>> _relCache = {};
+
   /// Opens a zip container. Returns null when the bytes are not a readable
   /// OOXML package (for example a legacy binary .ppt/.doc/.xls, which is an
   /// OLE compound file and not a zip).
@@ -135,22 +145,30 @@ class OoxmlPackage {
   /// `rId → part path` for the relationships of [partName].
   ///
   /// Targets are stored relative to the part, e.g. `../media/image1.png`,
-  /// so they are resolved to package-absolute paths here once.
+  /// so they are resolved to package-absolute paths here once — and the result
+  /// is kept, because this is looked up per image and per shape.
   Map<String, String> relationships(String partName) {
+    final cached = _relCache[partName];
+    if (cached != null) return cached;
     final relsPath = _relsPathFor(partName);
     final doc = xml(relsPath);
     final out = <String, String>{};
-    if (doc == null) return out;
-    for (final rel in doc.findAllElements('Relationship')) {
-      final id = rel.getAttribute('Id');
-      final target = rel.getAttribute('Target');
-      if (id == null || target == null || id.isEmpty || target.isEmpty) {
-        continue;
+    if (doc != null) {
+      // Hoisted: it was recomputed for every single relationship, and it
+      // depends only on the part, never on the target.
+      final from = _normalize(partName);
+      for (final rel in doc.findAllElements('Relationship')) {
+        final id = rel.getAttribute('Id');
+        final target = rel.getAttribute('Target');
+        if (id == null || target == null || id.isEmpty || target.isEmpty) {
+          continue;
+        }
+        // External links (Mode="External") are URLs, not package parts.
+        if (rel.getAttribute('TargetMode') == 'External') continue;
+        out[id] = _resolve(from, target);
       }
-      // External links (Mode="External") are URLs, not package parts.
-      if (rel.getAttribute('TargetMode') == 'External') continue;
-      out[id] = _resolve(_normalize(partName), target);
     }
+    _relCache[partName] = out;
     return out;
   }
 
@@ -211,11 +229,15 @@ XmlElement? childElement(XmlNode? parent, String localName) {
 }
 
 /// All direct children of [parent] whose local name is [localName].
-List<XmlElement> childElements(XmlNode? parent, String localName) {
-  if (parent == null) return const [];
-  return _childrenOf(parent)
-      .where((e) => _localName(e) == localName)
-      .toList();
+///
+/// Lazy on purpose: this is the innermost filter of every parser loop, and it
+/// is entered once per spreadsheet row, per table row, per paragraph and per
+/// shape. Materialising the match list meant an allocation that was almost
+/// always thrown away on the very next statement, which is just the filtered
+/// `where` iterator with a list wrapped around it. Every caller iterates.
+Iterable<XmlElement> childElements(XmlNode? parent, String localName) {
+  if (parent == null) return const <XmlElement>[];
+  return _childrenOf(parent).where((e) => _localName(e) == localName);
 }
 
 /// Children of [node], stepping into the root element of a document so that

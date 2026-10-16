@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../utils/local_file.dart';
@@ -78,11 +79,32 @@ class OoxmlLoader {
 
     final bytes = await _readBytes(localPath, remoteUrl);
     if (bytes == null || bytes.isEmpty) return null;
-    final parsed = parseBytes(extension: extension, bytes: bytes);
+    // On a background isolate. Inflating a 64 MB archive and walking every
+    // slide's XML is seconds of straight-line work, and `await` alone does not
+    // get it off this thread — only compute does. It was the difference
+    // between tapping a deck and watching the whole app stop until it opened.
+    final parsed = await compute(parseIn, <String, Object?>{
+      'extension': extension,
+      'bytes': bytes,
+    });
     if (parsed != null) {
       _remember(source, parsed);
     }
     return parsed;
+  }
+
+  /// The `compute` entry point: takes a map, returns the parsed document.
+  ///
+  /// Static because `compute` needs a plain function it can send to another
+  /// isolate, and because the whole message — a `Map` of a `String` and a
+  /// `Uint8List` — and the whole result are plain data. Nothing under
+  /// [OoxmlDocument] holds on to an `XmlNode`, which is what makes that safe;
+  /// the DOM is read during the parse and dropped before it returns.
+  static OoxmlDocument? parseIn(Map<String, Object?> message) {
+    final bytes = message['bytes'] as Uint8List?;
+    final extension = message['extension'] as String? ?? '';
+    if (bytes == null || bytes.isEmpty) return null;
+    return parseBytes(extension: extension, bytes: bytes);
   }
 
   /// Parses bytes already in hand. Exposed for tests.

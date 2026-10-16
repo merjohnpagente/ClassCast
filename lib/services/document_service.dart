@@ -103,16 +103,19 @@ class DocumentService {
   /// be read, which the UI already treats as "unknown total".
   ///
   /// Runs on a background isolate: inflating a 64 MB archive and parsing its
-  /// XML on the UI thread is what made picking a deck feel like a freeze.
+  /// XML on the UI thread is what made picking a deck feel like a freeze. The
+  /// viewer parses through the very same entry point, so there is one place
+  /// that decides how a file crosses a thread boundary.
   static Future<int> _countPages(String extension, String? path) async {
     if (path == null || path.isEmpty) return 0;
     final bytes = await localFileReadBytes(path);
     if (bytes == null || bytes.isEmpty) return 0;
     try {
-      return await compute(_pageCountIn, <String, Object?>{
+      final parsed = await compute(OoxmlLoader.parseIn, <String, Object?>{
         'extension': extension,
         'bytes': bytes,
       });
+      return parsed?.pageCount ?? 0;
     } catch (_) {
       return 0;
     }
@@ -165,16 +168,4 @@ class FilePickException implements Exception {
 
   @override
   String toString() => message;
-}
-
-/// Runs in the background isolate. Returns the page count, 0 when unreadable.
-///
-/// Top level because `compute` needs a plain function that can cross the
-/// isolate boundary with sendable arguments only.
-int _pageCountIn(Map<String, Object?> message) {
-  final bytes = message['bytes'] as Uint8List?;
-  final extension = message['extension'] as String? ?? '';
-  if (bytes == null || bytes.isEmpty) return 0;
-  final parsed = OoxmlLoader.parseBytes(extension: extension, bytes: bytes);
-  return parsed?.pageCount ?? 0;
 }

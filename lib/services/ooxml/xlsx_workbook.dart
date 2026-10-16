@@ -530,23 +530,23 @@ class _XlsxReader {
         (numFmtId >= 45 && numFmtId <= 47)) {
       return true;
     }
-    if (code == null) return false;
+    // General, which is what almost every numeric cell in a plain sheet
+    // carries. No code, no sniffing, no string work.
+    if (code == null || code.isEmpty) return false;
     // Strip quoted literals before sniffing for date/time placeholders.
-    final clean = code.replaceAll(RegExp(r'"[^"]*"'), '').toLowerCase();
+    final clean = code.replaceAll(_quotedLiteral, '').toLowerCase();
     if (clean.isEmpty || clean == 'general') return false;
-    final withoutLiterals = clean.replaceAll(RegExp(r'\[[^\]]*\]'), '');
+    final withoutLiterals = clean.replaceAll(_bracketedLiteral, '');
     if (withoutLiterals.contains('yy') || withoutLiterals.contains('dd')) {
       return true;
     }
-    return RegExp(r'[dmyh]').hasMatch(withoutLiterals);
+    return _datePlaceholder.hasMatch(withoutLiterals);
   }
 
   static String _formatDate(double serial, String? code) {
     if (serial < 1 || serial > 2958466) return serial.toInt().toString();
     final moment = _excelEpoch.add(Duration(hours: (serial * 24).round()));
-    final clean = (code ?? '')
-        .replaceAll(RegExp(r'"[^"]*"'), '')
-        .toLowerCase();
+    final clean = (code ?? '').replaceAll(_quotedLiteral, '').toLowerCase();
     final hasTime = clean.contains('h') || clean.contains('s');
     final y = moment.year.toString().padLeft(4, '0');
     final m = moment.month.toString().padLeft(2, '0');
@@ -579,12 +579,12 @@ class _XlsxReader {
   }
 
   static int? _rowOf(String reference) {
-    final digits = RegExp(r'(\d+)').firstMatch(reference)?.group(1);
+    final digits = _digits.firstMatch(reference)?.group(1);
     return digits == null ? null : int.parse(digits) - 1;
   }
 
   static int? _columnOf(String reference) {
-    final letters = RegExp(r'([A-Za-z]+)').firstMatch(reference)?.group(1);
+    final letters = _letters.firstMatch(reference)?.group(1);
     if (letters == null) return null;
     var value = 0;
     for (final ch in letters.toUpperCase().split('')) {
@@ -594,4 +594,17 @@ class _XlsxReader {
     }
     return value - 1;
   }
+
+  /// Compiled once, not per call.
+  ///
+  /// The VM does not cache a `RegExp` the way it caches a string, so these
+  /// were rebuilt on every invocation. `_columnOf` runs once per cell and
+  /// `_isDateNumberFormat` up to three times per numeric cell, which on a
+  /// dense workbook is hundreds of thousands of compilations — more time than
+  /// the rest of the parse put together.
+  static final _quotedLiteral = RegExp(r'"[^"]*"');
+  static final _bracketedLiteral = RegExp(r'\[[^\]]*\]');
+  static final _datePlaceholder = RegExp(r'[dmyh]');
+  static final _digits = RegExp(r'(\d+)');
+  static final _letters = RegExp(r'([A-Za-z]+)');
 }

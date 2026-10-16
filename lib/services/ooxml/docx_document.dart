@@ -260,14 +260,20 @@ class _DocxReader {
 
   /// Word style names are localized, so the id is trusted first.
   static int _headingLevelOf(String id, String name) {
-    final byId = RegExp(r'^heading(\d)$', caseSensitive: false).firstMatch(id);
+    final byId = _headingId.firstMatch(id);
     if (byId != null) return int.parse(byId.group(1)!);
-    final byName =
-        RegExp(r'^heading\s*(\d)', caseSensitive: false).firstMatch(name);
+    final byName = _headingName.firstMatch(name);
     if (byName != null) return int.parse(byName.group(1)!);
     if (id.toLowerCase() == 'title') return 1;
     return 0;
   }
+
+  /// Compiled once. This runs for every entry in `styles.xml`, and the VM does
+  /// not cache a `RegExp` the way it caches a string.
+  static final _headingId =
+      RegExp(r'^heading(\d)$', caseSensitive: false);
+  static final _headingName =
+      RegExp(r'^heading\s*(\d)', caseSensitive: false);
 
   void _readNumbering() {
     final doc = _pkg.xml('word/numbering.xml');

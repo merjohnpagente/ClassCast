@@ -287,9 +287,37 @@ class _PlaceholderTable {
   final List<_Placeholder> order = [];
 }
 
+/// One layout's resolved inheritance: placeholders, master placeholders, the
+/// master's text styles, its background and the colour scheme.
+///
+/// A value, so the same object can be handed to every slide that shares the
+/// layout without anyone worrying about who mutates what.
+class _Inheritance {
+  final _PlaceholderTable layout;
+  final _PlaceholderTable master;
+  final Map<String, _TextDefaults> titleStyles;
+  final Map<String, _TextDefaults> bodyStyles;
+  final Map<String, _TextDefaults> otherStyles;
+  final int masterBackground;
+  final Map<String, int> scheme;
+
+  const _Inheritance({
+    required this.layout,
+    required this.master,
+    required this.titleStyles,
+    required this.bodyStyles,
+    required this.otherStyles,
+    required this.masterBackground,
+    required this.scheme,
+  });
+}
+
 class _PptxReader {
   final OoxmlPackage _pkg;
   final Map<String, int> _scheme = {};
+
+  /// Layout part → its resolved inheritance. Keyed by layout, not by slide.
+  final Map<String, _Inheritance> _inheritCache = {};
 
   // Per-slide inheritance state.
   final _PlaceholderTable _layout = _PlaceholderTable();
@@ -365,7 +393,39 @@ class _PptxReader {
   }
 
   /// Resolves layout → master → theme for the slide at [slidePart].
+  ///
+  /// Cached per layout part. This used to run once per slide, and each run was
+  /// a depth-first walk of the layout, then the master, then the theme, plus a
+  /// rebuild of the colour scheme and of the master's text styles. A
+  /// sixty-slide deck with one layout paid that sixty times over — which is why
+  /// a big deck still took seconds to open even after the parse itself had got
+  /// cheap. Slides that share a layout share every byte of it, so it is
+  /// resolved once and copied back out.
   void _loadInheritance(String slidePart) {
+    final layoutPart = _layoutPartFor(slidePart);
+    // Slides with no usable layout all resolve to the same nothing.
+    final key = layoutPart ?? '';
+    final cached = _inheritCache[key];
+    if (cached != null) {
+      _applyInheritance(cached);
+      return;
+    }
+    _clearInheritance();
+    _resolveInheritance(layoutPart);
+    final built = _snapshotInheritance();
+    _inheritCache[key] = built;
+    _applyInheritance(built);
+  }
+
+  /// Which slide layout [slidePart] uses, or null when it names none.
+  String? _layoutPartFor(String slidePart) {
+    for (final entry in _pkg.relationships(slidePart).entries) {
+      if (entry.value.contains('/slidelayouts/')) return entry.value;
+    }
+    return null;
+  }
+
+  void _clearInheritance() {
     _layout.byKey.clear();
     _layout.order.clear();
     _master.byKey.clear();
@@ -375,15 +435,47 @@ class _PptxReader {
     _otherStyles = {};
     _masterBackground = 0xFFFFFFFF;
     _scheme.clear();
+  }
 
-    final slideRels = _pkg.relationships(slidePart);
-    String? layoutPart;
-    for (final entry in slideRels.entries) {
-      if (entry.value.contains('/slidelayouts/')) {
-        layoutPart = entry.value;
-        break;
-      }
-    }
+  /// Copies the resolved state out, so a later slide on the same layout can be
+  /// restored without re-reading anything.
+  _Inheritance _snapshotInheritance() => _Inheritance(
+        layout: _PlaceholderTable()
+          ..byKey.addAll(_layout.byKey)
+          ..order.addAll(_layout.order),
+        master: _PlaceholderTable()
+          ..byKey.addAll(_master.byKey)
+          ..order.addAll(_master.order),
+        titleStyles: _titleStyles,
+        bodyStyles: _bodyStyles,
+        otherStyles: _otherStyles,
+        masterBackground: _masterBackground,
+        scheme: Map.of(_scheme),
+      );
+
+  void _applyInheritance(_Inheritance inheritance) {
+    _layout.byKey
+      ..clear()
+      ..addAll(inheritance.layout.byKey);
+    _layout.order
+      ..clear()
+      ..addAll(inheritance.layout.order);
+    _master.byKey
+      ..clear()
+      ..addAll(inheritance.master.byKey);
+    _master.order
+      ..clear()
+      ..addAll(inheritance.master.order);
+    _titleStyles = inheritance.titleStyles;
+    _bodyStyles = inheritance.bodyStyles;
+    _otherStyles = inheritance.otherStyles;
+    _masterBackground = inheritance.masterBackground;
+    _scheme
+      ..clear()
+      ..addAll(inheritance.scheme);
+  }
+
+  void _resolveInheritance(String? layoutPart) {
     if (layoutPart == null || _pkg.xml(layoutPart) == null) return;
 
     _readPlaceholders(layoutPart, _layout);
