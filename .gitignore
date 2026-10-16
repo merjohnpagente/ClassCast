@@ -18,5 +18,12 @@ server/build/
 *.keystore
 local.properties
 
+# ...except the one key that has to be the same on every single build. If this
+# file is ever lost, every release changes signature and no user can install a
+# new version over an old one — they would have to uninstall first and lose
+# their library. It is committed on purpose. See docs/RELEASING.md.
+!android/classcast-release-key.jks
+!android/app/debug.keystore
+
 # Dart package lockfiles for the local host
 server/pubspec.lock
