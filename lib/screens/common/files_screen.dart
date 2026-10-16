@@ -6,17 +6,21 @@ import 'package:provider/provider.dart';
 import '../../models/doc_types.dart';
 import '../../models/shared_document.dart';
 import '../../providers/library_provider.dart';
-import '../../providers/session_provider.dart';
+import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/document_card.dart';
 import '../../widgets/motion.dart';
 import '../../widgets/state_cards.dart';
 import '../../widgets/ui_kit.dart';
 import '../teacher/share_document_screen.dart';
+import 'document_screen.dart';
 
 /// Reusable document management: recent, search, filters,
 /// empty / loading / error states. Grid on desktop, list on phones.
-/// When [sharing] is true (teacher), each file gets Share + Open actions.
+///
+/// When [sharing] is true (teacher), tapping a row opens the share screen —
+/// preview, share to the class, unshare — because that is the whole point of
+/// the teacher's library. When false, the row just opens the document.
 class FilesScreen extends StatefulWidget {
   final bool sharing;
 
@@ -170,37 +174,64 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   Widget _card(BuildContext context, SharedDocument doc) {
-    final sessions = context.read<SessionProvider>();
-    final sharingToActive = widget.sharing && sessions.active != null;
+    final library = context.read<LibraryProvider>();
     return DocumentCard(
       doc: doc,
       selected: context.watch<LibraryProvider>().selected?.id == doc.id,
       onTap: () {
-        context.read<LibraryProvider>().select(doc);
-        if (widget.sharing) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-                builder: (_) =>
-                    ShareDocumentScreen(doc: doc)),
-          );
-        }
+        library.select(doc);
+        // In the teacher's library the row is the main path: preview, share,
+        // unshare. Anywhere else it just opens the file — there is no class
+        // to share it to.
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => widget.sharing
+                ? ShareDocumentScreen(doc: doc)
+                : DocumentScreen(doc: doc),
+          ),
+        );
       },
-      onOpen: () =>
-          context.read<LibraryProvider>().select(doc),
-      onShare: sharingToActive
-          ? () async {
-              final messenger = ScaffoldMessenger.of(context);
-              final ok = await sessions.shareDocument(doc);
-              messenger.showSnackBar(SnackBar(
-                content: Text(ok
-                    ? 'Sharing ${doc.name}.${doc.extension}'
-                    : 'Could not send ${doc.name}.${doc.extension} to the '
-                        'class — check the session is still running.'),
-              ));
-            }
-          : null,
-      onRemove: () =>
-          context.read<LibraryProvider>().remove(doc.id),
+      onOpen: () {
+        library.select(doc);
+        // Used to only select the file. A button labelled "Open" has to open.
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => DocumentScreen(doc: doc)),
+        );
+      },
+      onRemove: () => _confirmRemove(context, doc),
+    );
+  }
+
+  /// Deleting drops the file out of the library and off the phone's record of
+  /// it, in one tap, with no way back. It is the only irreversible thing in
+  /// this screen, so it asks first and says what it removed afterwards —
+  /// a dialog alone leaves a teacher wondering whether it worked.
+  Future<void> _confirmRemove(BuildContext context, SharedDocument doc) async {
+    final library = context.read<LibraryProvider>();
+    final name = '${doc.name}.${doc.extension}';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove from library?'),
+        content: Text('$name will be taken off this device.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    library.remove(doc.id);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Removed $name')),
     );
   }
 }

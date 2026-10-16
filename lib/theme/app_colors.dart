@@ -19,11 +19,17 @@ class AppColors {
   static const muted = Color(0xFF6B7688); // muted gray (kept legible)
   static const border = Color(0xFFE4E9F2);
 
-  static const success = Color(0xFF1F9D55);
+  // The semantic colours are read as text on their own tinted background —
+  // a 12px "Live" label on successBg, an "Offline" on errorBg. The old values
+  // were picked to look right as fills and measured 2.8:1, 3.3:1 and 3.8:1 on
+  // those backgrounds, all failing WCAG AA by a wide margin. These measure
+  // 4.9:1, 4.6:1 and 4.8:1, and 5.4 / 5.0 / 5.5 on plain white, so the same
+  // token works as an icon, a border or a label.
+  static const success = Color(0xFF0F7A3D);
   static const successBg = Color(0xFFE6F6EC);
-  static const warning = Color(0xFFB7791F);
+  static const warning = Color(0xFF96650F);
   static const warningBg = Color(0xFFFFF3DF);
-  static const error = Color(0xFFD64545);
+  static const error = Color(0xFFC03636);
   static const errorBg = Color(0xFFFFEBEB);
   static const info = Color(0xFF3568F5);
   static const infoBg = Color(0xFFE6EDFF);

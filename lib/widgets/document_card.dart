@@ -22,6 +22,12 @@ class FileTypeIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (icon, color, bg) = _visual(kind);
+    // The label was sized as a fraction of the tile, which put it at 7px in a
+    // 44px tile — a grey smudge, and unreadable at arm's length in a
+    // classroom. It is floored at a size that can actually be read. The tile
+    // also carries a format-specific icon (a PDF sheet, a slide, a table), so
+    // the format is never signalled by the text alone.
+    final labelSize = size * 0.16 < 10 ? 10.0 : size * 0.16;
     return Container(
       width: size,
       height: size,
@@ -32,12 +38,14 @@ class FileTypeIcon extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: size * 0.42, color: color),
+          Icon(icon, size: size * 0.40, color: color),
           const SizedBox(height: 1),
           Text(
             extension.isEmpty ? 'FILE' : extension.toUpperCase(),
+            maxLines: 1,
             style: TextStyle(
-              fontSize: size * 0.16,
+              fontSize: labelSize,
+              height: 1.1,
               fontWeight: FontWeight.w800,
               color: color,
             ),
@@ -100,7 +108,6 @@ class DocumentCard extends StatelessWidget {
   final SharedDocument doc;
   final bool selected;
   final VoidCallback? onTap;
-  final VoidCallback? onShare;
   final VoidCallback? onOpen;
   final VoidCallback? onRemove;
 
@@ -109,7 +116,6 @@ class DocumentCard extends StatelessWidget {
     required this.doc,
     this.selected = false,
     this.onTap,
-    this.onShare,
     this.onOpen,
     this.onRemove,
   });
@@ -160,19 +166,16 @@ class DocumentCard extends StatelessWidget {
                   ],
                 ),
               ),
+              // Two actions, not three. Sharing lives on the row tap, which is where the
+              // design puts it, so a third button bought nothing and cost the
+              // filename 48px — on a 320px phone that left "quarterly-deck-v2-
+              // final.pptx" about four characters wide before it ellipsised.
               if (onOpen != null)
                 IconButton(
                   tooltip: 'Open',
                   icon: const Icon(Icons.open_in_new,
                       color: AppColors.primary),
                   onPressed: onOpen,
-                ),
-              if (onShare != null)
-                IconButton(
-                  tooltip: 'Share to classroom',
-                  icon: const Icon(Icons.cast_connected,
-                      color: AppColors.primary),
-                  onPressed: onShare,
                 ),
               if (onRemove != null)
                 IconButton(
