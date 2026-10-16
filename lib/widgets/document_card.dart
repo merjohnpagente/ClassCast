@@ -111,6 +111,14 @@ class DocumentCard extends StatelessWidget {
   final VoidCallback? onOpen;
   final VoidCallback? onRemove;
 
+  /// Send this file straight to the running session. Null hides the button.
+  final VoidCallback? onCast;
+
+  /// Why [onCast] is unavailable. Shown as the tooltip on a disabled button,
+  /// so a teacher who cannot cast is told what to do about it instead of
+  /// finding a greyed-out icon and no explanation.
+  final String? castBlockedReason;
+
   const DocumentCard({
     super.key,
     required this.doc,
@@ -118,6 +126,8 @@ class DocumentCard extends StatelessWidget {
     this.onTap,
     this.onOpen,
     this.onRemove,
+    this.onCast,
+    this.castBlockedReason,
   });
 
   @override
@@ -166,10 +176,21 @@ class DocumentCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // Two actions, not three. Sharing lives on the row tap, which is where the
-              // design puts it, so a third button bought nothing and cost the
-              // filename 48px — on a 320px phone that left "quarterly-deck-v2-
-              // final.pptx" about four characters wide before it ellipsised.
+              // Sharing also lives on the row tap, which is where the design
+              // puts it. This third button is the shortcut for the common case —
+              // in a running lesson, tapping cast beats tapping through to the
+              // share screen and then the share button — so it is compact,
+              // which is what keeps a third affordance from costing the
+              // filename 48px on a 320px phone.
+              if (onCast != null || castBlockedReason != null)
+                IconButton(
+                  tooltip: castBlockedReason ?? 'Cast to the active session',
+                  icon: const Icon(Icons.cast_connected),
+                  color: AppColors.primary,
+                  onPressed: onCast,
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 20,
+                ),
               if (onOpen != null)
                 IconButton(
                   tooltip: 'Open',

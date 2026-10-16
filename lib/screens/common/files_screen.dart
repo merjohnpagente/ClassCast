@@ -6,12 +6,14 @@ import 'package:provider/provider.dart';
 import '../../models/doc_types.dart';
 import '../../models/shared_document.dart';
 import '../../providers/library_provider.dart';
+import '../../providers/session_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/document_card.dart';
 import '../../widgets/motion.dart';
 import '../../widgets/state_cards.dart';
 import '../../widgets/ui_kit.dart';
+import '../teacher/presentation_screen.dart';
 import '../teacher/share_document_screen.dart';
 import 'document_screen.dart';
 
@@ -175,6 +177,8 @@ class _FilesScreenState extends State<FilesScreen> {
 
   Widget _card(BuildContext context, SharedDocument doc) {
     final library = context.read<LibraryProvider>();
+    final sharing = widget.sharing;
+    final running = sharing && context.watch<SessionProvider>().active != null;
     return DocumentCard(
       doc: doc,
       selected: context.watch<LibraryProvider>().selected?.id == doc.id,
@@ -185,7 +189,7 @@ class _FilesScreenState extends State<FilesScreen> {
         // to share it to.
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => widget.sharing
+            builder: (_) => sharing
                 ? ShareDocumentScreen(doc: doc)
                 : DocumentScreen(doc: doc),
           ),
@@ -198,7 +202,37 @@ class _FilesScreenState extends State<FilesScreen> {
           MaterialPageRoute(builder: (_) => DocumentScreen(doc: doc)),
         );
       },
+      // One tap from the library to the board, without the share screen in
+      // between. Mid-lesson that is the difference between two taps and four.
+      onCast: sharing ? () => _cast(context, doc) : null,
+      castBlockedReason: !sharing
+          ? null
+          : running
+              ? null
+              : 'No active session — create or start one first',
       onRemove: () => _confirmRemove(context, doc),
+    );
+  }
+
+  /// Sends [doc] to the running session and opens the board.
+  Future<void> _cast(BuildContext context, SharedDocument doc) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final nav = Navigator.of(context);
+    context.read<LibraryProvider>().select(doc);
+    // The host can refuse — the file may have been cleared from the phone, or
+    // the session may have ended. Saying nothing left the teacher believing
+    // everyone had it. Same honesty as the share screen's button.
+    final ok = await context.read<SessionProvider>().shareDocument(doc);
+    if (!ok) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text(
+            'The students could not be sent this file. Check that the session '
+            'is still running and the file is still on this device.'),
+      ));
+      return;
+    }
+    nav.push(
+      MaterialPageRoute(builder: (_) => const TeacherPresentationScreen()),
     );
   }
 
