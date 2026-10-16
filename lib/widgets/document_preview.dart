@@ -54,11 +54,16 @@ DocumentPreviewKey _sessionKey(SessionProvider sessions, OfficeViewMode mode) =>
       mode: mode,
     );
 
-/// The student's selection: same three values, no view mode.
-DocumentPreviewKey _syncKey(SyncProvider sync) => DocumentPreviewKey(
+/// The student's selection: same three values, plus whatever extra the student
+/// screen varies the document by. That is its own page when the teacher allows
+/// independent navigation: two students on different pages must not share one
+/// cached subtree, and a student turning a page must see it turn.
+DocumentPreviewKey _syncKey(SyncProvider sync, Object? mode) =>
+    DocumentPreviewKey(
       documentId: sync.snapshot?.documentId,
       page: sync.snapshot?.page ?? 1,
       total: sync.snapshot?.totalPages ?? 0,
+      mode: mode,
     );
 
 /// Builds [builder] again only when [keyOf] returns something different.
@@ -133,12 +138,15 @@ class SyncDocumentPreview extends StatelessWidget {
   final Widget Function(BuildContext context, ClassroomSession snapshot)
       builder;
 
-  const SyncDocumentPreview({super.key, required this.builder});
+  /// The page this screen draws, when it can differ from the class page.
+  final Object? mode;
+
+  const SyncDocumentPreview({super.key, required this.builder, this.mode});
 
   @override
   Widget build(BuildContext context) {
     return _PreviewGate<SyncProvider>(
-      keyOf: _syncKey,
+      keyOf: (sync) => _syncKey(sync, mode),
       builder: (context, sync) {
         final snapshot = sync.snapshot;
         if (snapshot == null) return const SizedBox.shrink();

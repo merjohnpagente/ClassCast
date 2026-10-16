@@ -48,10 +48,28 @@ class SessionProvider extends ChangeNotifier {
 
   WebSocketChannel? _hostSocket;
   StreamSubscription<dynamic>? _hostEvents;
+  Timer? _hostEventsRetry;
 
   void _openHostEvents(ClassroomSession s) {
     _closeHostEvents();
     if (s.hostIp.isEmpty) return;
+    _connectHostEvents(s);
+  }
+
+  /// Opens the teacher's receive-only socket, and keeps it open.
+  ///
+  /// This socket is the only way the teacher learns who joined. It used to be
+  /// opened once and forgotten: the first network blip (or the switch from
+  /// Wi-Fi to the hotspot the teacher turns on mid-lesson) killed it, and the
+  /// roster stood still for the rest of the lesson with nothing on screen
+  /// saying so.
+  void _connectHostEvents(ClassroomSession s) {
+    _hostEvents?.cancel();
+    _hostEvents = null;
+    try {
+      _hostSocket?.sink.close();
+    } catch (_) {/* already gone */}
+    _hostSocket = null;
     try {
       final channel = WebSocketChannel.connect(SyncProtocol.wsUri(
         host: s.hostIp,
@@ -65,15 +83,29 @@ class SessionProvider extends ChangeNotifier {
       _hostEvents = channel.stream.listen((frame) {
         final event = SyncProtocol.decode(frame);
         if (event != null) applyEvent(event);
-      }, onError: (_) {}, cancelOnError: false);
+      },
+          onError: (_) => _scheduleHostEventsRetry(s),
+          onDone: () => _scheduleHostEventsRetry(s),
+          cancelOnError: false);
     } catch (_) {
-      // Standalone teacher mode: no host, so no live roster.
-      _hostSocket = null;
-      _hostEvents = null;
+      _scheduleHostEventsRetry(s);
     }
   }
 
+  void _scheduleHostEventsRetry(ClassroomSession s) {
+    if (_disposed) return;
+    if (_active?.id != s.id) return;
+    if (_hostEventsRetry != null) return;
+    _hostEventsRetry = Timer(const Duration(seconds: 3), () {
+      _hostEventsRetry = null;
+      if (_disposed || _active?.id != s.id) return;
+      _connectHostEvents(_active!);
+    });
+  }
+
   void _closeHostEvents() {
+    _hostEventsRetry?.cancel();
+    _hostEventsRetry = null;
     _hostEvents?.cancel();
     _hostEvents = null;
     try {
@@ -158,7 +190,7 @@ class SessionProvider extends ChangeNotifier {
     bool allowStudentNav = false,
   }) async {
     final id = _newSessionId();
-    final session = ClassroomSession(
+    var session = ClassroomSession(
       id: id,
       name: name.trim(),
       subject: subject.trim(),
@@ -181,6 +213,22 @@ class SessionProvider extends ChangeNotifier {
     // exactly what happened when the app only posted to a host that did not
     // exist yet.
     await _startHost(session);
+
+    // The host resolves its own LAN address, and that address — not an empty
+    // string — is what the QR, the roster socket and every control call need.
+    // The caller cannot always supply it: the Wi-Fi plugin answers nothing
+    // while the phone is the one serving the network, and a session created
+    // before the hotspot came on had no address at all, so it looked dead
+    // until the teacher happened to open the presentation screen.
+    if (session.hostIp.isEmpty) {
+      final advertised = ClasscastHost.instance.advertisedIp;
+      if (advertised.isNotEmpty &&
+          NetworkService.isPrivateAddress(advertised)) {
+        session = session.copyWith(hostIp: advertised);
+        _active = session;
+        await _store.saveSession(session);
+      }
+    }
 
     // Register the session on the host so students can join it, and listen
     // for the roster events it broadcasts back.
@@ -236,8 +284,25 @@ class SessionProvider extends ChangeNotifier {
     }
   }
 
+  /// True while an [endSession] is in flight.
+  ///
+  /// Ending broadcasts `session_ended`, which comes straight back down the
+  /// teacher's own socket and re-entered this method while the first teardown
+  /// was still running. Both halves then raced to stop a host and save a
+  /// session that the other had already finished with.
+  bool _ending = false;
+
   Future<void> endSession() async {
-    if (_active == null) return;
+    if (_active == null || _ending) return;
+    _ending = true;
+    try {
+      await _endSessionNow();
+    } finally {
+      _ending = false;
+    }
+  }
+
+  Future<void> _endSessionNow() async {
     final ending = _active!;
     _closeHostEvents();
     // Let the "session ended" frame actually leave before the server goes
@@ -258,6 +323,11 @@ class SessionProvider extends ChangeNotifier {
     _recent = await _store.loadRecent();
     _active = null;
     _participants = [];
+    // Hands and reported pages belong to the class that just ended. Left
+    // behind, they attached themselves to the next session's roster ids and
+    // showed badges for students who were never in the room.
+    _raisedHands.clear();
+    _studentPages.clear();
     notifyListeners();
   }
 

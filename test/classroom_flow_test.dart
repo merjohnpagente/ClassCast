@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:classcast_offline/models/sync_event.dart';
+import 'package:classcast_offline/services/document_download.dart';
 import 'package:classcast_offline/services/host/classcast_host.dart';
 import 'package:classcast_offline/services/sync_protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -217,6 +218,186 @@ void main() {
       const Duration(seconds: 3),
     );
     expect(SyncProtocol.decode(page)!.page, 7);
+  });
+
+  test('a teacher socket that reconnects still gets the whole roster',
+      () async {
+    const teacherKey = 'ROSTERKEY';
+    await send('POST', '/api/session', {
+      'id': 'CLASS-ROSTER',
+      'teacherKey': teacherKey,
+    });
+
+    final student = IOWebSocketChannel.connect(Uri.parse(
+        'ws://127.0.0.1:$port/ws?session=CLASS-ROSTER&name=Ana&device=Android'));
+    final studentInbox = StreamQueue<dynamic>(student.stream);
+    addTearDown(() async {
+      await studentInbox.cancel();
+      await student.sink.close();
+    });
+    await studentInbox.next; // the greeting
+
+    // The teacher's socket only opens after Ana is already in the room — the
+    // exact situation after a network blip, which used to leave the roster
+    // empty for the rest of the lesson.
+    final teacher = IOWebSocketChannel.connect(Uri.parse(
+        'ws://127.0.0.1:$port/ws?session=CLASS-ROSTER&role=teacher&key=$teacherKey'));
+    final teacherInbox = StreamQueue<dynamic>(teacher.stream);
+    addTearDown(() async {
+      await teacherInbox.cancel();
+      await teacher.sink.close();
+    });
+    await teacherInbox.next; // the greeting
+
+    final replay = await teacherInbox.nextWhere(
+      (frame) =>
+          SyncProtocol.decode(frame)?.type == SyncEventType.participantJoined,
+      const Duration(seconds: 3),
+    );
+    expect(SyncProtocol.decode(replay)!.participantName, 'Ana',
+        reason: 'reconnecting must not erase the students already present');
+  });
+
+  test('a student who disconnects leaves the roster, for good', () async {
+    await send('POST', '/api/session', {
+      'id': 'CLASS-LEAVE',
+      'teacherKey': 'LEAVEKEY',
+    });
+
+    final teacher = IOWebSocketChannel.connect(Uri.parse(
+        'ws://127.0.0.1:$port/ws?session=CLASS-LEAVE&role=teacher&key=LEAVEKEY'));
+    final teacherInbox = StreamQueue<dynamic>(teacher.stream);
+    addTearDown(() async {
+      await teacherInbox.cancel();
+      await teacher.sink.close();
+    });
+    await teacherInbox.next; // the greeting
+
+    final student = IOWebSocketChannel.connect(Uri.parse(
+        'ws://127.0.0.1:$port/ws?session=CLASS-LEAVE&name=Ana&device=Android'));
+    final studentInbox = StreamQueue<dynamic>(student.stream);
+    await studentInbox.next; // the greeting
+    final joined = await teacherInbox.nextWhere(
+      (frame) =>
+          SyncProtocol.decode(frame)?.type == SyncEventType.participantJoined,
+      const Duration(seconds: 3),
+    );
+    final pid = SyncProtocol.decode(joined)!.participantId;
+
+    // The connection dies (Wi-Fi blip, phone locked). The teacher must see
+    // the leave, and the host must actually forget the student: an onError
+    // path that only removed the socket used to keep them listed forever.
+    await studentInbox.cancel();
+    await student.sink.close();
+
+    final left = await teacherInbox.nextWhere(
+      (frame) => SyncProtocol.decode(frame)?.type == SyncEventType.participantLeft,
+      const Duration(seconds: 3),
+    );
+    expect(SyncProtocol.decode(left)!.participantId, pid);
+
+    // A fresh teacher socket proves the roster is really clean, not just
+    // that a participant_left frame went out.
+    final again = IOWebSocketChannel.connect(Uri.parse(
+        'ws://127.0.0.1:$port/ws?session=CLASS-LEAVE&role=teacher&key=LEAVEKEY'));
+    final againInbox = StreamQueue<dynamic>(again.stream);
+    addTearDown(() async {
+      await againInbox.cancel();
+      await again.sink.close();
+    });
+    await againInbox.next; // the greeting
+    await expectLater(
+      againInbox.nextWhere(
+        (frame) =>
+            SyncProtocol.decode(frame)?.type == SyncEventType.participantJoined,
+        const Duration(milliseconds: 600),
+      ),
+      throwsA(isA<TimeoutException>()),
+      reason: 'a departed student must not be replayed to the reconnected '
+          'teacher',
+    );
+  });
+
+  test('ending a session stops serving, closes the room, and clears the file',
+      () async {
+    const teacherKey = 'ENDKEY';
+    await send('POST', '/api/session',
+        {'id': 'CLASS-END', 'teacherKey': teacherKey});
+    final dir = Directory.systemTemp.createTempSync('end');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/final.pdf')..writeAsStringSync('%PDF-1.4');
+    host.registerDocument('final.pdf', file.path);
+    await send('POST', '/api/document', {
+      'teacherKey': teacherKey,
+      'documentName': 'final.pdf',
+      'totalPages': 4,
+    });
+
+    final student = IOWebSocketChannel.connect(Uri.parse(
+        'ws://127.0.0.1:$port/ws?session=CLASS-END&name=Ana&device=Android'));
+    final studentInbox = StreamQueue<dynamic>(student.stream);
+    addTearDown(() async {
+      await studentInbox.cancel();
+      await student.sink.close();
+    });
+    await studentInbox.next; // the greeting
+
+    final snap = await json(await send('GET', '/api/session?id=CLASS-END'));
+    final url = (snap['session'] as Map)['documentUrl'] as String;
+    final target = Uri.parse(url);
+
+    final ended = await send('POST', '/api/end', {'teacherKey': teacherKey});
+    expect(ended.statusCode, 200);
+
+    // The student is told the class is over.
+    final bye = await studentInbox.nextWhere(
+      (frame) => SyncProtocol.decode(frame)?.type == SyncEventType.sessionEnded,
+      const Duration(seconds: 3),
+    );
+    expect(SyncProtocol.decode(bye), isNotNull);
+
+    // The kept URL must stop working, and the room must refuse new sockets.
+    final kept = await send('GET', '${target.path}?${target.query}');
+    expect(kept.statusCode, 403);
+    final refused = await send('GET', '/ws?session=CLASS-END&name=Ana');
+    expect(refused.statusCode, 403);
+
+    // The next session starts with a clean slate: no phantom document id.
+    await send('POST', '/api/session',
+        {'id': 'CLASS-END2', 'teacherKey': teacherKey});
+    final next = await json(await send('GET', '/api/session?id=CLASS-END2'));
+    expect((next['session'] as Map)['documentId'], isNull);
+    expect((next['session'] as Map)['documentName'], isNull);
+  });
+
+  test('the student download path really moves the file, and the token gates '
+      'it', () async {
+    const teacherKey = 'DLKEY';
+    await send('POST', '/api/session',
+        {'id': 'CLASS-DL', 'teacherKey': teacherKey});
+    final dir = Directory.systemTemp.createTempSync('dl');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/deck.pptx')..writeAsStringSync('PK-zip-bytes');
+    host.registerDocument('deck.pptx', file.path);
+    await send('POST', '/api/document', {
+      'teacherKey': teacherKey,
+      'documentName': 'deck.pptx',
+      'totalPages': 12,
+    });
+
+    // Exactly what SyncProvider.downloadDocument() does: take the URL out of
+    // the snapshot and fetch it over HTTP.
+    final snap = await json(await send('GET', '/api/session?id=CLASS-DL'));
+    final url = (snap['session'] as Map)['documentUrl'] as String;
+
+    final bytes = await DocumentDownloader.fetch(url);
+    expect(bytes, isNotNull, reason: 'the download button has to have bytes');
+    expect(utf8.decode(bytes!), 'PK-zip-bytes');
+
+    // Guessing the filename on the hotspot is not enough.
+    final denied = await DocumentDownloader.fetch(
+        'http://127.0.0.1:$port/files/deck.pptx');
+    expect(denied, isNull);
   });
 
   // This route did not exist on this host, so "Sync all" and the per-student

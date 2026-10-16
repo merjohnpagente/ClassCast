@@ -14,7 +14,7 @@ the artifacts.
 
 | Workflow | File | Produces |
 |---|---|---|
-| `Build Android APK` | `.github/workflows/build-android.yml` | `classcast-apk` → `app-release.apk` |
+| `Build Android APK` | `.github/workflows/build-android.yml` | `Class-cast-apk` → `Class-cast.apk` (arm), `Class-cast-apk-laptop` → `Class-cast-laptop.apk` (x64) |
 | `Build ClassCast (Web)` | `.github/workflows/build.yml` | `classcast-web` → full web build |
 
 Both run **Test first** (`flutter analyze` + `flutter test`); the build jobs
@@ -28,7 +28,8 @@ only start if tests pass.
 3. Open **GitHub → repo → Actions**. The run starts automatically on push
    to `main`. Watch `Test` → `APK`.
 4. When green: tap the run → **Artifacts** at the bottom → download
-   `classcast-apk` → unzip → `app-release.apk`.
+   `Class-cast-apk` → unzip → `Class-cast.apk` (or
+   `Class-cast-apk-laptop` for an x64 laptop/emulator).
 5. Copy the APK to the phone → tap it → allow *Install unknown apps* if asked.
 
 Manual re-run: **Actions → select workflow → Run workflow** (`workflow_dispatch`).
@@ -36,8 +37,9 @@ Manual re-run: **Actions → select workflow → Run workflow** (`workflow_dispa
 ### Release APKs
 
 Push a tag (`git tag v1.0.2 && git push origin v1.0.2`) and the same build
-attaches `app-release.apk` to **Releases**, which is easier to download from a
-phone browser: repo → **Releases** → pick version → download asset.
+attaches `Class-cast.apk` and `Class-cast-laptop.apk` to **Releases**, which is
+easier to download from a phone browser: repo → **Releases** → pick version →
+download asset.
 
 ## Signing (only if you need a distributable release)
 
@@ -137,8 +139,8 @@ dart run bin/classcast_server.dart --port 8080 --dir ./shared --web ../build/web
 
 ## Run the Android app
 
-1. Open the GitHub **Actions** tab → latest run → download `classcast-apk`
-   (or grab it from **Releases**).
+1. Open the GitHub **Actions** tab → latest run → download `Class-cast-apk`
+   (or grab `Class-cast.apk` from **Releases**).
 2. Teacher flow: Role → Teacher → Create session → share a file → Present.
 3. Student flow: join the teacher hotspot → Role → Student → scan QR or type
    the address → watch live.

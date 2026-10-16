@@ -134,7 +134,14 @@ class ClasscastHost {
       } catch (_) {/* nothing else to do */}
     }
     _session = null;
-    _documentPath = '';
+    // A restarted host must not inherit yesterday's document: leaving the
+    // name and token behind made the first snapshot of a fresh session point
+    // at a file that was already unshared.
+    clearDocument();
+    _documentId = '';
+    _page = 1;
+    _totalPages = 0;
+    _syncPaused = false;
   }
 
   /// Makes the teacher's picked file readable by students. Only the file that is
@@ -328,7 +335,23 @@ class ClasscastHost {
       'sessionId': _session?['id'] ?? '',
     });
     _session = null;
+    // The class is over: unshare the file (a kept URL must stop working),
+    // forget the roster, and close the students' sockets. Leaving them open
+    // meant a student who never left the page stayed connected to a host
+    // that had already refused every new join.
+    clearDocument();
+    _documentId = '';
+    _page = 1;
+    _totalPages = 0;
+    _syncPaused = false;
     _participants.clear();
+    for (final socket in _sockets.toList()) {
+      try {
+        socket.sink.close();
+      } catch (_) {/* already gone */}
+    }
+    _sockets.clear();
+    _socketsById.clear();
     return _json(request, 200, {'ok': true});
   }
 
@@ -403,7 +426,20 @@ class ClasscastHost {
     // The teacher's own socket subscribes to the roster but is never listed as
     // a participant, so it has no id.
     final pid = isTeacher ? '' : 'ws-${DateTime.now().microsecondsSinceEpoch}';
-    if (!isTeacher) {
+    if (isTeacher) {
+      // Replay who is already in the room. The teacher's socket drops and
+      // re-opens whenever the network changes, and without this the roster
+      // stood empty for the rest of the lesson even though the students never
+      // went anywhere: they had joined before the socket came back.
+      for (final participant in _participants.values) {
+        channel.sink.add(jsonEncode({
+          'type': 'participant_joined',
+          'sessionId': sessionId,
+          'participantId': participant['id'],
+          'participantName': participant['name'],
+        }));
+      }
+    } else {
       _participants[pid] = {'id': pid, 'name': name, 'device': device};
       _socketsById[pid] = channel;
       _broadcast({
@@ -501,8 +537,13 @@ class ClasscastHost {
 
   void _onClose(WebSocketChannel channel, String pid, String sessionId) {
     _sockets.remove(channel);
-    if (pid.isEmpty || !_participants.containsKey(pid)) return;
+    if (pid.isEmpty) return;
     _socketsById.remove(pid);
+    // Forgetting the participant too, not just its socket. A student who
+    // reconnected got a fresh id, and the old entry lived on in this map
+    // forever, ready to be replayed to the teacher as if they were still in
+    // the room.
+    if (_participants.remove(pid) == null) return;
 
     _broadcast({
       'type': 'participant_left',
@@ -514,7 +555,17 @@ class ClasscastHost {
   // --- files ---------------------------------------------------------------
 
   Future<void> _serveFile(HttpRequest request, String requested) async {
-    final name = Uri.decodeComponent(requested);
+    // The request-target arrives percent-encoded (`great%20slides.pdf`).
+    // Decode exactly once to match the name the teacher registered. A
+    // malformed escape used to throw out of the handler and paint a 500 for
+    // any device on the hotspot that asked for `/files/%`; it is simply a
+    // miss.
+    String name;
+    try {
+      name = Uri.decodeComponent(requested);
+    } catch (_) {
+      return await _text(request, 404, 'not found');
+    }
     // The session must be running, and the request must carry the token the
     // snapshot handed out. Without both, anyone on the hotspot who guessed the
     // filename could read the teacher's document.
@@ -531,6 +582,9 @@ class ClasscastHost {
       ..set(HttpHeaders.contentLengthHeader, '$length')
       // The shared document changes as the teacher moves on.
       ..set(HttpHeaders.cacheControlHeader, 'no-store')
+      // A student's browser may live on a different origin; the bytes are
+      // still local-network only, so the browser is allowed to read them.
+      ..set('access-control-allow-origin', '*')
       // Always inline: viewing the current document is the whole point.
       ..set('content-disposition', 'inline');
     if (request.method == 'HEAD') {
@@ -591,9 +645,13 @@ class ClasscastHost {
   static String _mimeFor(String name) {
     final lower = name.toLowerCase();
     if (lower.endsWith('.pdf')) return 'application/pdf';
-    if (lower.endsWith('.pptx') || lower.endsWith('.docx')) {
+    if (lower.endsWith('.pptx')) {
       return 'application/vnd.openxmlformats-officedocument.'
-          'wordprocessingml.presentation';
+          'presentationml.presentation';
+    }
+    if (lower.endsWith('.docx')) {
+      return 'application/vnd.openxmlformats-officedocument.'
+          'wordprocessingml.document';
     }
     if (lower.endsWith('.xlsx')) {
       return 'application/vnd.openxmlformats-officedocument.'

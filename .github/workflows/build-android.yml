@@ -152,11 +152,16 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release
 
+      # The file students and teachers are told to look for is Class-cast.apk,
+      # so the build produces exactly that name instead of app-release.apk.
+      - name: Name it for the classroom (arm)
+        run: cp build/app/outputs/flutter-apk/app-release.apk Class-cast.apk
+
       - name: Upload APK (download from this run)
         uses: actions/upload-artifact@v4
         with:
-          name: classcast-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: Class-cast-apk
+          path: Class-cast.apk
 
       # A laptop, not a phone. The release build above is arm, which an
       # emulator on a PC cannot run at all, so the classroom host could not be
@@ -165,14 +170,19 @@ jobs:
       - name: Build laptop APK
         run: flutter build apk --release --target-platform android-x64
 
+      - name: Name it for the classroom (x64 laptop)
+        run: cp build/app/outputs/flutter-apk/app-release.apk Class-cast-laptop.apk
+
       - name: Upload laptop APK
         uses: actions/upload-artifact@v4
         with:
-          name: classcast-apk-laptop
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: Class-cast-apk-laptop
+          path: Class-cast-laptop.apk
 
       - name: Attach APK to release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: |
+            Class-cast.apk
+            Class-cast-laptop.apk

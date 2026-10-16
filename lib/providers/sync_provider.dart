@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../models/classroom_session.dart';
 import '../models/sync_event.dart';
 import '../services/classcast_client.dart';
+import '../services/document_download.dart';
 import '../services/network_service.dart';
 
 /// Student-side live sync: join, snapshot, subscribe, reconnect.
@@ -271,6 +272,20 @@ class SyncProvider extends ChangeNotifier {
       participantName: _studentName,
       page: page,
     ));
+  }
+
+  /// Fetch the teacher's shared file off the local network and save it with
+  /// the platform's own save dialog. Never throws; the result carries a
+  /// sentence for the student.
+  Future<DocumentDownloadResult> downloadDocument() async {
+    final doc = _snapshot;
+    final url = doc?.documentUrl ?? '';
+    final name = doc?.documentName ?? '';
+    if (url.isEmpty || name.isEmpty) {
+      return const DocumentDownloadResult(
+          false, 'No file is shared by the teacher yet.');
+    }
+    return DocumentDownloader.download(url: url, fileName: name);
   }
 
   Future<void> leave() async {

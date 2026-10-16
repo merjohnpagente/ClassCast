@@ -194,6 +194,30 @@ void main() {
       expect((await call('GET', '/api/session?id=$id')).statusCode, 404);
     });
 
+    test('ending a session unshares the file and leaves no phantom state',
+        () async {
+      final [_, key] = await startSession();
+      writeFile('lesson.pdf', '%PDF-1.4');
+      final url = await shareAndUrl(key, 'lesson.pdf');
+
+      await call('POST', '/api/end', jsonEncode({'teacherKey': key}));
+
+      // A student who kept the URL must not still be able to pull the file
+      // after the class is over.
+      expect((await call('GET', url)).statusCode, 403);
+
+      // And the next session starts clean: a documentId that survived the end
+      // used to resurface in the first snapshot, drawing a nameless file.
+      final [id2, _] = await startSession(name: 'Next');
+      final snap = await body(await call('GET', '/api/session?id=$id2'));
+      final s = snap['session'] as Map;
+      expect(s['documentId'], isNull);
+      expect(s['documentName'], isNull);
+      expect(s['totalPages'], 0);
+      expect(s['page'], 1);
+      expect(s['syncPaused'], isFalse);
+    });
+
     test('re-posting updates in place instead of recreating', () async {
       final [id, key] = await startSession();
       final first = await body(await call(

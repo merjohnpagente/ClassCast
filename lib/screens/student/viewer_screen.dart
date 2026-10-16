@@ -29,11 +29,56 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
   final PdfViewerController _pdf = PdfViewerController();
   bool _fullscreen = false;
   int _lastSeenPage = -1;
+  int _lastClassPage = -1;
+  int _localPage = 1;
+  bool _downloading = false;
 
   @override
   void dispose() {
     _pdf.dispose();
     super.dispose();
+  }
+
+  /// The page this student is actually looking at.
+  ///
+  /// While the teacher allows independent navigation and has not taken the
+  /// screen back, the student's own page wins. Otherwise — and whenever the
+  /// class page moves, because then following it is the whole point — it is
+  /// the teacher's page. Without this, the arrows below reported a page the
+  /// screen never drew: the viewer kept rendering `active.page`, so a student
+  /// allowed to look ahead turned a virtual page and saw nothing happen.
+  int _viewPageFor(ClassroomSession active, bool canNav) {
+    if (!canNav) {
+      _lastClassPage = active.page;
+      _localPage = active.page;
+      return active.page;
+    }
+    if (active.page != _lastClassPage) {
+      _lastClassPage = active.page;
+      _localPage = active.page;
+    }
+    return _localPage;
+  }
+
+  /// Turn to a page on this student's own copy, and tell the teacher where
+  /// they landed. The class page does not move.
+  void _turnTo(int page) {
+    if (page < 1) return;
+    setState(() => _localPage = page);
+    _reportLocalPage(page);
+  }
+
+  Future<void> _download(BuildContext context, SyncProvider sync) async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _downloading = true);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Downloading from the teacher…')),
+    );
+    final result = await sync.downloadDocument();
+    if (!mounted) return;
+    setState(() => _downloading = false);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(content: Text(result.message)));
   }
 
   /// Rebuild the shared document from the session snapshot so the viewer
@@ -81,12 +126,16 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
       );
     }
 
-    // Mirror the teacher page into the local PDF controller.
-    if (active.page != _lastSeenPage) {
-      _lastSeenPage = active.page;
+    final viewPage = _viewPageFor(active, sync.canNavigate);
+
+    // Mirror the page being drawn into the local PDF controller. For a PDF
+    // this is what a local page turn actually looks like; for everything else
+    // the controller has no document and the jump is a no-op.
+    if (viewPage != _lastSeenPage) {
+      _lastSeenPage = viewPage;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         try {
-          _pdf.jumpToPage(active.page);
+          _pdf.jumpToPage(viewPage);
         } catch (_) {/* page not ready yet */}
       });
     }
@@ -97,7 +146,7 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
         body: SafeArea(
           child: Stack(
             children: [
-              Positioned.fill(child: _preview(active)),
+              Positioned.fill(child: _previewPanel(context, viewPage)),
               Positioned(
                 top: 8,
                 right: 8,
@@ -136,8 +185,9 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
                 // With the shell's app bar away nothing insets the body, so
                 // the slide would run under the status and gesture bars.
                 child: hideChrome
-                    ? SafeArea(child: _pageColumn(context, active, sync))
-                    : _pageColumn(context, active, sync),
+                    ? SafeArea(
+                        child: _pageColumn(context, active, sync, viewPage))
+                    : _pageColumn(context, active, sync, viewPage),
               ),
             ),
           ),
@@ -150,20 +200,20 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
 
   /// Title, page, controls. Hidden chrome drops the first and the last.
   Widget _pageColumn(BuildContext context, ClassroomSession active,
-      SyncProvider sync) {
+      SyncProvider sync, int viewPage) {
     final chrome = ChromeToggleScope.maybeOf(context);
     final hideChrome = chrome?.hidden ?? false;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (!hideChrome) ...[
-          _header(context, active, sync),
+          _header(context, active, sync, viewPage),
           const SizedBox(height: 8),
         ],
-        Expanded(child: _previewPanel(context)),
+        Expanded(child: _previewPanel(context, viewPage)),
         if (!hideChrome) ...[
           const SizedBox(height: 8),
-          _footer(context, active),
+          _footer(context, active, viewPage),
         ],
       ],
     );
@@ -172,15 +222,18 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
   /// The document, rebuilt on nothing but a new file, a new page or a new
   /// total. This screen rebuilds on every socket frame — the teacher's page, the
   /// hand badge, the paused chip, a reconnect — and the document came along for
-  /// all of it.
-  Widget _previewPanel(BuildContext context) {
+  /// all of it. The page passed as `mode` is the one being *drawn*: without it
+  /// a student's own page turn changed nothing, because the cache still
+  /// answered with the subtree built for the old page.
+  Widget _previewPanel(BuildContext context, int viewPage) {
     return SyncDocumentPreview(
-      builder: (context, snapshot) => _preview(snapshot),
+      mode: viewPage,
+      builder: (context, snapshot) => _preview(snapshot, viewPage),
     );
   }
 
   Widget _header(BuildContext context, ClassroomSession active,
-      SyncProvider sync) {
+      SyncProvider sync, int viewPage) {
     final theme = Theme.of(context);
     return Row(
       children: [
@@ -197,8 +250,8 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
                   )),
               Text(
                 active.totalPages > 0
-                    ? 'Page ${active.page} / ${active.totalPages}'
-                    : 'Page ${active.page}',
+                    ? 'Page $viewPage / ${active.totalPages}'
+                    : 'Page $viewPage',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: AppColors.muted,
                 ),
@@ -220,7 +273,7 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
     );
   }
 
-  Widget _preview(ClassroomSession active) {
+  Widget _preview(ClassroomSession active, int viewPage) {
     final doc = _documentFor(active);
     if (doc == null) {
       return const EmptyState(
@@ -236,10 +289,10 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
       doc: doc,
       controller: _pdf,
       remoteUrl: doc.remoteUrl,
-      page: active.page,
+      page: viewPage,
     );
     if (doc.kind == DocKind.pdf) return viewer;
-    return PageSwitcher(identity: 'page-${active.page}', child: viewer);
+    return PageSwitcher(identity: 'page-$viewPage', child: viewer);
   }
 
   /// Reports a self-driven page turn to the teacher.
@@ -255,12 +308,17 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
 
   int _lastReportedPage = -1;
 
-  Widget _footer(BuildContext context, ClassroomSession active) {
+  Widget _footer(BuildContext context, ClassroomSession active, int viewPage) {
     final sync = context.watch<SyncProvider>();
     final canNav = sync.canNavigate;
     final canDownload = active.allowDownload;
 
     // The page bar is the design's: arrow, counter, arrow.
+    //
+    // The arrows turn the page being drawn — PDF or Office alike — through
+    // `_turnTo`, which moves the local page, reports it to the teacher, and
+    // lets the mirror in `build` do the PDF jump. Calling the PDF controller
+    // directly (when it was attached at all) never moved an Office document.
     final pageBar = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: const BoxDecoration(
@@ -274,26 +332,14 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
             _ArrowButton(
               icon: Icons.chevron_left,
               tooltip: 'Previous page',
-              onPressed: !canNav || active.page <= 1
-                  ? null
-: () {
-                  final next = active.page - 1;
-                  // The controller is only attached for a PDF. An Office
-                  // page or an image has no `SfPdfViewer` behind it, so an
-                  // unguarded nextPage()/previousPage() threw on exactly the
-                  // documents that support student navigation. The Office
-                  // canvas follows the page through `_reportLocalPage`.
-                  try {
-                    _pdf.previousPage();
-                  } catch (_) {/* not a PDF */}
-                  _reportLocalPage(next);
-                },
+              onPressed:
+                  !canNav || viewPage <= 1 ? null : () => _turnTo(viewPage - 1),
             ),
             Expanded(
               child: Text(
                 active.totalPages > 0
-                    ? '${active.page} / ${active.totalPages}'
-                    : '${active.page}',
+                    ? '$viewPage / ${active.totalPages}'
+                    : '$viewPage',
                 textAlign: TextAlign.center,
                 style: Theme.of(context)
                     .textTheme
@@ -305,16 +351,9 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
               icon: Icons.chevron_right,
               tooltip: 'Next page',
               onPressed: !canNav ||
-                      (active.totalPages > 0 &&
-                          active.page >= active.totalPages)
+                      (active.totalPages > 0 && viewPage >= active.totalPages)
                   ? null
-: () {
-                  final next = active.page + 1;
-                  try {
-                    _pdf.nextPage();
-                  } catch (_) {/* not a PDF */}
-                  _reportLocalPage(next);
-                },
+                  : () => _turnTo(viewPage + 1),
             ),
           ],
         ),
@@ -358,14 +397,15 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
           if (canDownload)
             IconButton(
               tooltip: 'Download (allowed by teacher)',
-              icon: const Icon(Icons.download_outlined),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text(
-                          'Download starts when the host serves the file.')),
-                );
-              },
+              icon: _downloading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.download_outlined),
+              onPressed:
+                  _downloading ? null : () => _download(context, sync),
             ),
         ],
       ),

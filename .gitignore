@@ -18,6 +18,9 @@ server/build/
 *.keystore
 local.properties
 
+# CI names the release APK for download; never commit a build output.
+Class-cast*.apk
+
 # ...except the one key that has to be the same on every single build. If this
 # file is ever lost, every release changes signature and no user can install a
 # new version over an old one — they would have to uninstall first and lose

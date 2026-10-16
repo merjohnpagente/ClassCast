@@ -249,6 +249,22 @@ class ClasscastServer {
       // the document long after the teacher ended the class.
       _documentName = '';
       _documentToken = '';
+      // A phantom document id used to survive the end and reappear in the
+      // next session's snapshot, where the UI drew a file with no name.
+      _documentId = '';
+      _totalPages = 0;
+      _page = 1;
+      _syncPaused = false;
+      _participants.clear();
+      // Close the room's sockets. Anything left open would keep receiving
+      // frames from the session that starts next.
+      for (final socket in _sockets.toList()) {
+        try {
+          socket.sink.close();
+        } catch (_) {/* already gone */}
+      }
+      _sockets.clear();
+      _socketsById.clear();
       return _json(200, {'ok': true});
     });
 
@@ -292,6 +308,9 @@ class ClasscastServer {
             'content-length': length.toString(),
             // The shared document changes as the teacher moves on.
             'cache-control': 'no-store',
+            // Students running the web build live on a different origin;
+            // without this the browser refuses to hand them the bytes.
+            'access-control-allow-origin': '*',
           },
         );
       } catch (_) {
@@ -371,13 +390,24 @@ class ClasscastServer {
     bool isTeacher = false,
   }) {
     final sessionId = params['session'] ?? '';
-    final name = params['name'] ?? 'Student';
+    final name = _cleanName(params['name']);
     final device = params['device'] ?? '';
     _sockets.add(channel);
     // The teacher subscribes too (so it learns who joined), but must never
     // appear in its own student roster.
     if (isTeacher) {
       channel.sink.add(jsonEncode(_snapshotEvent('session_state')));
+      // Replay the room. The teacher's socket reconnects whenever the network
+      // changes, and without this its roster came back empty while every
+      // student was still sitting in the class.
+      for (final participant in _participants.values) {
+        channel.sink.add(jsonEncode({
+          'type': 'participant_joined',
+          'sessionId': sessionId,
+          'participantId': participant['id'],
+          'participantName': participant['name'],
+        }));
+      }
       channel.stream.listen(
         (_) {/* teacher control happens over the REST API, not frames */},
         onDone: () => _sockets.remove(channel),
@@ -400,24 +430,35 @@ class ClasscastServer {
     });
     channel.stream.listen(
       (frame) => _onFrame(channel, pid, sessionId, frame),
-      onDone: () {
-        _sockets.remove(channel);
-        _socketsById.remove(pid);
-        _participants.remove(pid);
-        _broadcast({
-          'type': 'participant_left',
-          'sessionId': sessionId,
-          'participantId': pid,
-        });
-      },
-      onError: (_) {
-        _sockets.remove(channel);
-        _socketsById.remove(pid);
-      },
+      onDone: () => _dropStudent(channel, pid, sessionId),
+      // An error socket must leave the roster exactly like a clean close.
+      // It used to remove the socket but not the participant, so a student
+      // whose connection died stayed on the teacher's screen forever.
+      onError: (_) => _dropStudent(channel, pid, sessionId),
       cancelOnError: false,
     );
   }
 
+  /// Removes a dropped student from the room and tells everyone who is left.
+  void _dropStudent(WebSocketChannel channel, String pid, String sessionId) {
+    _sockets.remove(channel);
+    _socketsById.remove(pid);
+    if (_participants.remove(pid) == null) return;
+    _broadcast({
+      'type': 'participant_left',
+      'sessionId': sessionId,
+      'participantId': pid,
+    });
+  }
+
+  /// A roster name comes straight off the wire, so it gets bounded: one
+  /// student cannot fill the teacher's screen with a megabyte of text or
+  /// impersonate another entry with stray whitespace.
+  static String _cleanName(String? raw) {
+    final trimmed = (raw ?? '').trim();
+    if (trimmed.isEmpty) return 'Student';
+    return trimmed.length <= 32 ? trimmed : trimmed.substring(0, 32);
+  }
 
   void _onFrame(WebSocketChannel channel, String pid, String sessionId,
       Object? frame) {
@@ -433,7 +474,9 @@ class ClasscastServer {
     // teacher's screen — a hand raised that the teacher never sees is a broken
     // feature, and it was exactly that: this handler only knew `join`, so every
     // other frame a student sent fell on the floor.
-    final name = msg['participantName'] as String? ?? 'Student';
+    // Bounded the same way as a connect name: the roster display comes off the
+    // wire, so a frame cannot stuff it with a megabyte of text.
+    final name = _cleanName(msg['participantName'] as String?);
     switch (msg['type']) {
       case 'join':
         _participants[pid] = {

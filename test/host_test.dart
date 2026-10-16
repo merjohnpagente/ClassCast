@@ -104,6 +104,29 @@ void main() {
     dir.deleteSync(recursive: true);
   });
 
+  test('a filename with a literal % is served, and readable cross-origin',
+      () async {
+    await send('POST', '/api/session', {'id': 'CLASS-PCT', 'teacherKey': 'k8'});
+    final dir = Directory.systemTemp.createTempSync('hostpct');
+    final doc = File('${dir.path}/100%.pdf')..writeAsStringSync('%PDF-1.4 pct');
+
+    host.registerDocument('100%.pdf', doc.path);
+    final ok = await json(await send('POST', '/api/document',
+        {'teacherKey': 'k8', 'documentName': '100%.pdf'}));
+    final target = Uri.parse((ok['session'] as Map)['documentUrl'] as String);
+    final res = await send('GET', '${target.path}?${target.query}');
+
+    // The URL percent-encodes the name; the host must decode exactly once, or
+    // an ordinary document comes back a 404.
+    expect(res.statusCode, 200);
+    expect(await res.transform(utf8.decoder).join(), '%PDF-1.4 pct');
+    // A student running the web build lives on a different origin; without
+    // this the browser refuses to hand the bytes to the app.
+    expect(res.headers.value('access-control-allow-origin'), '*');
+
+    dir.deleteSync(recursive: true);
+  });
+
   test('unsharing stops serving the file, even to a kept URL', () async {
     await send('POST', '/api/session', {'id': 'CLASS-U', 'teacherKey': 'k7'});
     final dir = Directory.systemTemp.createTempSync('hostdoc');

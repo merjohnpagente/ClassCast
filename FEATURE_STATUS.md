@@ -40,7 +40,15 @@
 - **Student view preview**: the teacher can open exactly what the class sees —
   the same viewer, built from the same snapshot, not a mock-up.
 - **Live roster**: names on join, removed on leave, raised hands, and the page
-  each student is on when they are allowed to browse.
+  each student is on when they are allowed to browse. The teacher's receive
+  socket reconnects by itself after a Wi-Fi blip or a mid-lesson hotspot
+  switch, and the host replays who is already in the room, so the list never
+  silently empties while students are still sitting there; a student whose
+  connection dies is removed for good.
+- **Downloads that really download**: when the teacher allows it, the student's
+  Download button fetches the shared file straight from the teacher's phone
+  over the hotspot and hands it to the platform's own save dialog (SAF on
+  Android, a browser download on web). No cloud, no internet.
 
 ## Durability and honesty
 
@@ -53,6 +61,9 @@
   URL carries a token and stops working the moment the document is unshared.
 - Anything the app cannot do is said plainly: a refused share, a failed pick, a
   host that could not start, a file that vanished.
+- Ending a session closes the room's sockets, unshares the file (a kept URL
+  stops working), and clears the page/document/roster state, so the next
+  session starts clean instead of inheriting a phantom document.
 
 ## Still TODO (per spec phases)
 

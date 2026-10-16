@@ -102,6 +102,33 @@ void main() {
     expect(sessions.participants, isEmpty);
     expect(sessions.active, isNull);
   });
+
+  test('ending a session forgets hands and reported pages too', () async {
+    await sessions.createSession(name: 'Physics');
+    sessions.applyEvent(_joined(sessions, 'stu-1', 'Ana'));
+    sessions.applyEvent(SyncEvent(
+      type: SyncEventType.handRaised,
+      sessionId: sessions.active!.id,
+      participantId: 'stu-1',
+      participantName: 'Ana',
+    ));
+    sessions.applyEvent(SyncEvent(
+      type: SyncEventType.studentPageChanged,
+      sessionId: sessions.active!.id,
+      participantId: 'stu-1',
+      participantName: 'Ana',
+      page: 4,
+    ));
+    expect(sessions.raisedHands, isNotEmpty);
+    expect(sessions.studentPages, isNotEmpty);
+
+    await sessions.endSession();
+
+    // Left behind, these attached themselves to the next session's roster ids
+    // and showed badges for students who were never in the room.
+    expect(sessions.raisedHands, isEmpty);
+    expect(sessions.studentPages, isEmpty);
+  });
 }
 
 /// A student joining the session that is actually running — applyEvent drops
