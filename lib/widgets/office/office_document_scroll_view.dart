@@ -152,40 +152,57 @@ class _OfficeDocumentScrollViewState extends State<OfficeDocumentScrollView> {
         // Scroll mode had no zoom at all, which made a dense Word page
         // impossible to read on a phone.
         if (zoom == null) return list;
-        return Stack(
-          children: [
-            InteractiveViewer(
-              transformationController: zoom.transform,
-              minScale: 1,
-              maxScale: kZoomMax,
-              boundaryMargin: const EdgeInsets.all(120),
-              trackpadScrollCausesScale: true,
-              scaleFactor: 200,
-              child: list,
-            ),
-            Positioned(
-              right: 10,
-              bottom: 10,
-              child: DocumentZoomBar(target: zoom.target),
-            ),
-          ],
+        return ListenableBuilder(
+          listenable: zoom.transform,
+          builder: (context, _) {
+            // The viewer must not claim the vertical drag while the list is at
+            // 1x. A scale recogniser between the finger and the list wins the
+            // arena every time, so the list could not be scrolled at all and
+            // continuous mode looked frozen — the pages were there, you just
+            // could not reach them. Panning only takes over once there is
+            // something to pan.
+            final zoomedIn = zoom.transform.value.getMaxScaleOnAxis() > 1.01;
+            return Stack(
+              children: [
+                InteractiveViewer(
+                  transformationController: zoom.transform,
+                  minScale: 1,
+                  maxScale: kZoomMax,
+                  panEnabled: zoomedIn,
+                  boundaryMargin: const EdgeInsets.all(120),
+                  trackpadScrollCausesScale: true,
+                  scaleFactor: 200,
+                  child: list,
+                ),
+                Positioned(
+                  right: 10,
+                  bottom: 10,
+                  child: DocumentZoomBar(target: zoom.target),
+                ),
+              ],
+            );
+          },
         );
       },
     );
   }
 
   /// One page of the document, whatever format it is.
+  ///
+  /// Every page is handed `interactive: false`. The viewer around the list owns
+  /// the gesture; a page that also handled it would put a second scale
+  /// recogniser in the way and stop the list scrolling all over again.
   Widget _page(int page) {
     final document = widget.document;
     switch (document.format) {
       case OoxmlFormat.powerpoint:
         final deck = document.deck;
         if (deck == null) return const SizedBox.shrink();
-        return PptxSlideView(deck: deck, page: page);
+        return PptxSlideView(deck: deck, page: page, interactive: false);
       case OoxmlFormat.word:
         final word = document.word;
         if (word == null) return const SizedBox.shrink();
-        return DocxPageView(document: word, page: page);
+        return DocxPageView(document: word, page: page, interactive: false);
       case OoxmlFormat.excel:
         final book = document.workbook;
         if (book == null) return const SizedBox.shrink();
@@ -195,6 +212,7 @@ class _OfficeDocumentScrollViewState extends State<OfficeDocumentScrollView> {
           sheet: located.sheet,
           page: located.pageInSheet,
           firstRowNumber: (located.pageInSheet - 1) * kRowsPerSheetPage + 1,
+          interactive: false,
         );
     }
   }

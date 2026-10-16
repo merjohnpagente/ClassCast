@@ -83,10 +83,19 @@ class OoxmlLoader {
     // slide's XML is seconds of straight-line work, and `await` alone does not
     // get it off this thread — only compute does. It was the difference
     // between tapping a deck and watching the whole app stop until it opened.
-    final parsed = await compute(parseIn, <String, Object?>{
-      'extension': extension,
-      'bytes': bytes,
-    });
+    OoxmlDocument? parsed;
+    try {
+      parsed = await compute(parseIn, <String, Object?>{
+        'extension': extension,
+        'bytes': bytes,
+      });
+    } catch (_) {
+      // The isolate is a nicety, not a requirement. If the message is too big
+      // to send, or the isolate cannot be spawned, parsing inline is slow but
+      // it still opens the file — and reporting "could not open this file" for
+      // a deck that is perfectly readable is the worst possible answer.
+      parsed = parseBytes(extension: extension, bytes: bytes);
+    }
     if (parsed != null) {
       _remember(source, parsed);
     }

@@ -10,6 +10,7 @@ import '../../services/classcast_client.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/chrome_toggle.dart';
+import '../../widgets/document_preview.dart';
 import '../../widgets/document_viewer.dart';
 import '../../widgets/motion.dart';
 import '../../widgets/state_cards.dart';
@@ -166,29 +167,12 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
   }
 
   /// The document, rebuilt on nothing but a new file, a new page or a new
-  /// total.
-  ///
-  /// This screen rebuilds on every socket frame — the teacher's page, the hand
-  /// badge, the paused chip, a reconnect — and the document subtree is by far
-  /// the most expensive thing in it: a spreadsheet page is over two thousand
-  /// cells and a slide walks every shape. It used to come along for all of it.
-  /// The snapshot is read fresh inside the builder rather than captured, so the
-  /// Selector can never draw a stale page.
+  /// total. This screen rebuilds on every socket frame — the teacher's page, the
+  /// hand badge, the paused chip, a reconnect — and the document came along for
+  /// all of it.
   Widget _previewPanel(BuildContext context) {
-    return Selector<SyncProvider,
-        ({String? documentId, int page, int total})>(
-      selector: (_, sync) => (
-        documentId: sync.snapshot?.documentId,
-        page: sync.snapshot?.page ?? 1,
-        total: sync.snapshot?.totalPages ?? 0,
-      ),
-      builder: (context, _) {
-        // Read fresh rather than captured, so the Selector can never draw a
-        // stale page — and never force-unwrap a snapshot that has since gone.
-        final snapshot = context.read<SyncProvider>().snapshot;
-        if (snapshot == null) return const SizedBox.shrink();
-        return _preview(snapshot);
-      },
+    return SyncDocumentPreview(
+      builder: (context, snapshot) => _preview(snapshot),
     );
   }
 

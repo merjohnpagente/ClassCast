@@ -16,11 +16,16 @@ class DocxPageView extends StatelessWidget {
   /// Zoom shared across pages, so turning a page keeps the zoom level.
   final DocumentZoom? zoom;
 
+  /// False in continuous scroll mode, where a viewer around the whole list
+  /// already owns the pinch, the pan and the double tap.
+  final bool interactive;
+
   const DocxPageView({
     super.key,
     required this.document,
     required this.page,
     this.zoom,
+    this.interactive = true,
   });
 
   @override
@@ -28,6 +33,7 @@ class DocxPageView extends StatelessWidget {
     final blocks = document.blocksOfPage(page);
     return OfficeCanvas(
       zoom: zoom,
+      interactive: interactive,
       widthPt: kPageWidthPt,
       heightPt: kPageHeightPt,
       child: Padding(

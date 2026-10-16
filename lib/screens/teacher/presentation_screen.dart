@@ -11,6 +11,7 @@ import '../../providers/session_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/chrome_toggle.dart';
+import '../../widgets/document_preview.dart';
 import '../../widgets/document_viewer.dart';
 import '../../widgets/motion.dart';
 import '../../widgets/office/office_document_scroll_view.dart';
@@ -241,20 +242,11 @@ class _TeacherPresentationScreenState
   /// class — the roster, the raised hands, the host status chip, every student
   /// reporting the page they wandered to. All of it used to arrive through one
   /// `context.watch<SessionProvider>` and drag the whole document subtree with
-  /// it, and that subtree is the most expensive thing in the app: a spreadsheet
-  /// page is over two thousand cells and a slide walks every shape on it. A
-  /// single raised hand rebuilt all of that. Records compare structurally, so
-  /// the Selector only rebuilds when one of these four actually moves.
+  /// it. A single raised hand rebuilt every shape on the slide.
   Widget _previewPanel(BuildContext context) {
-    return Selector<SessionProvider,
-        ({String? documentId, int page, int total, OfficeViewMode mode})>(
-      selector: (_, sessions) => (
-        documentId: sessions.active?.documentId,
-        page: sessions.active?.page ?? 1,
-        total: sessions.active?.totalPages ?? 0,
-        mode: _viewMode,
-      ),
-      builder: (context, key) => _preview(context, key.page),
+    return SessionDocumentPreview(
+      viewMode: _viewMode,
+      builder: (context, page) => _preview(context, page),
     );
   }
 

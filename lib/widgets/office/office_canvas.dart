@@ -51,6 +51,15 @@ class OfficeCanvas extends StatefulWidget {
   /// one-off page wants.
   final DocumentZoom? zoom;
 
+  /// Whether this canvas handles pinch, pan and double tap itself.
+  ///
+  /// False in continuous scroll mode, where a viewer around the whole list
+  /// already owns the gesture. A canvas that handles it as well puts a scale
+  /// recogniser between the finger and the list, and the scale recogniser wins
+  /// — so the list could not be scrolled at all, and the wheel zoomed a page
+  /// instead of scrolling past it.
+  final bool interactive;
+
   const OfficeCanvas({
     super.key,
     required this.widthPt,
@@ -59,6 +68,7 @@ class OfficeCanvas extends StatefulWidget {
     this.background = Colors.white,
     this.maxScale = 6,
     this.zoom,
+    this.interactive = true,
   });
 
   @override
@@ -111,6 +121,19 @@ class _OfficeCanvasState extends State<OfficeCanvas> {
           ),
         );
 
+        final fitted = SizedBox(
+          width: width,
+          height: height,
+          child: FittedBox(fit: BoxFit.fill, child: page),
+        );
+
+        // In continuous scroll the surrounding list's viewer owns the gesture,
+        // so this one stays out of the arena entirely rather than tying with
+        // it and winning.
+        if (!widget.interactive) {
+          return Center(child: fitted);
+        }
+
         // The tap position is needed in the page's own coordinates so a
         // double tap can zoom into the spot that was actually touched.
         void handleDoubleTap(Offset position) {
@@ -136,27 +159,23 @@ class _OfficeCanvasState extends State<OfficeCanvas> {
           child: Center(
             // The page is fitted to the viewport and centred, with slack around
             // it, so a zoomed-in edge can still be dragged back into view.
-            child: SizedBox(
-              width: width,
-              height: height,
-              child: InteractiveViewer(
-                transformationController: _transform,
-                minScale: 1,
-                maxScale: widget.maxScale,
-                boundaryMargin: const EdgeInsets.all(120),
-                // Wheel and trackpad now zoom too. A teacher working from a
-                // laptop had nothing but a double click before.
-                trackpadScrollCausesScale: true,
-                scaleFactor: 200,
-                child: GestureDetector(
-                  onDoubleTapDown: (d) => _pendingTap = d.globalPosition,
-                  onDoubleTap: () {
-                    final tap = _pendingTap;
-                    _pendingTap = null;
-                    if (tap != null) handleDoubleTap(tap);
-                  },
-                  child: FittedBox(fit: BoxFit.fill, child: page),
-                ),
+            child: InteractiveViewer(
+              transformationController: _transform,
+              minScale: 1,
+              maxScale: widget.maxScale,
+              boundaryMargin: const EdgeInsets.all(120),
+              // Wheel and trackpad now zoom too. A teacher working from a
+              // laptop had nothing but a double click before.
+              trackpadScrollCausesScale: true,
+              scaleFactor: 200,
+              child: GestureDetector(
+                onDoubleTapDown: (d) => _pendingTap = d.globalPosition,
+                onDoubleTap: () {
+                  final tap = _pendingTap;
+                  _pendingTap = null;
+                  if (tap != null) handleDoubleTap(tap);
+                },
+                child: fitted,
               ),
             ),
           ),

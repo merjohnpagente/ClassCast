@@ -21,12 +21,17 @@ class XlsxSheetView extends StatelessWidget {
   /// Zoom shared across pages, so turning a page keeps the zoom level.
   final DocumentZoom? zoom;
 
+  /// False in continuous scroll mode, where a viewer around the whole list
+  /// already owns the pinch, the pan and the double tap.
+  final bool interactive;
+
   const XlsxSheetView({
     super.key,
     required this.sheet,
     required this.page,
     required this.firstRowNumber,
     this.zoom,
+    this.interactive = true,
   });
 
   @override
@@ -36,6 +41,7 @@ class XlsxSheetView extends StatelessWidget {
 
     return OfficeCanvas(
       zoom: zoom,
+      interactive: interactive,
       widthPt: kSheetPageWidthPt,
       heightPt: kSheetPageRenderedHeightPt,
       child: Column(

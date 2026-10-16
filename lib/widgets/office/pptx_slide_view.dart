@@ -17,11 +17,16 @@ class PptxSlideView extends StatelessWidget {
   /// Zoom shared across pages, so turning a page keeps the zoom level.
   final DocumentZoom? zoom;
 
+  /// False in continuous scroll mode, where a viewer around the whole list
+  /// already owns the pinch, the pan and the double tap.
+  final bool interactive;
+
   const PptxSlideView({
     super.key,
     required this.deck,
     required this.page,
     this.zoom,
+    this.interactive = true,
   });
 
   @override
@@ -30,6 +35,7 @@ class PptxSlideView extends StatelessWidget {
     if (slides.isEmpty) {
       return OfficeCanvas(
         zoom: zoom,
+        interactive: interactive,
         widthPt: deck.slideWidthPt,
         heightPt: deck.slideHeightPt,
         child: const Center(child: Text('This deck has no slides.')),
@@ -40,6 +46,7 @@ class PptxSlideView extends StatelessWidget {
 
     return OfficeCanvas(
       zoom: zoom,
+      interactive: interactive,
       widthPt: deck.slideWidthPt,
       heightPt: deck.slideHeightPt,
       background: Color(slide.background),
