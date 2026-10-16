@@ -17,6 +17,8 @@ import '../../widgets/office/office_document_scroll_view.dart';
 import '../../widgets/state_cards.dart';
 import '../../widgets/status_bits.dart';
 import '../../widgets/ui_kit.dart';
+import '../common/files_screen.dart';
+import 'create_session_screen.dart';
 import 'student_preview_screen.dart';
 import 'students_screen.dart';
 
@@ -111,10 +113,19 @@ class _TeacherPresentationScreenState
         builder: (context, _) {
           final hideChrome = canHide && _chrome.hidden;
           final body = active == null
-              ? const EmptyState(
+              ? EmptyState(
                   icon: Icons.present_to_all,
                   title: 'No active session',
                   subtitle: 'Create a session and share a document first.',
+                  // The subtitle has been telling the teacher to create a
+                  // session since this screen existed, with nothing on screen
+                  // to do it with. It is reachable at any time from the
+                  // teacher's own "Present now" button.
+                  actionLabel: 'Create session',
+                  onAction: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (_) => const CreateSessionScreen()),
+                  ),
                 )
               : active.documentId == null
                   ? EmptyState(
@@ -123,7 +134,10 @@ class _TeacherPresentationScreenState
                       subtitle:
                           'Pick a file from the library to start presenting.',
                       actionLabel: 'Open files',
-                      onAction: () => Navigator.of(context).pop(),
+                      // This used to just pop the route. It said "Open files"
+                      // and delivered a back button, on the one dead end
+                      // where the teacher is actively looking for the library.
+                      onAction: () => _openFiles(context),
                     )
                   : context.isDesktop
                       ? _desktopLayout(context, sessions, active, hideChrome)
@@ -546,7 +560,29 @@ class _TeacherPresentationScreenState
     );
   }
 
-  /// Ending a session drops every student. One tap should not be enough —
+  /// Pushes the library with a real back affordance.
+///
+/// The library normally lives as a tab inside the teacher shell, and this
+/// screen is a route pushed on top of that shell — so it cannot simply switch
+/// a tab. Pushing the library keeps the teacher where they are and gives them
+/// somewhere to come back to, which is the whole point of a button labelled
+/// "Open files".
+void _openFiles(BuildContext context) {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (routeContext) => Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(title: const Text('Files')),
+        body: Padding(
+          padding: EdgeInsets.all(routeContext.pagePadding),
+          child: const FilesScreen(sharing: true),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Ending a session drops every student. One tap should not be enough —
   /// especially from a control the teacher reaches for mid-lesson.
   void _confirmEnd(BuildContext context, SessionProvider sessions) {
     showDialog(

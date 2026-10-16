@@ -12,9 +12,27 @@ import '../theme/app_colors.dart';
 class ChromeController extends ChangeNotifier {
   bool _hidden = false;
 
+  /// When the last accepted toggle landed.
+  int _lastToggleMs = 0;
+
+  /// A double tap on the page fires this twice in quick succession, because
+  /// the document underneath owns the double tap and the page's own tap fires
+  /// on each half of the gesture. Toggling twice nets back to where it
+  /// started, which means the interface flickered away and back for every
+  /// zoom. Dropping the second one leaves the zoom visible and the interface
+  /// still showing, which is what the teacher meant.
+  ///
+  /// This lives here rather than in a competing `onDoubleTap` gesture
+  /// recogniser, because a recogniser on the ancestor beats the "Show
+  /// controls" pill's own tap and takes the way back with it.
+  static const _debounce = Duration(milliseconds: 250);
+
   bool get hidden => _hidden;
 
   void toggle() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastToggleMs < _debounce.inMilliseconds) return;
+    _lastToggleMs = now;
     _hidden = !_hidden;
     notifyListeners();
   }
@@ -49,13 +67,12 @@ class ChromeToggleScope extends InheritedNotifier<ChromeController> {
 /// fires on bare page surface — which is exactly the gesture that should clear
 /// the chrome and the one that should bring it back.
 ///
-/// [onDoubleTap] is the reason the document underneath can own a double tap.
-/// Without a double-tap handler here, the first tap wins the gesture arena,
-/// `onTap` fires, and the second tap fires it again — so double tapping the
-/// slide toggled the interface off and straight back on while the page zoomed
-/// underneath it. Declaring a no-op double tap makes this recogniser compete
-/// for the second tap; the inner one wins, the page zooms, and `onTap` is
-/// cancelled rather than fired twice.
+/// There is deliberately no `onDoubleTap` here, even though the document
+/// underneath owns one. Adding it looked like the tidy fix for a double tap
+/// firing this twice, and it broke the thing that matters: a competing double
+/// tap recogniser on the ancestor wins the gesture arena over the "Show
+/// controls" pill's own tap, so the only way back out of a hidden interface
+/// stopped working. [ChromeController.toggle] absorbs the double instead.
 class ChromeTapAnywhere extends StatelessWidget {
   final Widget child;
 
@@ -67,7 +84,6 @@ class ChromeTapAnywhere extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: chrome?.toggle,
-      onDoubleTap: () {},
       child: child,
     );
   }
