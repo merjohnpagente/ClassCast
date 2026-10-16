@@ -67,59 +67,75 @@ class _StudentShellState extends State<StudentShell> {
 
     // Only the viewer hides chrome: the join and connection tabs are chrome
     // themselves, so clearing them would leave nothing behind.
-    final hideChrome = _index == 1 && presenting && _chrome.hidden;
+
+    // A session that ends while the student is looking at a hidden slide would
+    // otherwise leave the flag set, and the next session would come up blank.
+    // Restored after the frame, because notifying mid-build rebuilds the tree.
+    if (_index == 1 && !presenting && _chrome.hidden) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _chrome.show();
+      });
+    }
 
     return ChromeToggleScope(
       controller: _chrome,
-      child: AppScaffold(
-        title: title,
-        destinations: _destinations,
-        currentIndex: _index,
-        showChrome: !hideChrome,
-        onNavigate: (i) {
-          // Leaving the viewer restores the navigation, so the student is
-          // never stranded on a hidden screen they cannot get out of.
-          if (i != 1) _chrome.show();
-          setState(() => _index = i);
-        },
-        // Back from the Join (QR / session ID) flow returns to role selection.
-        // Leaving first matters: otherwise the socket and participant entry
-        // would outlive the screen.
-        onBack: () async {
-          _chrome.show();
-          if (joined) await sync.leave();
-          if (context.mounted) {
-            context.read<AppState>().resetRole();
-          }
-        },
-        actions: [
-          if (_index == 1 && presenting) const ChromeAppBarAction(),
-          if (joined)
-            TextButton.icon(
-              onPressed: () async {
-                _chrome.show();
-                await sync.leave();
-                if (context.mounted) setState(() => _index = 0);
-              },
-              icon: const Icon(Icons.logout, size: 18),
-              label: const Text('Leave'),
-            ),
-        ],
-        body: LazyTabStack(
-          index: _index,
-          builders: [
-            () => JoinScreen(
-                  onJoined: () =>
-                      setState(() => _index = presenting ? 1 : _index),
+      // The controller belongs to this state, so reading it up here would not
+      // register a rebuild. The builder below is where the flag is read.
+      child: ListenableBuilder(
+        listenable: _chrome,
+        builder: (context, _) {
+          final hideChrome = _index == 1 && presenting && _chrome.hidden;
+          return AppScaffold(
+            title: title,
+            destinations: _destinations,
+            currentIndex: _index,
+            showChrome: !hideChrome,
+            onNavigate: (i) {
+              // Leaving the viewer restores the navigation, so the student is
+              // never stranded on a hidden screen they cannot get out of.
+              if (i != 1) _chrome.show();
+              setState(() => _index = i);
+            },
+            // Back from the Join (QR / session ID) flow returns to role
+            // selection. Leaving first matters: otherwise the socket and
+            // participant entry would outlive the screen.
+            onBack: () async {
+              _chrome.show();
+              if (joined) await sync.leave();
+              if (context.mounted) {
+                context.read<AppState>().resetRole();
+              }
+            },
+            actions: [
+              if (_index == 1 && presenting) const ChromeAppBarAction(),
+              if (joined)
+                TextButton.icon(
+                  onPressed: () async {
+                    _chrome.show();
+                    await sync.leave();
+                    if (context.mounted) setState(() => _index = 0);
+                  },
+                  icon: const Icon(Icons.logout, size: 18),
+                  label: const Text('Leave'),
                 ),
-            () => presenting
-                ? const StudentViewerScreen()
-                : StudentWaitingScreen(
-                    onLeave: () => setState(() => _index = 0),
-                  ),
-            () => const _StudentConnectionTab(),
-          ],
-        ),
+            ],
+            body: LazyTabStack(
+              index: _index,
+              builders: [
+                () => JoinScreen(
+                      onJoined: () =>
+                          setState(() => _index = presenting ? 1 : _index),
+                    ),
+                () => presenting
+                    ? const StudentViewerScreen()
+                    : StudentWaitingScreen(
+                        onLeave: () => setState(() => _index = 0),
+                      ),
+                () => const _StudentConnectionTab(),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

@@ -48,6 +48,14 @@ class ChromeToggleScope extends InheritedNotifier<ChromeController> {
 /// pinch and every button are claimed by the document underneath, so this only
 /// fires on bare page surface — which is exactly the gesture that should clear
 /// the chrome and the one that should bring it back.
+///
+/// [onDoubleTap] is the reason the document underneath can own a double tap.
+/// Without a double-tap handler here, the first tap wins the gesture arena,
+/// `onTap` fires, and the second tap fires it again — so double tapping the
+/// slide toggled the interface off and straight back on while the page zoomed
+/// underneath it. Declaring a no-op double tap makes this recogniser compete
+/// for the second tap; the inner one wins, the page zooms, and `onTap` is
+/// cancelled rather than fired twice.
 class ChromeTapAnywhere extends StatelessWidget {
   final Widget child;
 
@@ -59,6 +67,7 @@ class ChromeTapAnywhere extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: chrome?.toggle,
+      onDoubleTap: () {},
       child: child,
     );
   }
@@ -99,33 +108,36 @@ class ChromeToggleHint extends StatelessWidget {
     if (chrome == null || !chrome.hidden) return const SizedBox.shrink();
     return Align(
       alignment: Alignment.bottomCenter,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.s16),
-        child: Semantics(
-          button: true,
-          label: label,
-          child: Material(
-            color: Colors.black.withValues(alpha: 0.55),
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            child: InkWell(
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.s16),
+          child: Semantics(
+            button: true,
+            label: label,
+            child: Material(
+              color: Colors.black.withValues(alpha: 0.55),
               borderRadius: BorderRadius.circular(AppRadius.pill),
-              onTap: chrome.show,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.s16, vertical: AppSpacing.s8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.visibility_outlined,
-                        size: 18, color: Colors.white),
-                    const SizedBox(width: AppSpacing.s8),
-                    Text(label,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        )),
-                  ],
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                onTap: chrome.show,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.s16, vertical: AppSpacing.s8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.visibility_outlined,
+                          size: 18, color: Colors.white),
+                      const SizedBox(width: AppSpacing.s8),
+                      Text(label,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          )),
+                    ],
+                  ),
                 ),
               ),
             ),

@@ -253,11 +253,13 @@ class _DocumentViewerState extends State<DocumentViewer>
     );
   }
 
-  /// Pinch or drag to zoom a photo — a teacher regularly needs to show one
-  /// corner of an image to the whole room.
-  /// Pinch, drag, double tap into a spot, and the same bar every other format
-  /// uses. A teacher regularly needs to show one corner of a photo to the whole
-  /// room, and pinch alone needs two hands.
+  /// Pinch or drag to zoom a photo, and double tap into the spot you tapped.
+  ///
+  /// The double tap has to be owned by a detector that also knows about the
+  /// tap that clears the interface off the screen, or the two fight: the tap
+  /// fires on each half of a double tap and the chrome flickers while the
+  /// picture zooms. See ChromeTapAnywhere in chrome_toggle.dart, which claims
+  /// the second tap.
   Widget _zoomable(Widget child) {
     return LayoutBuilder(
       builder: (context, constraints) {

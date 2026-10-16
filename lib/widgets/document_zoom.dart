@@ -105,6 +105,9 @@ class DocumentZoom extends ChangeNotifier {
 
   /// Snaps to the nearest step in [direction], with a short animation so the
   /// eye can follow the page instead of it jumping.
+  ///
+  /// This is the on-screen bar, for when a teacher has one hand free or is
+  /// working from a trackpad. Pinch and double tap are the deliberate ones.
   void step(int direction) =>
       _animateTo(_nextStep(scale, direction), focal: null);
 
@@ -119,7 +122,8 @@ class DocumentZoom extends ChangeNotifier {
   ///
   /// This is the difference between usable and not. Zooming to the centre of
   /// the page means tapping a small label sends it to the middle of the slide,
-  /// which is worse than having no zoom at all.
+  /// which is worse than having no zoom at all — and pinching needs two hands,
+  /// which a teacher at a lectern does not have.
   void toggleZoomAt(Offset tapped, Size viewport) {
     if (isZoomed) {
       fit();

@@ -34,7 +34,8 @@ Color argbWithOpacity(int argb, double opacity) {
 ///
 /// The page is wrapped in an [InteractiveViewer]: a teacher needs to pinch into
 /// a small label on a slide or drag across a page that is taller than the
-/// screen. Page 1 still starts fitted, so the default view is unchanged.
+/// screen. Double tap zooms into the spot that was tapped. Page 1 still starts
+/// fitted, so the default view is unchanged.
 class OfficeCanvas extends StatefulWidget {
   final double widthPt;
   final double heightPt;

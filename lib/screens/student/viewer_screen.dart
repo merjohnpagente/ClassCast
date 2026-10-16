@@ -129,31 +129,38 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
             child: Center(
               child: ContentWidth(
                 maxWidth: 1000,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (!hideChrome) ...[
-                      _header(context, active, sync),
-                      const SizedBox(height: 8),
-                    ],
-                    Expanded(child: _preview(active)),
-                    if (!hideChrome) ...[
-                      const SizedBox(height: 8),
-                      _footer(context, active),
-                    ],
-                  ],
-                ),
+                // With the shell's app bar away nothing insets the body, so
+                // the slide would run under the status and gesture bars.
+                child: hideChrome
+                    ? SafeArea(child: _pageColumn(context, active, sync))
+                    : _pageColumn(context, active, sync),
               ),
             ),
           ),
         ),
         if (hideChrome)
-          const Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: ChromeToggleHint(),
-          ),
+          const Positioned.fill(child: ChromeToggleHint()),
+      ],
+    );
+  }
+
+  /// Title, page, controls. Hidden chrome drops the first and the last.
+  Widget _pageColumn(BuildContext context, ClassroomSession active,
+      SyncProvider sync) {
+    final chrome = ChromeToggleScope.maybeOf(context);
+    final hideChrome = chrome?.hidden ?? false;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (!hideChrome) ...[
+          _header(context, active, sync),
+          const SizedBox(height: 8),
+        ],
+        Expanded(child: _preview(active)),
+        if (!hideChrome) ...[
+          const SizedBox(height: 8),
+          _footer(context, active),
+        ],
       ],
     );
   }
