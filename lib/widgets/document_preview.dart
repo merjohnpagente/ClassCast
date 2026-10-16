@@ -119,8 +119,7 @@ class SessionDocumentPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     return _PreviewGate<SessionProvider>(
       keyOf: (sessions) => _sessionKey(sessions, viewMode),
-      builder: (context, sessions) =>
-          builder(context, sessions.active?.page ?? 1),
+      builder: (context, sessions) => builder(context, sessions),
     );
   }
 }
