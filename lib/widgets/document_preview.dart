@@ -14,10 +14,6 @@ import 'office/office_document_scroll_view.dart';
 /// short list of values the document is a function of, and comparing it is what
 /// keeps a raised hand or a page report from dragging a spreadsheet page of two
 /// thousand cells behind it.
-///
-/// A record would have done the same job, but it does not survive being used as
-/// a `Selector`'s selected type without inference help, and a named class with
-/// `==` is easier to read here anyway.
 @immutable
 class DocumentPreviewKey {
   final String? documentId;
@@ -49,11 +45,24 @@ class DocumentPreviewKey {
   int get hashCode => Object.hash(documentId, page, total, mode);
 }
 
+/// The teacher's selection: the student's three values plus the view mode.
+DocumentPreviewKey _keyOf(SessionProvider sessions, OfficeViewMode viewMode) =>
+    DocumentPreviewKey(
+      documentId: sessions.active?.documentId,
+      page: sessions.active?.page ?? 1,
+      total: sessions.active?.totalPages ?? 0,
+      mode: viewMode,
+    );
+
 /// The teacher's document panel.
 ///
 /// Rebuilds only when the shared file changes, the page moves, the real page
 /// count arrives, or the teacher switches between one-page-at-a-time and
 /// scrolling.
+///
+/// `context.select` rather than a `Selector`: it returns the value instead of
+/// taking a builder, so there is no `ValueWidgetBuilder` inference to get
+/// wrong, and it reads as what it is — a dependency narrowed to four values.
 class SessionDocumentPreview extends StatelessWidget {
   final OfficeViewMode viewMode;
 
@@ -68,21 +77,18 @@ class SessionDocumentPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Selector<SessionProvider, DocumentPreviewKey>(
-      selector: (_, sessions) => DocumentPreviewKey(
-        documentId: sessions.active?.documentId,
-        page: sessions.active?.page ?? 1,
-        total: sessions.active?.totalPages ?? 0,
-        mode: viewMode,
-      ),
-      builder: (context, key) => builder(context, key.page),
+    return Consumer<SessionProvider>(
+      buildWhen: (previous, current) =>
+          _keyOf(previous, viewMode) != _keyOf(current, viewMode),
+      builder: (context, sessions, _) =>
+          builder(context, _keyOf(sessions, viewMode).page),
     );
   }
 }
 
 /// The student's document panel.
 ///
-/// Same short list. The snapshot is read fresh inside the builder rather than
+/// Same short list. The snapshot is read fresh after the selection rather than
 /// captured from the enclosing build, so this can never draw a stale page — and
 /// never has to force-unwrap a snapshot that has since gone.
 class SyncDocumentPreview extends StatelessWidget {
@@ -93,17 +99,23 @@ class SyncDocumentPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Selector<SyncProvider, DocumentPreviewKey>(
-      selector: (_, sync) => DocumentPreviewKey(
-        documentId: sync.snapshot?.documentId,
-        page: sync.snapshot?.page ?? 1,
-        total: sync.snapshot?.totalPages ?? 0,
-      ),
-      builder: (context, _) {
-        final snapshot = context.read<SyncProvider>().snapshot;
+    return Consumer<SyncProvider>(
+      buildWhen: (previous, current) =>
+          _keyOf(previous) != _keyOf(current),
+      builder: (context, sync, _) {
+        // Read fresh rather than captured, so this can never draw a stale page
+        // — and never has to force-unwrap a snapshot that has since gone.
+        final snapshot = sync.snapshot;
         if (snapshot == null) return const SizedBox.shrink();
         return builder(context, snapshot);
       },
     );
   }
 }
+
+/// The student's selection: same three values, no view mode.
+DocumentPreviewKey _keyOf(SyncProvider sync) => DocumentPreviewKey(
+      documentId: sync.snapshot?.documentId,
+      page: sync.snapshot?.page ?? 1,
+      total: sync.snapshot?.totalPages ?? 0,
+    );
