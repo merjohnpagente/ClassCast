@@ -234,7 +234,31 @@ class _TeacherPresentationScreenState
     );
   }
 
-  Widget _preview(BuildContext context, ClassroomSession active) {
+  /// The document, rebuilt on nothing but a new file, a new page, a new total
+  /// or a new view mode.
+  ///
+  /// Everything else on this screen changes several times a second in a live
+  /// class — the roster, the raised hands, the host status chip, every student
+  /// reporting the page they wandered to. All of it used to arrive through one
+  /// `context.watch<SessionProvider>` and drag the whole document subtree with
+  /// it, and that subtree is the most expensive thing in the app: a spreadsheet
+  /// page is over two thousand cells and a slide walks every shape on it. A
+  /// single raised hand rebuilt all of that. Records compare structurally, so
+  /// the Selector only rebuilds when one of these four actually moves.
+  Widget _previewPanel(BuildContext context) {
+    return Selector<SessionProvider,
+        ({String? documentId, int page, int total, OfficeViewMode mode})>(
+      selector: (_, sessions) => (
+        documentId: sessions.active?.documentId,
+        page: sessions.active?.page ?? 1,
+        total: sessions.active?.totalPages ?? 0,
+        mode: _viewMode,
+      ),
+      builder: (context, key) => _preview(context, key.page),
+    );
+  }
+
+  Widget _preview(BuildContext context, int page) {
     final doc = context.read<LibraryProvider>().selected;
     if (doc == null) {
       return const EmptyState(
@@ -247,12 +271,12 @@ class _TeacherPresentationScreenState
     // its page pushed here. This read `!=` for years, which meant the arrows
     // moved every Office document and never moved the one format where the
     // teacher could actually see the page they were on.
-    if (doc.kind == DocKind.pdf) _syncPdfPage(active.page);
+    if (doc.kind == DocKind.pdf) _syncPdfPage(page);
     final sessions = context.read<SessionProvider>();
     final viewer = DocumentViewer(
       doc: doc,
       controller: _pdf,
-      page: active.page,
+      page: page,
       // The app only learns how many slides / pages a file really has once it
       // is open; publish that so students get the same total.
       onPageCount: (count) => _publishPageCount(context, count),
@@ -267,9 +291,8 @@ class _TeacherPresentationScreenState
     // be animated or it reads as a dropped frame.
     if (doc.kind == DocKind.pdf) return viewer;
     return PageSwitcher(
-      identity: _viewMode == OfficeViewMode.scroll
-          ? 'scroll'
-          : 'page-${active.page}',
+      identity:
+          _viewMode == OfficeViewMode.scroll ? 'scroll' : 'page-$page',
       child: viewer,
     );
   }
@@ -305,7 +328,7 @@ class _TeacherPresentationScreenState
             child: SafeArea(
               // With no app bar there is nothing insetting the body, so the
               // slide would otherwise run under the status and gesture bars.
-              child: _preview(context, active),
+              child: _previewPanel(context),
             ),
           ),
           const Positioned.fill(child: ChromeToggleHint()),
@@ -321,7 +344,7 @@ class _TeacherPresentationScreenState
                 context.pagePadding,
                 context.pagePadding,
                 8),
-            child: _preview(context, active),
+            child: _previewPanel(context),
           ),
         ),
         _pageRow(context, sessions, active),
@@ -487,7 +510,7 @@ class _TeacherPresentationScreenState
         children: [
           Positioned.fill(
             child: SafeArea(
-              child: _preview(context, active),
+              child: _previewPanel(context),
             ),
           ),
           const Positioned.fill(
@@ -507,7 +530,7 @@ class _TeacherPresentationScreenState
               children: [
                 _docHeader(context, active),
                 const SizedBox(height: 8),
-                Expanded(child: _preview(context, active)),
+                Expanded(child: _previewPanel(context)),
               ],
             ),
           ),

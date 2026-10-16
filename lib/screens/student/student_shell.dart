@@ -122,9 +122,15 @@ class _StudentShellState extends State<StudentShell> {
             body: LazyTabStack(
               index: _index,
               builders: [
+                // Goes to the viewer tab unconditionally. It used to read
+                // `presenting` — a local from the build that happened before
+                // the tap — so a student who joined a class that already had a
+                // document sat on the join screen with a green "live" chip
+                // until they navigated by hand. The viewer tab renders either
+                // the document or the waiting room, so it is the right place to
+                // land either way.
                 () => JoinScreen(
-                      onJoined: () =>
-                          setState(() => _index = presenting ? 1 : _index),
+                      onJoined: () => setState(() => _index = 1),
                     ),
                 () => presenting
                     ? const StudentViewerScreen()

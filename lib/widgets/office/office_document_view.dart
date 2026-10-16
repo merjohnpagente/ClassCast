@@ -54,6 +54,17 @@ class OfficeDocumentView extends StatefulWidget {
 class _OfficeDocumentViewState extends State<OfficeDocumentView>
     with SingleTickerProviderStateMixin {
   Future<OoxmlDocument?>? _pending;
+
+  /// The document, when it is already parsed and can be drawn this frame.
+  ///
+  /// A cache hit used to go through a Future anyway, and a FutureBuilder starts
+  /// every future at `ConnectionState.none` — so a deck already sitting in
+  /// memory still flashed a spinner, and a fresh `CircularProgressIndicator`
+  /// with its own AnimationController, for one frame on *every* page turn. A
+  /// teacher holding the arrow key watched it strobe. Anything already parsed
+  /// is taken synchronously instead.
+  OoxmlDocument? _ready;
+
   int _reported = 0;
 
   /// Owned here, above the pages, because each page used to have its own
@@ -63,7 +74,7 @@ class _OfficeDocumentViewState extends State<OfficeDocumentView>
   @override
   void initState() {
     super.initState();
-    _pending = _load();
+    _open();
   }
 
   @override
@@ -79,29 +90,37 @@ class _OfficeDocumentViewState extends State<OfficeDocumentView>
         old.remoteUrl != widget.remoteUrl ||
         old.extension != widget.extension) {
       _reported = 0;
-      _pending = _load();
+      _open();
     }
   }
 
-  Future<OoxmlDocument?> _load() async {
+  /// Resolves the document: the synchronous path when the parse is already
+  /// cached, the future only when it actually has to read and parse something.
+  void _open() {
+    _ready = _peek();
+    _pending = _ready == null ? _load() : null;
+  }
+
+  OoxmlDocument? _peek() {
     final key = OoxmlLoader.sourceKey(
       widget.extension,
       widget.localPath,
       widget.remoteUrl,
     );
-    if (key != null) {
-      final cached = OoxmlLoader.instance.peek(key);
-      if (cached != null) return cached;
-    }
-    return OoxmlLoader.instance.load(
-      extension: widget.extension,
-      localPath: widget.localPath,
-      remoteUrl: widget.remoteUrl,
-    );
+    if (key == null) return null;
+    return OoxmlLoader.instance.peek(key);
   }
+
+  Future<OoxmlDocument?> _load() => OoxmlLoader.instance.load(
+        extension: widget.extension,
+        localPath: widget.localPath,
+        remoteUrl: widget.remoteUrl,
+      );
 
   @override
   Widget build(BuildContext context) {
+    final ready = _ready;
+    if (ready != null) return _page(ready);
     return FutureBuilder<OoxmlDocument?>(
       future: _pending,
       builder: (context, snapshot) {
@@ -109,47 +128,53 @@ class _OfficeDocumentViewState extends State<OfficeDocumentView>
           return LoadingState(message: 'Opening ${widget.name}…');
         }
         if (snapshot.hasError) {
-          return ErrorState(
-            title: 'Could not open this file',
-            message: _failureMessage(widget.extension),
-            retryLabel: 'Try again',
-            onRetry: () => setState(() => _pending = _load()),
-          );
+          return _failure(retry: true);
         }
         final document = snapshot.data;
-        if (document == null) {
-          return ErrorState(
-            title: 'Could not open this file',
-            message: _failureMessage(widget.extension),
-          );
-        }
-        if (document.pageCount <= 0) {
-          return ErrorState(
-            title: 'Nothing to show',
-            message: '${widget.name} did not contain any '
-                '${document.format == OoxmlFormat.powerpoint ? 'slides' : 'pages'}.',
-          );
-        }
-        _reportPageCount(document.pageCount);
-        if (widget.viewMode == OfficeViewMode.scroll) {
-          return OfficeDocumentScrollView(
-            document: document,
-            zoom: _zoom,
-            page: widget.page,
-            onPageChanged: widget.onPageChanged,
-          );
-        }
-        return Stack(
-          children: [
-            Positioned.fill(child: _render(document)),
-            Positioned(
-              right: 10,
-              bottom: 10,
-              child: DocumentZoomBar(target: _zoom.target),
-            ),
-          ],
-        );
+        if (document == null) return _failure();
+        return _page(document);
       },
+    );
+  }
+
+  Widget _failure({bool retry = false}) => ErrorState(
+        title: 'Could not open this file',
+        message: _failureMessage(widget.extension),
+        onRetry: retry
+            ? () => setState(() {
+                  _reported = 0;
+                  _open();
+                })
+            : null,
+      );
+
+  /// Everything below here assumes the document is open and has pages.
+  Widget _page(OoxmlDocument document) {
+    if (document.pageCount <= 0) {
+      return ErrorState(
+        title: 'Nothing to show',
+        message: '${widget.name} did not contain any '
+            '${document.format == OoxmlFormat.powerpoint ? 'slides' : 'pages'}.',
+      );
+    }
+    _reportPageCount(document.pageCount);
+    if (widget.viewMode == OfficeViewMode.scroll) {
+      return OfficeDocumentScrollView(
+        document: document,
+        zoom: _zoom,
+        page: widget.page,
+        onPageChanged: widget.onPageChanged,
+      );
+    }
+    return Stack(
+      children: [
+        Positioned.fill(child: _render(document)),
+        Positioned(
+          right: 10,
+          bottom: 10,
+          child: DocumentZoomBar(target: _zoom.target),
+        ),
+      ],
     );
   }
 

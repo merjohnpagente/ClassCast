@@ -25,24 +25,49 @@ class LazyTabStack extends StatefulWidget {
 }
 
 class _LazyTabStackState extends State<LazyTabStack> {
-  late final Set<int> _built = {widget.index};
+  /// One slot per tab, filled the first time that tab is opened and never
+  /// replaced.
+  ///
+  /// The builders were re-invoked on every build before. That sounds harmless
+  /// until you notice who rebuilds: the student shell watches the whole
+  /// `SyncProvider`, so every single socket frame — every page change, every
+  /// raised hand — rebuilt the shell, which re-ran all three builders and gave
+  /// the viewer a brand new widget instance. Four rebuilds per frame, one of
+  /// them the document. Holding the instance means a parent rebuild hands the
+  /// same widget down and `updateChild`'s identity check skips the subtree.
+  final List<Widget?> _slots = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _slots.length = widget.builders.length;
+    _fill(widget.index);
+  }
 
   @override
   void didUpdateWidget(LazyTabStack oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_built.add(widget.index)) setState(() {});
+    if (widget.builders.length != _slots.length) {
+      _slots.length = widget.builders.length;
+    }
+    _fill(widget.index);
+  }
+
+  /// Builds [tab] if it has never been built. No `setState`: this runs from
+  /// `build` and from `didUpdateWidget`, both of which are already rebuilding.
+  void _fill(int tab) {
+    if (tab < 0 || tab >= _slots.length) return;
+    if (_slots[tab] != null) return;
+    _slots[tab] = widget.builders[tab]();
   }
 
   @override
   Widget build(BuildContext context) {
-    final order = _built.toList()..sort();
     return Stack(
       children: [
-        for (final i in order)
-          Offstage(
-            offstage: i != widget.index,
-            child: widget.builders[i](),
-          ),
+        for (var i = 0; i < _slots.length; i++)
+          if (_slots[i] case final Widget child)
+            Offstage(offstage: i != widget.index, child: child),
       ],
     );
   }

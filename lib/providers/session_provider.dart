@@ -425,6 +425,13 @@ class SessionProvider extends ChangeNotifier {
     if (_active == null) return null;
     final total = _active!.totalPages;
     final clamped = total <= 0 ? page : page.clamp(1, total);
+    // The teacher sets the page, POSTs it, and the host broadcasts it straight
+    // back to this same socket. Without this the echo arrived after the real
+    // update and rebuilt the entire presentation screen a second time for a
+    // page number that had not moved. It also fired whenever two controls were
+    // pressed faster than the host could answer, in which case the older echo
+    // arrived last and rewound the teacher.
+    if (_active!.page == clamped) return clamped;
     _active = _active!.copyWith(page: clamped);
     notifyListeners();
     return clamped;
@@ -485,21 +492,34 @@ class SessionProvider extends ChangeNotifier {
         }
         break;
       case SyncEventType.handRaised:
+        // The teacher raises and lowers hands locally too, so the host echoes
+        // this straight back down the teacher's own socket. Notifying on an
+        // unchanged map rebuilt the whole presentation screen for nothing.
         if (event.participantId != null) {
-          _raisedHands[event.participantId!] =
-              event.participantName ?? 'Student';
+          final id = event.participantId!;
+          final name = event.participantName ?? 'Student';
+          if (_raisedHands[id] != name) {
+            _raisedHands[id] = name;
+            notifyListeners();
+          }
         }
-        notifyListeners();
         break;
       case SyncEventType.handLowered:
-        if (event.participantId != null) _raisedHands.remove(event.participantId!);
-        notifyListeners();
+        if (event.participantId != null &&
+            _raisedHands.remove(event.participantId!) != null) {
+          notifyListeners();
+        }
         break;
       case SyncEventType.studentPageChanged:
-        if (event.participantId != null && event.page != null) {
+        // A burst of these is the noisiest thing on the wire: every student
+        // reports on every class page change, and each one used to rebuild the
+        // teacher's entire screen including the document.
+        if (event.participantId != null &&
+            event.page != null &&
+            _studentPages[event.participantId!] != event.page) {
           _studentPages[event.participantId!] = event.page!;
+          notifyListeners();
         }
-        notifyListeners();
         break;
       case SyncEventType.join:
       case SyncEventType.sessionState:
@@ -518,7 +538,11 @@ class SessionProvider extends ChangeNotifier {
   }
 
   void removeParticipant(String id) {
+    final before = _participants.length;
     _participants = _participants.where((p) => p.id != id).toList();
+    // A leave for somebody who was never here changes nothing, and this is
+    // called on every socket close on the host.
+    if (_participants.length == before) return;
     notifyListeners();
   }
 

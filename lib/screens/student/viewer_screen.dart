@@ -156,12 +156,39 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
           _header(context, active, sync),
           const SizedBox(height: 8),
         ],
-        Expanded(child: _preview(active)),
+        Expanded(child: _previewPanel(context)),
         if (!hideChrome) ...[
           const SizedBox(height: 8),
           _footer(context, active),
         ],
       ],
+    );
+  }
+
+  /// The document, rebuilt on nothing but a new file, a new page or a new
+  /// total.
+  ///
+  /// This screen rebuilds on every socket frame — the teacher's page, the hand
+  /// badge, the paused chip, a reconnect — and the document subtree is by far
+  /// the most expensive thing in it: a spreadsheet page is over two thousand
+  /// cells and a slide walks every shape. It used to come along for all of it.
+  /// The snapshot is read fresh inside the builder rather than captured, so the
+  /// Selector can never draw a stale page.
+  Widget _previewPanel(BuildContext context) {
+    return Selector<SyncProvider,
+        ({String? documentId, int page, int total})>(
+      selector: (_, sync) => (
+        documentId: sync.snapshot?.documentId,
+        page: sync.snapshot?.page ?? 1,
+        total: sync.snapshot?.totalPages ?? 0,
+      ),
+      builder: (context, _) {
+        // Read fresh rather than captured, so the Selector can never draw a
+        // stale page — and never force-unwrap a snapshot that has since gone.
+        final snapshot = context.read<SyncProvider>().snapshot;
+        if (snapshot == null) return const SizedBox.shrink();
+        return _preview(snapshot);
+      },
     );
   }
 
