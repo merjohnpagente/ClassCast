@@ -7,6 +7,7 @@ import '../../models/shared_document.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/document_viewer.dart';
+import '../../widgets/motion.dart';
 import '../../widgets/state_cards.dart';
 
 /// Exactly what a student sees, on the teacher's own screen.
