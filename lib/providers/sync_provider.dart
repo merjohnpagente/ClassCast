@@ -105,11 +105,20 @@ class SyncProvider extends ChangeNotifier {
         sessionId: _sessionId,
         name: _studentName,
         device: device);
+    // Bind before the snapshot is looked at, not inside the branch below.
+    //
+    // The events stream is a plain broadcast controller with no buffering, so
+    // the host's opening `session_state` greeting — which arrives the moment
+    // the socket opens — was being dropped on the floor: nothing was listening
+    // yet. And with a null snapshot every later frame hit the
+    // `if (base == null) return` in the handler, so the student could never be
+    // brought back without leaving and rejoining. Listening unconditionally
+    // is what lets a recovered session populate itself.
+    bind();
     if (snapshot != null) {
       _snapshot = snapshot;
       _syncPaused = snapshot.syncPaused;
       _hasDocument = snapshot.documentId != null;
-      bind();
       // Only a snapshot proves the host is answering. Saying "live" when the
       // fetch failed showed a green chip over a session that never connected;
       // the client sets live itself on the first socket frame from here.
@@ -117,10 +126,15 @@ class SyncProvider extends ChangeNotifier {
     } else {
       _link = LinkState.offline;
       _error = 'The teacher answered, but the session could not be read. '
-          'Try scanning the QR again.';
+          'The socket is open, so this may still catch up — otherwise scan the '
+          'QR again.';
     }
     notifyListeners();
-    return true;
+    // False on this path. The doc comment above says "returns true only when
+    // the host really answers", and the caller shows a "Joined classroom"
+    // confirmation on a true: the student was told they had joined a session
+    // the app had not actually read.
+    return snapshot != null;
   }
 
   /// Listen for teacher broadcasts and mirror them into [_snapshot].
@@ -136,22 +150,49 @@ class SyncProvider extends ChangeNotifier {
         case SyncEventType.documentChanged:
         case SyncEventType.pageChanged:
           final base = _snapshot;
-          if (base == null) return;
-          _snapshot = base.copyWith(
-            documentId: () => event.documentId ?? base.documentId,
-            documentName: () =>
-                event.documentName ?? base.documentName,
-            // Must be mirrored too: a student who joined before the teacher
-            // shared anything learns the fetch URL from this event alone.
-            documentUrl: () => event.documentUrl ?? base.documentUrl,
-            page: event.page ?? base.page,
-            totalPages: event.totalPages ?? base.totalPages,
-            syncPaused: event.syncPaused ?? base.syncPaused,
-          );
+          if (base == null) {
+            // Recover rather than drop. The first snapshot fetch failed but the
+            // socket is open and the host is talking, so the broadcast is the
+            // only thing this student will ever get. Returning here is what left
+            // them on "Joining Session…" with a green chip and no way out but
+            // leaving and rejoining.
+            _snapshot = ClassroomSession(
+              id: _sessionId,
+              name: _sessionId,
+              hostIp: _host,
+              port: _port,
+              createdAt: DateTime.now(),
+              isActive: true,
+              documentId: event.documentId,
+              documentName: event.documentName,
+              documentUrl: event.documentUrl,
+              page: event.page ?? 1,
+              totalPages: event.totalPages ?? 0,
+              syncPaused: event.syncPaused ?? false,
+            );
+          } else {
+            _snapshot = base.copyWith(
+              documentId: () => event.documentId ?? base.documentId,
+              documentName: () =>
+                  event.documentName ?? base.documentName,
+              // Must be mirrored too: a student who joined before the teacher
+              // shared anything learns the fetch URL from this event alone.
+              documentUrl: () => event.documentUrl ?? base.documentUrl,
+              page: event.page ?? base.page,
+              totalPages: event.totalPages ?? base.totalPages,
+              syncPaused: event.syncPaused ?? base.syncPaused,
+            );
+          }
           if (event.documentId != null) _hasDocument = true;
           _syncPaused = _snapshot!.syncPaused;
           // Following the class again is normal teaching, so the hold is over.
           if (event.page != null) _takenOver = false;
+          // A frame arriving at all is proof the host is talking, which is the
+          // one thing the failed fetch could not tell us.
+          if (_link != LinkState.ended) {
+            _link = LinkState.live;
+            _error = null;
+          }
           notifyListeners();
           break;
         case SyncEventType.sessionEnded:
@@ -242,6 +283,11 @@ class SyncProvider extends ChangeNotifier {
     _hasDocument = false;
     _syncPaused = false;
     _handRaised = false;
+    // Also cleared: canNavigate is `allowStudentNav && !_takenOver`, and this
+    // was not among the resets, so a student the teacher had ever taken over
+    // could not turn a page again for the rest of the app's life — including
+    // in the next class, which allows it.
+    _takenOver = false;
     _error = null;
     await _eventSub?.cancel();
     _eventSub = null;

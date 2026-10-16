@@ -107,9 +107,13 @@ class TeacherHostClient {
     Map<String, dynamic> body,
   ) async {
     // No host address configured means the teacher is running standalone
-    // (no laptop server). That is a legitimate mode, not an error.
+    // (no laptop server). That is a legitimate mode, not an error — but it was
+    // reporting success to the status listener *and* returning failure to the
+    // caller from the same branch, so `hostReachable` read true while
+    // `classroomReady` read false and the app bar could never agree on a
+    // colour. A deliberate no-op reports as one thing: not called, not failed.
     if (!_usable(s)) {
-      _status(true, null);
+      _status(null, null);
       return false;
     }
     try {
@@ -129,7 +133,14 @@ class TeacherHostClient {
     }
   }
 
-  void _status(bool ok, String? error) {
+  /// [ok] is null when the call was not attempted — the standalone case — and
+  /// is deliberately not reported as either success or failure.
+  void _status(bool? ok, String? error) {
+    if (ok == null) return;
+    // Only when something actually changed. Every control call used to notify
+    // unconditionally, so turning a page rebuilt the teacher's whole screen
+    // twice: once for the change, once for the round trip that changed nothing.
+    if (lastCallOk == ok && lastError == error) return;
     lastCallOk = ok;
     lastError = error;
     onStatusChanged?.call();

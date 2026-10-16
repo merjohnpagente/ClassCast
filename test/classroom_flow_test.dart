@@ -148,6 +148,117 @@ void main() {
     final impostor = await send('GET', '/ws?session=CLASS-SAFE&role=teacher');
     expect(impostor.statusCode, 403);
   });
+
+  // A raised hand that the teacher never sees is a broken feature, and it was
+  // broken silently: the host switched on 'raise_hand' while the client had
+  // always sent 'hand_raised', so every frame fell through to a bare
+  // `default: return` and nothing anywhere said so.
+  test('a raised hand reaches the teacher', () async {
+    const teacherKey = 'HANDKEY';
+    await send('POST', '/api/session', {
+      'id': 'CLASS-HAND',
+      'teacherKey': teacherKey,
+    });
+
+    // The teacher's own socket, subscribed to events but not on the roster.
+    final teacher = IOWebSocketChannel.connect(Uri.parse(
+        'ws://127.0.0.1:$port/ws?session=CLASS-HAND&role=teacher&key=$teacherKey'));
+    final teacherInbox = StreamQueue<dynamic>(teacher.stream);
+    addTearDown(() async {
+      await teacherInbox.cancel();
+      await teacher.sink.close();
+    });
+    await teacherInbox.next; // the greeting
+
+    final student = IOWebSocketChannel.connect(Uri.parse(
+        'ws://127.0.0.1:$port/ws?session=CLASS-HAND&name=Ana&device=Android'));
+    final studentInbox = StreamQueue<dynamic>(student.stream);
+    addTearDown(() async {
+      await studentInbox.cancel();
+      await student.sink.close();
+    });
+    await studentInbox.next; // the greeting
+
+    // Exactly what SyncProvider.setHandRaised(true) puts on the wire.
+    student.sink.add(SyncProtocol.encode(SyncEvent(
+      type: SyncEventType.handRaised,
+      sessionId: 'CLASS-HAND',
+      participantName: 'Ana',
+    )));
+
+    final relayed = await teacherInbox.nextWhere(
+      (frame) => SyncProtocol.decode(frame)?.type == SyncEventType.handRaised,
+      const Duration(seconds: 3),
+    );
+    final event = SyncProtocol.decode(relayed)!;
+    expect(event.participantName, 'Ana',
+        reason: 'the teacher has to know who wants attention');
+
+    student.sink.add(SyncProtocol.encode(SyncEvent(
+      type: SyncEventType.handLowered,
+      sessionId: 'CLASS-HAND',
+      participantName: 'Ana',
+    )));
+    await teacherInbox.nextWhere(
+      (frame) => SyncProtocol.decode(frame)?.type == SyncEventType.handLowered,
+      const Duration(seconds: 3),
+    );
+
+    // And a student browsing ahead reports where they went.
+    student.sink.add(SyncProtocol.encode(SyncEvent(
+      type: SyncEventType.studentPageChanged,
+      sessionId: 'CLASS-HAND',
+      participantName: 'Ana',
+      page: 7,
+    )));
+    final page = await teacherInbox.nextWhere(
+      (frame) =>
+          SyncProtocol.decode(frame)?.type == SyncEventType.studentPageChanged,
+      const Duration(seconds: 3),
+    );
+    expect(SyncProtocol.decode(page)!.page, 7);
+  });
+
+  // This route did not exist on this host, so "Sync all" and the per-student
+  // "Take control" button both came back 404 — and a 404 is what flips the
+  // app's status chip to a red "Not sharing", so the failure looked like the
+  // whole classroom had gone rather than like one missing button.
+  test('take control pulls a student back, and needs the key', () async {
+    const teacherKey = 'CTRLKEY';
+    await send('POST', '/api/session', {
+      'id': 'CLASS-CTRL',
+      'teacherKey': teacherKey,
+    });
+
+    final student = IOWebSocketChannel.connect(Uri.parse(
+        'ws://127.0.0.1:$port/ws?session=CLASS-CTRL&name=Ana&device=Android'));
+    final studentInbox = StreamQueue<dynamic>(student.stream);
+    addTearDown(() async {
+      await studentInbox.cancel();
+      await student.sink.close();
+    });
+    await studentInbox.next; // the greeting
+
+    // No key: still refused, like every other control route.
+    final refused = await send('POST', '/api/take-control', {});
+    expect(refused.statusCode, 403);
+
+    final ok = await send('POST', '/api/take-control', {
+      'teacherKey': teacherKey,
+    });
+    expect(ok.statusCode, 200);
+    final body = await json(ok);
+    expect(body['ok'], isTrue);
+    expect(body['notified'], 1,
+        reason: 'the one connected student has to be told');
+
+    final relayed = await studentInbox.nextWhere(
+      (frame) => SyncProtocol.decode(frame)?.type == SyncEventType.takeControl,
+      const Duration(seconds: 3),
+    );
+    expect(SyncProtocol.decode(relayed), isNotNull,
+        reason: 'take control has to reach the student');
+  });
 }
 
 /// Minimal queue over a socket stream, so a test can await frames in order

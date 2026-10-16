@@ -157,9 +157,17 @@ class _TeacherPresentationScreenState
                         Padding(
                           padding: const EdgeInsets.only(right: 4),
                           child: StatusChip(
-                            label: sessions.classroomError == null
-                                ? 'Host offline'
-                                : 'Not sharing',
+                            // Names which of the two is wrong, instead of one
+                            // label for both. A teacher on the classroom Wi-Fi
+                            // whose control calls all succeed and whose session
+                            // registration was refused an hour ago was told
+                            // "Not sharing" and had no way to tell which half
+                            // of that was true.
+                            label: !sessions.classroomReady
+                                ? 'Not registered'
+                                : sessions.classroomError == null
+                                    ? 'Host offline'
+                                    : 'Not sharing',
                             icon: Icons.cloud_off,
                             color: AppColors.error,
                             background: AppColors.errorBg,

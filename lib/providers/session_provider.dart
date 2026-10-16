@@ -272,8 +272,35 @@ class SessionProvider extends ChangeNotifier {
     // there, or the QR and the roster keep pointing at an address that no
     // longer exists — which is what happened after switching from Wi-Fi to a
     // hotspot mid-lesson.
-    unawaited(_host.startSession(_active!));
+    //
+    // Awaited, and its result acted on. This used to be fire-and-forget, and
+    // the verdict written at session-creation time was never revisited, so a
+    // teacher who moved onto the classroom Wi-Fi kept being told "students
+    // cannot reach this device" for the rest of the lesson even though every
+    // control call from then on was succeeding.
+    unawaited(_reannounce());
+    // The teacher's own socket is bound to the old address, so it has to be
+    // re-opened for the roster to keep updating on the new network.
     _openHostEvents(_active!);
+  }
+
+  /// Re-registers the session on the host and records whether it took.
+  Future<void> _reannounce() async {
+    final session = _active;
+    if (session == null) return;
+    final registered = await _host.startSession(session);
+    if (_active?.id != session.id) return;
+    if (registered) {
+      if (_hostReachable) return;
+      _hostReachable = true;
+      _hostError = null;
+    } else {
+      if (!_hostReachable) return;
+      _hostReachable = false;
+      _hostError = 'Students cannot reach this device at '
+          '${session.hostIp}:${session.port}.';
+    }
+    _safeNotify();
   }
 
   /// Re-reads this device's address and tells the host about it.

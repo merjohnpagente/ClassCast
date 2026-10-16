@@ -75,7 +75,11 @@ class ClasscastClient {
     }
   }
 
-  /// Open the live channel. Reconnects with backoff on drops.
+  /// Open the live channel, from scratch. Reconnects with backoff on drops.
+  ///
+  /// This is the deliberate entry point, so it starts the backoff over. The
+  /// retry path calls [_open] directly instead, which is what stops every
+  /// attempt from resetting the counter and pinning the delay at two seconds.
   void subscribe({
     required String host,
     required int port,
@@ -83,10 +87,34 @@ class ClasscastClient {
     String name = '',
     String device = '',
   }) {
+    _open(
+      host: host,
+      port: port,
+      sessionId: sessionId,
+      name: name,
+      device: device,
+      resetBackoff: true,
+    );
+  }
+
+  void _open({
+    required String host,
+    required int port,
+    required String sessionId,
+    required bool resetBackoff,
+    String name = '',
+    String device = '',
+  }) {
     _stopReconnect();
     _setState(LinkState.connecting);
+    if (resetBackoff) _attempt = 0;
+    // The previous channel's socket has to actually close. Cancelling the
+    // subscription only stops delivery; the underlying WebSocket stayed open,
+    // so every retry abandoned a live TCP connection and the host collected
+    // them as dead entries in its socket set.
+    _teardown();
     try {
-      _channel = WebSocketChannel.connect(
+      final channel = WebSocketChannel.connect(
         SyncProtocol.wsUri(
             host: host,
             port: port,
@@ -94,16 +122,15 @@ class ClasscastClient {
             name: name,
             device: device),
       );
+      _channel = channel;
       // Hello frame so the server registers this participant.
-      _channel!.sink.add(SyncProtocol.encode(SyncEvent(
+      channel.sink.add(SyncProtocol.encode(SyncEvent(
         type: SyncEventType.join,
         sessionId: sessionId,
         participantName: name,
         message: device,
       )));
-      _attempt = 0;
-      _sub?.cancel();
-      _sub = _channel!.stream.listen(
+      _sub = channel.stream.listen(
         (frame) {
           // "Live" means the host answered, not that we asked. connect()
           // returns a channel object immediately, so marking it live here
@@ -145,10 +172,27 @@ class ClasscastClient {
         Duration(seconds: _attempt >= 5 ? 10 : 2 * _attempt);
     _reconnectTimer = Timer(wait, () {
       if (_state == LinkState.ended) return;
-      subscribe(
+      // resetBackoff: false, or this is the flat two-second loop again.
+      _open(
           host: host, port: port, sessionId: sessionId,
-          name: name, device: device);
+          name: name, device: device, resetBackoff: false);
     });
+  }
+
+  /// Closes the current channel for real.
+  ///
+  /// `StreamSubscription.cancel` stops delivery but leaves the socket open, so
+  /// every reconnect used to leak one. Nothing here is awaited on purpose: a
+  /// close that is slow to finish must not delay the new connection.
+  void _teardown() {
+    final sub = _sub;
+    final channel = _channel;
+    _sub = null;
+    _channel = null;
+    unawaited(sub?.cancel());
+    try {
+      unawaited(channel?.sink.close());
+    } catch (_) {/* already gone */}
   }
 
   void _stopReconnect() {
@@ -160,12 +204,7 @@ class ClasscastClient {
   Future<void> disconnect() async {
     _setState(LinkState.ended);
     _stopReconnect();
-    await _sub?.cancel();
-    _sub = null;
-    try {
-      await _channel?.sink.close();
-    } catch (_) {/* ignore */}
-    _channel = null;
+    _teardown();
   }
 
   Future<void> dispose() async {

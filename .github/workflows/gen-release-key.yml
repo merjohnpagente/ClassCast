@@ -9,7 +9,7 @@ name: Generate release key
 # with "the package appears to be invalid". The key has to exist in the repo
 # for the signature to be the same on every build.
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 permissions:
   contents: write

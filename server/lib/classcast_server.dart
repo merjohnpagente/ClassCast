@@ -56,6 +56,11 @@ class ClasscastServer {
 
   final Set<WebSocketChannel> _sockets = {};
 
+  /// Participant id → its socket, so "take control" can be aimed at one student
+  /// instead of every one of them. Without it the per-student button on the
+  /// Students screen could only ever pull the whole room back.
+  final Map<String, WebSocketChannel> _socketsById = {};
+
   /// Real LAN address students use (resolved in [serve]).
   String advertisedIp = '';
 
@@ -191,7 +196,45 @@ class ClasscastServer {
       return _json(200, {'ok': true, 'session': _snapshot()});
     });
 
-router.post('/api/end', (Request req) async {
+    // Pull one wandering student — or the whole room — back onto the class
+    // page. This route did not exist, so the teacher client's request fell
+    // through to the catch-all and came back 404: "Sync all" and the
+    // per-student "Take control" button did nothing at all against this host,
+    // and the 404 then flipped the app's status chip to a red "Not sharing".
+    router.post('/api/take-control', (Request req) async {
+      final body = await _readJson(req);
+      if (!_checkTeacher(body)) {
+        return _json(403, {'ok': false, 'error': 'Permission denied'});
+      }
+      final pid = body['participantId'] as String? ?? '';
+      final frame = jsonEncode({
+        'type': 'take_control',
+        'sessionId': _session?['id'] ?? '',
+        if (pid.isNotEmpty) 'participantId': pid,
+        'page': _page,
+        'totalPages': _totalPages,
+      });
+      var notified = 0;
+      if (pid.isEmpty) {
+        for (final socket in _socketsById.values) {
+          try {
+            socket.sink.add(frame);
+            notified++;
+          } catch (_) {/* that student just left */}
+        }
+      } else {
+        final socket = _socketsById[pid];
+        if (socket != null) {
+          try {
+            socket.sink.add(frame);
+            notified = 1;
+          } catch (_) {/* that student just left */}
+        }
+      }
+      return _json(200, {'ok': true, 'notified': notified});
+    });
+
+    router.post('/api/end', (Request req) async {
       final body = await _readJson(req);
       if (!_checkTeacher(body)) {
         return _json(403, {'ok': false, 'error': 'Permission denied'});
@@ -344,8 +387,9 @@ router.post('/api/end', (Request req) async {
       return;
     }
     final pid =
-        'ws-${_sockets.length}-${DateTime.now().millisecondsSinceEpoch}';
+        'ws-${_sockets.length}-${DateTime.now().microsecondsSinceEpoch}';
     _participants[pid] = {'id': pid, 'name': name, 'device': device};
+    _socketsById[pid] = channel;
     // Reconnecting students get the current state immediately.
     channel.sink.add(jsonEncode(_snapshotEvent('session_state')));
     _broadcast({
@@ -358,6 +402,7 @@ router.post('/api/end', (Request req) async {
       (frame) => _onFrame(channel, pid, sessionId, frame),
       onDone: () {
         _sockets.remove(channel);
+        _socketsById.remove(pid);
         _participants.remove(pid);
         _broadcast({
           'type': 'participant_left',
@@ -365,10 +410,14 @@ router.post('/api/end', (Request req) async {
           'participantId': pid,
         });
       },
-      onError: (_) => _sockets.remove(channel),
+      onError: (_) {
+        _sockets.remove(channel);
+        _socketsById.remove(pid);
+      },
       cancelOnError: false,
     );
   }
+
 
   void _onFrame(WebSocketChannel channel, String pid, String sessionId,
       Object? frame) {
@@ -378,24 +427,69 @@ router.post('/api/end', (Request req) async {
     } catch (_) {
       return;
     }
-    // Students must not control the presentation: only `join` frames
-    // from non-teacher sockets are accepted. Teacher control frames
-    // arrive via the REST API above (validated by teacherKey).
-    if (msg['type'] == 'join') {
-      final name = msg['participantName'] as String? ?? 'Student';
-      _participants[pid] = {
-        'id': pid,
-        'name': name,
-        'device': msg['message'] ?? ''
-      };
-      channel.sink.add(jsonEncode(_snapshotEvent('session_state')));
-      _broadcast({
-        'type': 'participant_joined',
-        'sessionId': sessionId,
-        'participantId': pid,
-        'participantName': name,
-      });
+    // Students must not control the presentation: the class page is teacher
+    // control only, over REST with the teacher key. They may, however, *ask*
+    // for attention and report where they are, and those have to reach the
+    // teacher's screen — a hand raised that the teacher never sees is a broken
+    // feature, and it was exactly that: this handler only knew `join`, so every
+    // other frame a student sent fell on the floor.
+    final name = msg['participantName'] as String? ?? 'Student';
+    switch (msg['type']) {
+      case 'join':
+        _participants[pid] = {
+          'id': pid,
+          'name': name,
+          'device': msg['message'] ?? ''
+        };
+        _socketsById[pid] = channel;
+        channel.sink.add(jsonEncode(_snapshotEvent('session_state')));
+        _broadcast({
+          'type': 'participant_joined',
+          'sessionId': sessionId,
+          'participantId': pid,
+          'participantName': name,
+        });
+        return;
+      case 'hand_raised':
+        _broadcastParticipant('hand_raised', sessionId, pid, name,
+            page: null);
+        return;
+      case 'hand_lowered':
+        _broadcastParticipant('hand_lowered', sessionId, pid, name,
+            page: null);
+        return;
+      case 'student_page_changed':
+        final page = (msg['page'] as num?)?.toInt();
+        if (page == null) return;
+        // Reported, not applied: the teacher sees where this student is.
+        _broadcastParticipant('student_page_changed', sessionId, pid, name,
+            page: page);
+        return;
+      default:
+        return;
     }
+  }
+
+  /// Relays one student's own event to everybody, including the teacher.
+  ///
+  /// The name is taken from the roster rather than the frame, so a student
+  /// cannot rename themselves in the teacher's list by lying in a message.
+  void _broadcastParticipant(
+    String type,
+    String sessionId,
+    String pid,
+    String fallbackName, {
+    int? page,
+  }) {
+    if (pid.isEmpty) return;
+    _broadcast({
+      'type': type,
+      'sessionId': sessionId,
+      'participantId': pid,
+      'participantName': _participants[pid]?['name'] ?? fallbackName,
+      if (page != null) 'page': page,
+      'totalPages': _totalPages,
+    });
   }
 
   Map<String, dynamic> _snapshot() => {

@@ -438,6 +438,12 @@ class ClasscastHost {
     // for attention and report where they are, and those have to reach the
     // teacher's screen — a hand raised that the teacher never sees is a
     // broken feature.
+    //
+    // These case labels are the client's wire names, taken from
+    // `SyncEventType.wire`. They were 'raise_hand' / 'lower_hand' /
+    // 'student_page', which the client has never sent, so every frame a student
+    // sent fell through to `default: return` and the feature was dead in both
+    // directions without anything ever saying so.
     final name = _cleanName(message['participantName'] as String?);
     switch (message['type']) {
       case 'join':
@@ -455,7 +461,7 @@ class ClasscastHost {
           'participantName': name,
         });
         return;
-      case 'raise_hand':
+      case 'hand_raised':
         if (pid.isEmpty) return;
         // The teacher tracks hands from the broadcast; the host keeps no copy.
         _broadcast({
@@ -465,7 +471,7 @@ class ClasscastHost {
           'participantName': _participants[pid]?['name'] ?? name,
         });
         return;
-      case 'lower_hand':
+      case 'hand_lowered':
         if (pid.isEmpty) return;
         _broadcast({
           'type': 'hand_lowered',
@@ -474,7 +480,7 @@ class ClasscastHost {
           'participantName': _participants[pid]?['name'] ?? name,
         });
         return;
-      case 'student_page':
+      case 'student_page_changed':
         if (pid.isEmpty) return;
         final page = (message['page'] as num?)?.toInt();
         if (page == null) return;
