@@ -7,7 +7,6 @@ import '../../models/shared_document.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/document_viewer.dart';
-import '../../widgets/motion.dart';
 import '../../widgets/state_cards.dart';
 
 /// Exactly what a student sees, on the teacher's own screen.
@@ -83,96 +82,124 @@ class _StudentPreviewScreenState extends State<StudentPreviewScreen> {
     );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Student view'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: Center(
-              child: Text(
-                '${doc.name}.${doc.extension}',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: AppColors.muted),
-              ),
-            ),
-          ),
-        ],
-      ),
-      body: Center(
-        child: ContentWidth(
-          maxWidth: 1000,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              FadeIn(
-                child: _header(session),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: doc.kind == DocKind.pdf
-                    ? viewer
-                    : PageSwitcher(
-                        identity: 'preview-${session.page}',
-                        child: viewer,
-                      ),
-              ),
-              const SizedBox(height: 8),
-              _footer(session),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _header(ClassroomSession session) {
-    final total = session.totalPages;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-      child: Row(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: Text(session.name)),
+      body: Column(
         children: [
           Expanded(
-            child: Text(
-              session.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w700, fontSize: 15),
+            child: Padding(
+              padding: EdgeInsets.all(context.pagePadding),
+              child: Card(
+                clipBehavior: Clip.antiAlias,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: doc.kind == DocKind.pdf
+                      ? viewer
+                      : PageSwitcher(
+                          identity: 'preview-${session.page}',
+                          child: viewer,
+                        ),
+                ),
+              ),
             ),
           ),
-          Text(
-            total > 0 ? 'Page ${session.page} / $total' : 'Page ${session.page}',
-            style: const TextStyle(color: AppColors.muted, fontSize: 13),
+          _statusLine(context, session),
+          const SizedBox(height: 8),
+          _pageBar(session),
+        ],
+      ),
+    );
+  }
+
+  /// One line saying what this screen is and what the students may do.
+  ///
+  /// It used to be a row of bare chevrons and a hand icon with no tap handlers
+  /// at all. Chevrons are the universal page-control glyph — and the app uses
+  /// the very same ones as real buttons in the student viewer — so a
+  /// screen-reader user was told about three apparently-tappable icons that
+  /// did nothing, and everyone else saw controls that were not controls.
+  Widget _statusLine(BuildContext context, ClassroomSession session) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        children: [
+          const Icon(Icons.visibility_outlined,
+              size: 16, color: AppColors.muted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'This is what your students see. '
+              '${session.allowStudentNav ? 'They may also turn pages.' : 'The teacher controls every screen.'}',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AppColors.muted),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _footer(ClassroomSession session) {
-    return Row(
-      children: [
-        const Icon(Icons.chevron_left,
-            size: 20, color: AppColors.muted),
-        Expanded(
-          child: Text(
-            'Teacher controls the presentation'
-            '${session.allowStudentNav ? ' · you may also turn pages' : ''}',
-            textAlign: TextAlign.center,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: AppColors.muted),
-          ),
+  /// The page bar, drawn exactly as the student's own viewer draws it so the
+  /// teacher recognises the screen they are about to show the room.
+  ///
+  /// The arrows are deliberately inert: this screen mirrors the class, and the
+  /// teacher drives the page from the presentation screen, not from here.
+  Widget _pageBar(ClassroomSession session) {
+    final total = session.totalPages;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            const _CircleArrow(
+                icon: Icons.chevron_left, tooltip: 'Previous page'),
+            Expanded(
+              child: Text(
+                total > 0 ? '${session.page} / $total' : '${session.page}',
+                textAlign: TextAlign.center,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
+            const _CircleArrow(
+                icon: Icons.chevron_right, tooltip: 'Next page'),
+          ],
         ),
-        const Icon(Icons.chevron_right,
-            size: 20, color: AppColors.muted),
-        const Icon(Icons.pan_tool_outlined,
-            size: 20, color: AppColors.muted),
-        const SizedBox(width: 16),
-      ],
+      ),
+    );
+  }
+}
+
+/// A circular arrow shown in its disabled state, because the teacher does not
+/// turn pages from the preview. Same 48dp footprint as the student's, so the
+/// two screens line up.
+class _CircleArrow extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+
+  const _CircleArrow({required this.icon, required this.tooltip});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: null,
+      icon: Icon(icon),
+      style: IconButton.styleFrom(
+        backgroundColor: AppColors.surfaceSoft,
+        disabledForegroundColor: AppColors.muted,
+        minimumSize: const Size(48, 48),
+        shape: const CircleBorder(),
+      ),
     );
   }
 }
