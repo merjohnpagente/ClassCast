@@ -6,11 +6,18 @@ import '../theme/app_colors.dart';
 import '../widgets/motion.dart';
 import '../widgets/ui_kit.dart';
 
+/// How long the splash stays up, and how long the progress bar takes to
+/// cross. They are deliberately the same length: the bar finishes exactly as
+/// the app hands over, so the wait reads as the bar filling rather than as
+/// the bar filling and then something else happening.
+static const _duration = Duration(milliseconds: 4000);
+
 /// Splash: the mark settles in on a full-bleed blue field, then the app moves
 /// on.
 ///
 /// Everything is finite — a looping animation here would keep the CPU awake
-/// during the one moment the app has nothing to do.
+/// during the one moment the app has nothing to do. Tapping anywhere skips
+/// straight to the role screen, so the four seconds are never in the way.
 class SplashScreen extends StatefulWidget {
   final VoidCallback onFinished;
 
@@ -38,7 +45,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
   void _hold() {
     if (_done) return;
-    _timer = Timer(const Duration(milliseconds: 1400), _finish);
+    _timer = Timer(_duration, _finish);
   }
 
   void _finish() {
@@ -132,12 +139,15 @@ class _SplashScreenState extends State<SplashScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          SizedBox(
-                            width: 110,
-                            child: TweenAnimationBuilder<double>(
-                              tween: Tween<double>(begin: 0, end: 1),
-                              duration: const Duration(milliseconds: 1200),
-                              curve: Curves.easeInOutCubic,
+// A determinate sweep rather than an endless spinner: it
+                              // fills across the same four seconds the screen is
+                              // up, and finishes exactly as the app hands over.
+                              SizedBox(
+                                width: 110,
+                                child: TweenAnimationBuilder<double>(
+                                  tween: Tween<double>(begin: 0, end: 1),
+                                  duration: _duration,
+                                  curve: Curves.easeInOutCubic,
                               builder: (context, value, _) => ClipRRect(
                                 borderRadius: BorderRadius.circular(2),
                                 child: LinearProgressIndicator(

@@ -24,8 +24,9 @@ void main() {
         child: const ClassCastApp(),
       ),
     );
-    // Splash (1.4s timer) then role selection.
-    await tester.pump(const Duration(milliseconds: 1600));
+    // Splash holds for 4s so the mark, the tagline and the credit are all
+    // readable, then role selection.
+    await tester.pump(const Duration(milliseconds: 4500));
     expect(find.text('Choose your role'), findsOneWidget);
     expect(find.text('Teacher'), findsOneWidget);
     expect(find.text('Student'), findsOneWidget);
@@ -38,7 +39,7 @@ void main() {
         child: const ClassCastApp(),
       ),
     );
-    await tester.pump(const Duration(milliseconds: 1600));
+    await tester.pump(const Duration(milliseconds: 4500));
     await tester.tap(find.text('Teacher'));
     await tester.pumpAndSettle();
     expect(find.text('Create New Session'), findsOneWidget);
@@ -63,7 +64,7 @@ void main() {
         child: const ClassCastApp(),
       ),
     );
-    await tester.pump(const Duration(milliseconds: 1600));
+    await tester.pump(const Duration(milliseconds: 4500));
     await tester.tap(find.text('Student'));
     // StudentShell uses an IndexedStack that eagerly builds the waiting
     // screen, which shows an endless CircularProgressIndicator. So we
@@ -85,7 +86,7 @@ void main() {
         child: const ClassCastApp(),
       ),
     );
-    await tester.pump(const Duration(milliseconds: 1600));
+    await tester.pump(const Duration(milliseconds: 4500));
     await tester.tap(find.text('Teacher'));
     await tester.pumpAndSettle();
 
@@ -106,7 +107,7 @@ void main() {
         child: const ClassCastApp(),
       ),
     );
-    await tester.pump(const Duration(milliseconds: 1600));
+    await tester.pump(const Duration(milliseconds: 4500));
     await tester.tap(find.text('Student'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
