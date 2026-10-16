@@ -1,6 +1,7 @@
 
 import 'package:classcast_offline/models/sync_event.dart';
 import 'package:classcast_offline/providers/session_provider.dart';
+import 'package:classcast_offline/services/host/classcast_host.dart';
 import 'package:classcast_offline/services/local_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -34,6 +35,10 @@ void main() {
   tearDown(() async {
     sessions.dispose();
     setLocalStoreOverride(null);
+    // Each test runs its own classroom. Leaving the host up kept the previous
+    // test's session registered, and the next createSession's teacher socket
+    // was then refused by a host that still belonged to the last test.
+    await ClasscastHost.instance.stop();
   });
 
   test('refreshing stored sessions leaves the live roster alone', () async {

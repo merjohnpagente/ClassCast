@@ -87,6 +87,14 @@ class SessionProvider extends ChangeNotifier {
           onError: (_) => _scheduleHostEventsRetry(s),
           onDone: () => _scheduleHostEventsRetry(s),
           cancelOnError: false);
+      // Connecting is asynchronous, and a refused upgrade — the host has no
+      // such session yet, or the address just changed — completes `ready`
+      // with an error that never reaches the stream. Unobserved, that error
+      // is an unhandled exception; observed, it is the same quiet retry as a
+      // dropped socket.
+      unawaited(channel.ready.catchError((_) {
+        _scheduleHostEventsRetry(s);
+      }));
     } catch (_) {
       _scheduleHostEventsRetry(s);
     }
