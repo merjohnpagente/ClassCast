@@ -150,6 +150,19 @@ jobs:
           name: classcast-apk
           path: build/app/outputs/flutter-apk/app-release.apk
 
+      # A laptop, not a phone. The release build above is arm, which an
+      # emulator on a PC cannot run at all, so the classroom host could not be
+      # tried on a laptop without a device. x86_64 is what Android Studio,
+      # WSA and the standalone emulators all want.
+      - name: Build laptop APK
+        run: flutter build apk --release --target-platform android-x64
+
+      - name: Upload laptop APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: classcast-apk-laptop
+          path: build/app/outputs/flutter-apk/app-release.apk
+
       - name: Attach APK to release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
