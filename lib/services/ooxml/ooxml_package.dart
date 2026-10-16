@@ -86,12 +86,14 @@ class OoxmlPackage {
     // from the headers.
     var inflated = 0;
     var entries = 0;
+    var sawEntry = false;
     const maxInflated = 256 * 1024 * 1024;
     const maxEntries = 20000;
     final parts = <String, Uint8List>{};
     try {
       for (final file in archive) {
         if (!file.isFile) continue;
+        sawEntry = true;
         if (++entries > maxEntries) {
           fail('This file has more parts than the app will open — it is either '
               'not a presentation or it is far too large for a phone.');
@@ -114,7 +116,18 @@ class OoxmlPackage {
     }
     // A real Office package always carries [Content_Types].xml.
     if (!parts.containsKey('[content_types].xml')) {
-      fail('The archive opened but holds no Office document inside it.');
+      // An archive that decoded but yielded no entries at all is what a
+      // transfer that stopped half way leaves behind — the zip decoder is
+      // lenient enough to accept the header it did receive and hand back an
+      // empty archive, which otherwise reads as "this is not an Office file"
+      // and sends the teacher off to re-save a perfectly good deck.
+      if (!sawEntry) {
+        fail('The archive opened but holds nothing inside it. If this came '
+            'from another device, the transfer stopped part way — sharing it '
+            'again is worth a try.');
+      } else {
+        fail('The archive opened but holds no Office document inside it.');
+      }
       return null;
     }
     return OoxmlPackage._(parts);

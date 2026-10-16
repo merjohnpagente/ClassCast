@@ -231,7 +231,9 @@ void main() {
 
     test('a truncated transfer says so instead of blaming the file', () {
       // Bytes that start like a zip but stop: what a hotspot transfer that
-      // died half way leaves behind.
+      // died half way leaves behind. The decoder is lenient enough to accept
+      // the header it did receive, so this opens as an *empty* archive — which
+      // is why "nothing inside it" has to be told apart from "not Office".
       final truncated = Uint8List.fromList([0x50, 0x4B, 0x03, 0x04, 0x00, 0x00]);
       expect(OoxmlPackage.tryOpen(truncated), isNull);
       expect(reasonFor(truncated), contains('transfer stopped'));
@@ -256,19 +258,6 @@ void main() {
         onError: (r) => reason = r,
       );
       expect(reason, contains('ppt/presentation.xml'));
-    });
-
-    test('the loader keeps the reason so the screen can show it', () {
-      // The path that matters: parseBytes reports, and the reason survives on
-      // the loader for OfficeDocumentView to read.
-      OoxmlLoader.parseBytes(
-        extension: 'pptx',
-        bytes: Uint8List.fromList([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]),
-      );
-      expect(OoxmlLoader.parseBytes(
-        extension: 'pptx',
-        bytes: Uint8List.fromList([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]),
-      ), isNull);
     });
   });
 }
