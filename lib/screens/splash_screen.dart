@@ -158,10 +158,23 @@ class _SplashScreenState extends State<SplashScreen> {
                               fontSize: 13,
                             ),
                           ),
+                          const SizedBox(height: 14),
+                          // The credit sits last, at the very bottom of the
+                          // blue field, where it belongs: it is not something
+                          // the teacher has to read to start a class.
+                          const Text(
+                            'By MerjDev',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.4,
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 28),
                   ],
                 ),
               ),

@@ -1,7 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/app_state.dart';
 import '../../providers/session_provider.dart';
@@ -23,9 +26,41 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  static const _githubUser = 'merjohnpagente';
+
+  /// Spaced the way GCash displays it, so it can be read off the screen and
+  /// typed into a wallet without guessing the grouping.
+  static const _gcashNumber = '0915 043 5696';
+
+  static const _gcashDigits = '09150435696';
+
   String _ip = '';
   String? _wifi;
   bool _loading = true;
+
+  /// Opening an external link must never be able to crash the settings page:
+  /// a phone with no browser, or a browser that refuses the intent, is normal
+  /// enough that the user gets a sentence instead of a red screen.
+  Future<void> _openGithub(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final uri = Uri.parse('https://github.com/$_githubUser');
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) throw StateError('launchUrl returned false');
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not open the browser.')),
+      );
+    }
+  }
+
+  Future<void> _copyGcash(BuildContext context) async {
+    await Clipboard.setData(const ClipboardData(text: _gcashDigits));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('GCash number copied — $_gcashNumber')),
+    );
+  }
 
   @override
   void initState() {
@@ -220,6 +255,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.info_outline,
                 title: 'ClassCast Offline',
                 subtitle: 'Share. Present. Learn. Works without internet.',
+              ),
+              const AppListRow(
+                icon: FontAwesomeIcons.user,
+                title: 'Developed by MerjDev',
+                iconColor: AppColors.secondary,
+                iconBackground: AppColors.secondarySoft,
+              ),
+              AppListRow(
+                icon: FontAwesomeIcons.github,
+                title: 'GitHub',
+                subtitle: 'github.com/$_githubUser',
+                trailing: const AppChevron(),
+                onTap: () => _openGithub(context),
+              ),
+              // Tapping copies the number: there is no universal GCash deep
+              // link, so the number travels and the teacher pastes it into
+              // their wallet app.
+              AppListRow(
+                icon: FontAwesomeIcons.mugHot,
+                title: 'Buy me a coffee',
+                subtitle: 'GCash $_gcashNumber',
+                iconColor: AppColors.warning,
+                iconBackground: AppColors.warningBg,
+                trailing: const Icon(Icons.copy_all_outlined,
+                    size: 20, color: AppColors.muted),
+                onTap: () => _copyGcash(context),
               ),
               AppListRow(
                 icon: Icons.bug_report_outlined,
