@@ -133,12 +133,18 @@ class XlsxWorkbook {
   }
 
   /// Parses workbook bytes. Returns null when this is not a readable .xlsx.
-  static XlsxWorkbook? parse(Uint8List bytes) {
-    final pkg = OoxmlPackage.tryOpen(bytes);
-    if (pkg == null || !pkg.hasWorkbook) return null;
+  static XlsxWorkbook? parse(Uint8List bytes, {void Function(String)? onError}) {
+    final pkg = OoxmlPackage.tryOpen(bytes, onError: onError);
+    if (pkg == null) return null;
+    if (!pkg.hasWorkbook) {
+      onError?.call("There is no xl/workbook.xml in the archive, so this is "
+          "not an Excel file.");
+      return null;
+    }
     try {
       return _XlsxReader(pkg).read();
-    } catch (_) {
+    } catch (e) {
+      onError?.call("The workbook could not be read: $e");
       return null;
     }
   }

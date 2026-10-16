@@ -47,14 +47,37 @@ class OoxmlPackage {
   final Map<String, Map<String, String>> _relCache = {};
 
   /// Opens a zip container. Returns null when the bytes are not a readable
-  /// OOXML package (for example a legacy binary .ppt/.doc/.xls, which is an
-  /// OLE compound file and not a zip).
-  static OoxmlPackage? tryOpen(Uint8List bytes) {
-    if (bytes.isEmpty) return null;
+  /// OOXML package, and says which of the several ways that can happen went
+  /// wrong on [onError].
+  ///
+  /// This used to return null and nothing else, so every one of these — a
+  /// renamed Office 97-2003 file, a password-protected one, a download that
+  /// stopped halfway — reached the teacher as the same unhelpful sentence about
+  /// the file being damaged. Only one of those is actually the file's fault.
+  static OoxmlPackage? tryOpen(Uint8List bytes, {void Function(String)? onError}) {
+    void fail(String reason) {
+      onError?.call(reason);
+    }
+
+    if (bytes.isEmpty) {
+      fail('Nothing arrived — the file came back empty.');
+      return null;
+    }
+    // A legacy .ppt/.doc/.xls, and every password-protected Office file, is an
+    // OLE compound file rather than a zip. Its magic is unmistakable, and it
+    // is worth naming because "share a PDF" is the fix and "re-save it" is not.
+    if (_looksLikeOle(bytes)) {
+      fail('This is not a modern Office file. Either it was saved in the old '
+          'Office 97-2003 format, or it is password protected — both are a '
+          'completely different container from .pptx/.docx/.xlsx.');
+      return null;
+    }
     Archive archive;
     try {
       archive = ZipDecoder().decodeBytes(bytes);
     } catch (_) {
+      fail('The archive would not open. If this arrived from another device, '
+          'the transfer stopped part way and it is worth trying again.');
       return null;
     }
     // A zip can declare far less than it delivers. Squeezing a few KB into a
@@ -69,19 +92,42 @@ class OoxmlPackage {
     try {
       for (final file in archive) {
         if (!file.isFile) continue;
-        if (++entries > maxEntries) return null;
+        if (++entries > maxEntries) {
+          fail('This file has more parts than the app will open — it is either '
+              'not a presentation or it is far too large for a phone.');
+          return null;
+        }
         final name = _normalize(file.name);
         if (name.isEmpty) continue;
         inflated += file.content.length;
-        if (inflated > maxInflated) return null;
+        if (inflated > maxInflated) {
+          fail('This file unpacks to more than 256 MB, which is more than the '
+              'app will hold open on a phone.');
+          return null;
+        }
         parts[name] = file.content;
       }
     } catch (_) {
+      fail('The archive would not open. If this arrived from another device, '
+          'the transfer stopped part way and it is worth trying again.');
       return null;
     }
     // A real Office package always carries [Content_Types].xml.
-    if (!parts.containsKey('[content_types].xml')) return null;
+    if (!parts.containsKey('[content_types].xml')) {
+      fail('The archive opened but holds no Office document inside it.');
+      return null;
+    }
     return OoxmlPackage._(parts);
+  }
+
+  /// The OLE2 compound-file signature: D0 CF 11 E0 A1 B1 1A E1.
+  static bool _looksLikeOle(Uint8List bytes) {
+    const magic = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+    if (bytes.length < magic.length) return false;
+    for (var i = 0; i < magic.length; i++) {
+      if (bytes[i] != magic[i]) return false;
+    }
+    return true;
   }
 
   /// True when the package holds presentation slides.

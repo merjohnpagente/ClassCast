@@ -141,13 +141,19 @@ class DocxDocument {
   }
 
   /// Parses document bytes. Returns null when this is not a readable .docx.
-  static DocxDocument? parse(Uint8List bytes) {
-    final pkg = OoxmlPackage.tryOpen(bytes);
-    if (pkg == null || !pkg.hasWordDocument) return null;
+  static DocxDocument? parse(Uint8List bytes, {void Function(String)? onError}) {
+    final pkg = OoxmlPackage.tryOpen(bytes, onError: onError);
+    if (pkg == null) return null;
+    if (!pkg.hasWordDocument) {
+      onError?.call("There is no word/document.xml in the archive, so this is "
+          "not a Word file.");
+      return null;
+    }
     try {
       final reader = _DocxReader(pkg);
       return reader.read();
-    } catch (_) {
+    } catch (e) {
+      onError?.call("The document could not be read: $e");
       return null;
     }
   }

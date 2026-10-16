@@ -224,6 +224,12 @@ class _OfficeDocumentViewState extends State<OfficeDocumentView>
   }
 
   static String _failureMessage(String extension) {
+    // If the loader worked out what actually went wrong, say that. The generic
+    // sentence it falls back to lists four unrelated causes and recommends
+    // "re-save it" for all of them, and three of the four are fixed by doing
+    // something else entirely.
+    final reason = OoxmlLoader.lastFailure;
+    if (reason != null && reason.isNotEmpty) return reason;
     if (OoxmlFileTypes.isLegacy(extension)) {
       final ext = extension.isEmpty ? 'pptx' : extension;
       return 'This is an old Office 97-2003 .$ext file, which is a completely '

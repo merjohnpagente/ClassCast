@@ -30,14 +30,21 @@ class PptxDeck {
   int get slideCount => slides.length;
 
   /// Parses deck bytes. Returns null when this is not a readable .pptx.
-  static PptxDeck? parse(Uint8List bytes) {
-    final pkg = OoxmlPackage.tryOpen(bytes);
-    if (pkg == null || !pkg.hasSlides) return null;
+  static PptxDeck? parse(Uint8List bytes, {void Function(String)? onError}) {
+    final pkg = OoxmlPackage.tryOpen(bytes, onError: onError);
+    if (pkg == null) return null;
+    if (!pkg.hasSlides) {
+      onError?.call("There is no ppt/presentation.xml in the archive, so this "
+          "is not a PowerPoint file.");
+      return null;
+    }
     try {
       return _PptxReader(pkg).read();
-    } catch (_) {
-      // A malformed deck must not crash the presentation screen: the caller
-      // falls back to an honest "cannot open" panel.
+    } catch (e) {
+      // A malformed deck must not crash the presentation screen — but the
+      // reason is handed back, because "it is damaged" is a guess and this is
+      // the one place that knows.
+      onError?.call("The slides could not be read: $e");
       return null;
     }
   }

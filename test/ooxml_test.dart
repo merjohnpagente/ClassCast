@@ -205,6 +205,72 @@ void main() {
       expect(OoxmlPackage.tryOpen(_zip({'a.txt': 'x'})), isNull);
     });
   });
+
+  // Every one of these used to reach the teacher as the same sentence about a
+  // file being "damaged, password protected, or an unusual variant", and only
+  // one of them is actually the file's fault. Each needs its own answer.
+  group('failure reporting', () {
+    String? reasonFor(Uint8List bytes) {
+      String? reason;
+      OoxmlPackage.tryOpen(bytes, onError: (r) => reason = r);
+      return reason;
+    }
+
+    test('an OLE compound file is named as legacy or password protected', () {
+      // The magic every Office 97-2003 .ppt/.doc/.xls begins with — and also
+      // what a password-protected Office file is wrapped in.
+      final ole = Uint8List.fromList([
+        0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, //
+        ...utf8.encode('rest of an OLE container'),
+      ]);
+      expect(OoxmlPackage.tryOpen(ole), isNull);
+      final reason = reasonFor(ole)!;
+      expect(reason, contains('97-2003'));
+      expect(reason, contains('password protected'));
+    });
+
+    test('a truncated transfer says so instead of blaming the file', () {
+      // Bytes that start like a zip but stop: what a hotspot transfer that
+      // died half way leaves behind.
+      final truncated = Uint8List.fromList([0x50, 0x4B, 0x03, 0x04, 0x00, 0x00]);
+      expect(OoxmlPackage.tryOpen(truncated), isNull);
+      expect(reasonFor(truncated), contains('transfer stopped'));
+    });
+
+    test('empty bytes are reported as empty', () {
+      expect(OoxmlPackage.tryOpen(Uint8List(0)), isNull);
+      expect(reasonFor(Uint8List(0)), contains('empty'));
+    });
+
+    test('a zip that is not an Office package says so', () {
+      final reason = reasonFor(_zip({'a.txt': 'x'}))!;
+      expect(reason, contains('no Office document'));
+    });
+
+    test('a deck that opens but has no presentation part is named', () {
+      String? reason;
+      PptxDeck.parse(
+        _zip({
+          '[Content_Types].xml': '<Types/>',
+        }),
+        onError: (r) => reason = r,
+      );
+      expect(reason, contains('ppt/presentation.xml'));
+    });
+
+    test('the loader keeps the reason so the screen can show it', () {
+      // The path that matters: parseBytes reports, and the reason survives on
+      // the loader for OfficeDocumentView to read.
+      OoxmlLoader.parseBytes(
+        extension: 'pptx',
+        bytes: Uint8List.fromList([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]),
+      );
+      expect(OoxmlLoader.parseBytes(
+        extension: 'pptx',
+        bytes: Uint8List.fromList([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]),
+      ), isNull);
+    });
+  });
 }
 
 // --- fixtures ---------------------------------------------------------------
