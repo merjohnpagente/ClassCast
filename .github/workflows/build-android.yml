@@ -125,9 +125,17 @@ jobs:
           if [ -f android/app/build.gradle.kts ]; then
             sed -i -E 's/compileSdk *=.*/compileSdk = 36/' android/app/build.gradle.kts
             grep -n "compileSdk" android/app/build.gradle.kts
+            # Android 12 and up only. The classroom server binds a socket and
+            # reads a local file; nothing here needs the older compatibility
+            # shims, and dropping them is one less thing between the teacher and
+            # an install.
+            sed -i -E 's/minSdk *=.*/minSdk = 31/' android/app/build.gradle.kts
+            grep -n "minSdk" android/app/build.gradle.kts
           elif [ -f android/app/build.gradle ]; then
             sed -i -E 's/(compileSdk(Version)?) .*/\1 36/' android/app/build.gradle
             grep -n "compileSdk" android/app/build.gradle
+            sed -i -E 's/(minSdk(Version)?) .*/\1 31/' android/app/build.gradle
+            grep -n "minSdk" android/app/build.gradle
           fi
 
 

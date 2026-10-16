@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
@@ -236,10 +237,48 @@ class _TeacherPresentationScreenState
                   ),
             // A tap on the document is how the chrome comes back once it is
             // gone.
-            body: ChromeTapAnywhere(child: body),
+            body: _withPageKeys(
+              context,
+              ChromeTapAnywhere(child: body),
+            ),
           );
         },
       ),
+    );
+  }
+
+  /// Arrow keys, Page Up/Down and space turn the page on a laptop.
+  ///
+  /// A teacher on a phone taps two buttons; a teacher at a lectern with a
+  /// keyboard should not have to. Bound with [CallbackShortcuts] rather than a
+  /// raw key listener so they are inert until the screen is focused, and
+  /// skipped entirely on a phone — where the hardware keys are Back and Home
+  /// and must not be swallowed.
+  Widget _withPageKeys(BuildContext context, Widget child) {
+    if (!context.isDesktop) return child;
+    final sessions = context.read<SessionProvider>();
+    void turn(int delta) {
+      final active = sessions.active;
+      if (active == null) return;
+      final next = active.page + delta;
+      if (next < 1) return;
+      if (active.totalPages > 0 && next > active.totalPages) return;
+      _goTo(sessions, next);
+    }
+
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.arrowRight): () => turn(1),
+        const SingleActivator(LogicalKeyboardKey.arrowDown): () => turn(1),
+        const SingleActivator(LogicalKeyboardKey.pageDown): () => turn(1),
+        const SingleActivator(LogicalKeyboardKey.space): () => turn(1),
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): () => turn(-1),
+        const SingleActivator(LogicalKeyboardKey.arrowUp): () => turn(-1),
+        const SingleActivator(LogicalKeyboardKey.pageUp): () => turn(-1),
+        const SingleActivator(LogicalKeyboardKey.escape): () =>
+            Navigator.of(context).maybePop(),
+      },
+      child: Focus(autofocus: true, child: child),
     );
   }
 

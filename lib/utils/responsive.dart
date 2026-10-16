@@ -19,22 +19,40 @@ extension ResponsiveContext on BuildContext {
 }
 
 /// Centers content and caps width on tablet / desktop / web.
+///
+/// The cap exists so a list of file cards or a block of settings text does not
+/// stretch to a metre across a 27-inch monitor, and so it does not shrink to
+/// nothing on a phone. A presentation is neither: it is a page that should use
+/// whatever room it is given. [wide] raises the cap for the screens that show
+/// one — the board — and only those, so text-heavy screens keep their measure.
 class ContentWidth extends StatelessWidget {
   final Widget child;
   final double maxWidth;
 
-  const ContentWidth({super.key, required this.child, this.maxWidth = 1100});
+  /// Lets a document use the screen instead of a reading column.
+  final bool wide;
+
+  const ContentWidth({
+    super.key,
+    required this.child,
+    this.maxWidth = 1100,
+    this.wide = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxWidth),
+        constraints: BoxConstraints(maxWidth: wide ? _wideMax : maxWidth),
         child: child,
       ),
     );
   }
+
+  /// A page is readable from the back of a room at this width; past it, the
+  /// extra space would only shrink the type relative to the screen.
+  static const double _wideMax = 1600;
 }
 
 /// Grid delegate: compact list-like cards on phones, multi-column on desktop.

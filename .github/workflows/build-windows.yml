@@ -1,0 +1,95 @@
+name: Build Windows app
+
+# ClassCast Offline on a laptop.
+#
+# The teacher runs the classroom server on their own machine, so being able to
+# open the app on the laptop at the front of the room — to present, to watch the
+# roster, to check the room's view before the class sees it — is the same job as
+# the phone, not a different one.
+#
+# Committing a windows/ folder would pin the project to one Flutter and Visual
+# Studio version, so the folder is created on the runner the way android/ and
+# ios/ are.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Windows app
+    # windows-2022 rather than latest: it is the image with the Visual Studio
+    # C++ desktop workload that `flutter build windows` needs, pinned so the
+    # build does not move under you when the image does.
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Bootstrap platform folders if missing
+        shell: pwsh
+        run: |
+          if (-not (Test-Path windows)) {
+            flutter create . --project-name classcast_offline --org com.classcast.offline --platforms=windows
+          }
+          # flutter create drops its own placeholder test.
+          if (Test-Path test/widget_test.dart) { Remove-Item test/widget_test.dart }
+
+      - run: flutter pub get
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Package the app
+        shell: pwsh
+        run: |
+          $src = 'build/windows/x64/runner/Release'
+          if (-not (Test-Path $src)) { throw "no Release folder at $src" }
+          New-Item -ItemType Directory -Force classcast-windows | Out-Null
+          Copy-Item "$src/*" classcast-windows -Recurse -Force
+          # The template names the executable after the project, so it arrives
+          # as classcast_offline.exe. Rename it to what the app calls itself.
+          $exe = Get-ChildItem classcast-windows -Filter *.exe |
+                 Where-Object { $_.Name -ne 'Uninstall.exe' } |
+                 Select-Object -First 1
+          if ($exe) {
+            Rename-Item $exe.FullName 'ClassCast Offline.exe'
+            Write-Host "renamed $($exe.Name) -> ClassCast Offline.exe"
+          } else {
+            Write-Host "::warning::no executable found to rename"
+          }
+          Compress-Archive -Path 'classcast-windows/*' -DestinationPath 'ClassCast-Windows-x64.zip'
+          Get-Item ClassCast-Windows-x64.zip | Select-Object Name, Length
+
+      - name: Upload Windows build (download from this run)
+        uses: actions/upload-artifact@v4
+        with:
+          name: classcast-windows
+          path: ClassCast-Windows-x64.zip
+          retention-days: 14
+
+      - name: Summary
+        shell: pwsh
+        run: |
+          @"
+          ### Windows build
+
+          Download `classcast-windows` from this run, unzip it, and open
+          `ClassCast Offline.exe`.
+
+          **Bluetooth is not involved.** The app serves the classroom from this
+          machine on the local network: the teacher and the students have to be
+          on the same Wi-Fi, or the teacher on a hotspot the students join. The
+          address in the QR is this machine's address on that network.
+
+          The camera QR scanner is hidden on Windows — `mobile_scanner` has no
+          Windows implementation — and the join screen says so and points at the
+          field above it, which joins a class on any platform.
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append

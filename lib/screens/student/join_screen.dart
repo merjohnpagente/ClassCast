@@ -9,6 +9,7 @@ import '../../providers/sync_provider.dart';
 import '../../services/classcast_client.dart';
 import '../../services/session_store.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/qr_scanner_support.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/motion.dart';
 import '../../widgets/ui_kit.dart';
@@ -89,6 +90,9 @@ class _JoinScreenState extends State<JoinScreen> {
   /// so the join screen stays underneath; scanning then joins straight away —
   /// pointing a phone at the teacher's QR is already the intent to join.
   Future<void> _openScanner() async {
+    // A second guard to the one on the row, because this is also reachable
+    // from a keyboard shortcut and from anything that calls it in a test.
+    if (!qrScannerSupported) return;
     final scanned = await Navigator.of(context).push<String>(
       MaterialPageRoute(
         builder: (_) => const _QrScanPage(),
@@ -180,19 +184,44 @@ class _JoinScreenState extends State<JoinScreen> {
           // Scanning stays available, but as the alternative it is: a soft row
           // under the form instead of a filled button above it, so the screen
           // has one clear action instead of two competing ones.
-          FadeIn(
-            delay: Motion.stagger(2),
-            child: Card(
-              clipBehavior: Clip.antiAlias,
-              child: AppListRow(
-                icon: Icons.qr_code_scanner,
-                title: 'Scan QR Code',
-                subtitle: 'Use the camera to scan the teacher screen',
-                trailing: const AppChevron(),
-                onTap: joining ? null : _openScanner,
+          //
+          // On a computer the row says why it is not there rather than
+          // disappearing — mobile_scanner has no Windows implementation, and a
+          // button that opens a black page is worse than one that explains
+          // itself. The field above joins a class on any platform.
+          if (qrScannerSupported)
+            FadeIn(
+              delay: Motion.stagger(2),
+              child: Card(
+                clipBehavior: Clip.antiAlias,
+                child: AppListRow(
+                  icon: Icons.qr_code_scanner,
+                  title: 'Scan QR Code',
+                  subtitle: 'Use the camera to scan the teacher screen',
+                  trailing: const AppChevron(),
+                  onTap: joining ? null : _openScanner,
+                ),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.qr_code_scanner,
+                      size: 18, color: AppColors.muted),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      qrScannerUnsupportedReason,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: AppColors.muted),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
           const SizedBox(height: 20),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,

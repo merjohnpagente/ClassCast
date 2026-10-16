@@ -130,6 +130,9 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
             child: Center(
               child: ContentWidth(
                 maxWidth: 1000,
+                // A page, not a column of text: on a laptop it should use the
+                // screen rather than sit in a 1000px strip of a 1920 one.
+                wide: true,
                 // With the shell's app bar away nothing insets the body, so
                 // the slide would run under the status and gesture bars.
                 child: hideChrome
