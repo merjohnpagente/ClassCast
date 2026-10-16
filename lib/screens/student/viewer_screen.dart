@@ -9,6 +9,7 @@ import '../../providers/sync_provider.dart';
 import '../../services/classcast_client.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/chrome_toggle.dart';
 import '../../widgets/document_viewer.dart';
 import '../../widgets/motion.dart';
 import '../../widgets/state_cards.dart';
@@ -116,21 +117,44 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
     }
 
     // One centred column, so the title, the page and the controls line up
-    // with each other instead of each spanning the whole screen.
-    return Center(
-      child: ContentWidth(
-        maxWidth: 1000,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _header(context, active, sync),
-            const SizedBox(height: 8),
-            Expanded(child: _preview(active)),
-            const SizedBox(height: 8),
-            _footer(context, active),
-          ],
+    // with each other instead of each spanning the whole screen. Tapping the
+    // page drops the title and the controls and leaves only the document.
+    final chrome = ChromeToggleScope.maybeOf(context);
+    final hideChrome = chrome?.hidden ?? false;
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: ChromeTapAnywhere(
+            child: Center(
+              child: ContentWidth(
+                maxWidth: 1000,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (!hideChrome) ...[
+                      _header(context, active, sync),
+                      const SizedBox(height: 8),
+                    ],
+                    Expanded(child: _preview(active)),
+                    if (!hideChrome) ...[
+                      const SizedBox(height: 8),
+                      _footer(context, active),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
-      ),
+        if (hideChrome)
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ChromeToggleHint(),
+          ),
+      ],
     );
   }
 

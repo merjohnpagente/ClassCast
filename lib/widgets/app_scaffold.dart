@@ -17,6 +17,13 @@ class AppScaffold extends StatefulWidget {
   final Widget? panel;
   final bool showBack;
 
+  /// Whether the app bar and the navigation are drawn at all.
+  ///
+  /// The full-screen document view turns this off so the page is the only
+  /// thing on the phone; it puts the outer padding back too, because a slide
+  /// inset inside two sets of page margins is not really filling the screen.
+  final bool showChrome;
+
   /// Explicit back affordance.
   ///
   /// Needed by the role shells: they are the app's `home` route, so
@@ -35,6 +42,7 @@ class AppScaffold extends StatefulWidget {
     this.floatingActionButton,
     this.panel,
     this.showBack = false,
+    this.showChrome = true,
     this.onBack,
   });
 
@@ -63,39 +71,47 @@ class _AppScaffoldState extends State<AppScaffold> {
     final floatingActionButton = widget.floatingActionButton;
     final panel = widget.panel;
     final showBack = widget.showBack;
+    final showChrome = widget.showChrome;
+    final appBar = showChrome
+        ? AppBar(
+            automaticallyImplyLeading: showBack,
+            leading: _leading(),
+            title: Text(title),
+            actions: actions,
+          )
+        : null;
 
     if (context.isDesktop) {
       return Scaffold(
-        appBar: AppBar(
-          automaticallyImplyLeading: showBack,
-          leading: _leading(),
-          title: Text(title),
-          actions: actions,
-        ),
+        appBar: appBar,
         body: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            NavigationRail(
-              selectedIndex: currentIndex,
-              onDestinationSelected: onNavigate,
-              labelType: NavigationRailLabelType.all,
-              destinations: [
-                for (final d in destinations)
-                  NavigationRailDestination(
-                    icon: Icon(d.icon),
-                    selectedIcon: Icon(d.selectedIcon ?? d.icon),
-                    label: Text(d.label),
-                  ),
-              ],
-            ),
-            const VerticalDivider(width: 1),
-            Expanded(
-              child: ContentWidth(
-                child: Padding(
-                  padding: EdgeInsets.all(context.pagePadding),
-                  child: _withTabFade(body),
-                ),
+            if (showChrome) ...[
+              NavigationRail(
+                selectedIndex: currentIndex,
+                onDestinationSelected: onNavigate,
+                labelType: NavigationRailLabelType.all,
+                destinations: [
+                  for (final d in destinations)
+                    NavigationRailDestination(
+                      icon: Icon(d.icon),
+                      selectedIcon: Icon(d.selectedIcon ?? d.icon),
+                      label: Text(d.label),
+                    ),
+                ],
               ),
+              const VerticalDivider(width: 1),
+            ],
+            Expanded(
+              child: showChrome
+                  ? ContentWidth(
+                      child: Padding(
+                        padding: EdgeInsets.all(context.pagePadding),
+                        child: _withTabFade(body),
+                      ),
+                    )
+                  : _withTabFade(body),
             ),
             if (panel != null) ...[
               const VerticalDivider(width: 1),
@@ -107,31 +123,30 @@ class _AppScaffoldState extends State<AppScaffold> {
       );
     }
     return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: showBack,
-        leading: _leading(),
-        title: Text(title),
-        actions: actions,
-      ),
-      body: Padding(
-        padding: EdgeInsets.all(context.pagePadding),
-        child: ContentWidth(
-          maxWidth: 720,
-          child: _withTabFade(body),
-        ),
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: currentIndex,
-        onDestinationSelected: onNavigate,
-        destinations: [
-          for (final d in destinations)
-            NavigationDestination(
-              icon: Icon(d.icon),
-              selectedIcon: Icon(d.selectedIcon ?? d.icon),
-              label: d.label,
-            ),
-        ],
-      ),
+      appBar: appBar,
+      body: showChrome
+          ? Padding(
+              padding: EdgeInsets.all(context.pagePadding),
+              child: ContentWidth(
+                maxWidth: 720,
+                child: _withTabFade(body),
+              ),
+            )
+          : _withTabFade(body),
+      bottomNavigationBar: showChrome
+          ? NavigationBar(
+              selectedIndex: currentIndex,
+              onDestinationSelected: onNavigate,
+              destinations: [
+                for (final d in destinations)
+                  NavigationDestination(
+                    icon: Icon(d.icon),
+                    selectedIcon: Icon(d.selectedIcon ?? d.icon),
+                    label: d.label,
+                  ),
+              ],
+            )
+          : null,
       floatingActionButton: floatingActionButton,
     );
   }

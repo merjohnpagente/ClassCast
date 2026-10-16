@@ -10,6 +10,7 @@ import '../../providers/library_provider.dart';
 import '../../providers/session_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/chrome_toggle.dart';
 import '../../widgets/document_viewer.dart';
 import '../../widgets/motion.dart';
 import '../../widgets/office/office_document_scroll_view.dart';
@@ -34,6 +35,10 @@ class _TeacherPresentationScreenState
     extends State<TeacherPresentationScreen> {
   final PdfViewerController _pdf = PdfViewerController();
 
+  /// Clears the app bar, the page row and the session bar so the document is
+  /// the only thing on the screen. Tapping the document puts them back.
+  final ChromeController _chrome = ChromeController();
+
   /// Page-by-page or continuous scroll. Both keep the class in step: in scroll
   /// mode the page nearest the top is broadcast as the teacher scrolls.
   OfficeViewMode _viewMode = OfficeViewMode.pages;
@@ -51,6 +56,7 @@ class _TeacherPresentationScreenState
 
   @override
   void dispose() {
+    _chrome.dispose();
     _pdf.dispose();
     super.dispose();
   }
@@ -82,102 +88,117 @@ class _TeacherPresentationScreenState
     final sessions = context.watch<SessionProvider>();
     final active = sessions.active;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(active?.name ?? 'Classroom Session'),
-        actions: [
-          // Honest about delivery: if the host is not reachable, the teacher
-          // is presenting locally only and students are NOT in sync.
-          if (!sessions.hostReachable || !sessions.classroomReady)
-            Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: StatusChip(
-                label: sessions.classroomError == null
-                    ? 'Host offline'
-                    : 'Not sharing',
-                icon: Icons.cloud_off,
-                color: AppColors.error,
-                background: AppColors.errorBg,
+    // Nothing to hide behind a blank slide: with no document on the board the
+    // empty state *is* the content, so the chrome stays put.
+    final canHide = active?.documentId != null;
+    final hideChrome = canHide && _chrome.hidden;
+
+    final body = active == null
+        ? const EmptyState(
+            icon: Icons.present_to_all,
+            title: 'No active session',
+            subtitle: 'Create a session and share a document first.',
+          )
+        : active.documentId == null
+            ? EmptyState(
+                icon: Icons.description_outlined,
+                title: 'No document shared',
+                subtitle:
+                    'Pick a file from the library to start presenting.',
+                actionLabel: 'Open files',
+                onAction: () => Navigator.of(context).pop(),
+              )
+            : context.isDesktop
+                ? _desktopLayout(context, sessions, active, hideChrome)
+                : _mobileLayout(context, sessions, active, hideChrome);
+
+    return ChromeToggleScope(
+      controller: _chrome,
+      child: Scaffold(
+        appBar: hideChrome
+            ? null
+            : AppBar(
+                title: Text(active?.name ?? 'Classroom Session'),
+                actions: [
+                  // Honest about delivery: if the host is not reachable, the
+                  // teacher is presenting locally only and students are NOT
+                  // in sync.
+                  if (!sessions.hostReachable || !sessions.classroomReady)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: StatusChip(
+                        label: sessions.classroomError == null
+                            ? 'Host offline'
+                            : 'Not sharing',
+                        icon: Icons.cloud_off,
+                        color: AppColors.error,
+                        background: AppColors.errorBg,
+                      ),
+                    ),
+                  if (active?.syncPaused ?? false)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 4),
+                      child: StatusChip(
+                          label: 'Paused',
+                          icon: Icons.pause_circle_outline,
+                          color: AppColors.muted,
+                          background: AppColors.surfaceSoft),
+                    )
+                  else
+                    const Padding(
+                      padding: EdgeInsets.only(right: 4),
+                      child: StatusChip(
+                          label: 'Live',
+                          icon: Icons.sensors,
+                          color: AppColors.success,
+                          background: AppColors.successBg),
+                    ),
+                  if (_supportsScrollMode)
+                    IconButton(
+                      tooltip: _viewMode == OfficeViewMode.pages
+                          ? 'Switch to scrolling'
+                          : 'Switch to one page at a time',
+                      icon: Icon(
+                        _viewMode == OfficeViewMode.pages
+                            ? Icons.swipe_vertical
+                            : Icons.crop_free,
+                        size: 20,
+                      ),
+                      onPressed: () => setState(() {
+                        _viewMode = _viewMode == OfficeViewMode.pages
+                            ? OfficeViewMode.scroll
+                            : OfficeViewMode.pages;
+                      }),
+                    ),
+                  if (canHide) const ChromeAppBarAction(),
+                  IconButton(
+                    tooltip: sessions.raisedHands.isEmpty
+                        ? 'Students'
+                        : '${sessions.raisedHands.length} hand(s) raised',
+                    // One badge, both numbers: students connected, and how many
+                    // have a hand up right now.
+                    icon: Badge(
+                      isLabelVisible: true,
+                      label: Text(sessions.raisedHands.isEmpty
+                          ? '${sessions.connectedCount}'
+                          : '${sessions.connectedCount} · '
+                              '${sessions.raisedHands.length} raised'),
+                      child: Icon(
+                        sessions.raisedHands.isEmpty
+                            ? Icons.people_outline
+                            : Icons.pan_tool,
+                        color: sessions.raisedHands.isEmpty
+                            ? null
+                            : AppColors.warning,
+                      ),
+                    ),
+                    onPressed: () => _showStudents(context, sessions),
+                  ),
+                ],
               ),
-            ),
-          if (active?.syncPaused ?? false)
-            const Padding(
-              padding: EdgeInsets.only(right: 4),
-              child: StatusChip(
-                  label: 'Paused',
-                  icon: Icons.pause_circle_outline,
-                  color: AppColors.muted,
-                  background: AppColors.surfaceSoft),
-            )
-          else
-            const Padding(
-              padding: EdgeInsets.only(right: 4),
-              child: StatusChip(
-                  label: 'Live',
-                  icon: Icons.sensors,
-                  color: AppColors.success,
-                  background: AppColors.successBg),
-            ),
-          if (_supportsScrollMode)
-            IconButton(
-              tooltip: _viewMode == OfficeViewMode.pages
-                  ? 'Switch to scrolling'
-                  : 'Switch to one page at a time',
-              icon: Icon(
-                _viewMode == OfficeViewMode.pages
-                    ? Icons.swipe_vertical
-                    : Icons.crop_free,
-                size: 20,
-              ),
-              onPressed: () => setState(() {
-                _viewMode = _viewMode == OfficeViewMode.pages
-                    ? OfficeViewMode.scroll
-                    : OfficeViewMode.pages;
-              }),
-            ),
-          IconButton(
-            tooltip: sessions.raisedHands.isEmpty
-                ? 'Students'
-                : '${sessions.raisedHands.length} hand(s) raised',
-            // One badge, both numbers: students connected, and how many have a
-            // hand up right now.
-            icon: Badge(
-              isLabelVisible: true,
-              label: Text(sessions.raisedHands.isEmpty
-                  ? '${sessions.connectedCount}'
-                  : '${sessions.connectedCount} · '
-                      '${sessions.raisedHands.length} raised'),
-              child: Icon(
-                sessions.raisedHands.isEmpty
-                    ? Icons.people_outline
-                    : Icons.pan_tool,
-                color: sessions.raisedHands.isEmpty
-                    ? null
-                    : AppColors.warning,
-              ),
-            ),
-            onPressed: () => _showStudents(context, sessions),
-          ),
-        ],
+        // A tap on the document is how the chrome comes back once it is gone.
+        body: ChromeTapAnywhere(child: body),
       ),
-      body: active == null
-          ? const EmptyState(
-              icon: Icons.present_to_all,
-              title: 'No active session',
-              subtitle: 'Create a session and share a document first.',
-            )
-          : active.documentId == null
-              ? EmptyState(
-                  icon: Icons.description_outlined,
-                  title: 'No document shared',
-                  subtitle:
-                      'Pick a file from the library to start presenting.',
-                  actionLabel: 'Open files',
-                  onAction: () => Navigator.of(context).pop(),
-                )
-              : context.isDesktop
-                  ? _desktopLayout(context, sessions, active)
-                  : _mobileLayout(context, sessions, active),
     );
   }
 
@@ -241,7 +262,23 @@ class _TeacherPresentationScreenState
   }
 
   Widget _mobileLayout(BuildContext context, SessionProvider sessions,
-      ClassroomSession active) {
+      ClassroomSession active, bool hideChrome) {
+    if (hideChrome) {
+      // Edge to edge, and nothing on it but the page: the pause / sync /
+      // preview row and the "No students yet" list go away with everything
+      // else, so the slide is the whole screen.
+      return Stack(
+        children: [
+          Positioned.fill(child: _preview(context, active)),
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ChromeToggleHint(),
+          ),
+        ],
+      );
+    }
     return Column(
       children: [
         Expanded(
@@ -411,7 +448,20 @@ class _TeacherPresentationScreenState
   }
 
   Widget _desktopLayout(BuildContext context, SessionProvider sessions,
-      ClassroomSession active) {
+      ClassroomSession active, bool hideChrome) {
+    if (hideChrome) {
+      return Stack(
+        children: [
+          Positioned.fill(child: _preview(context, active)),
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ChromeToggleHint(label: 'Show panel'),
+          ),
+        ],
+      );
+    }
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

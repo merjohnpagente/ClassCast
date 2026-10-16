@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -257,15 +256,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: 'Share. Present. Learn. Works without internet.',
               ),
               const AppListRow(
-                icon: FontAwesomeIcons.user,
+                icon: Icons.person_outline,
                 title: 'Developed by MerjDev',
                 iconColor: AppColors.secondary,
                 iconBackground: AppColors.secondarySoft,
               ),
               AppListRow(
-                icon: FontAwesomeIcons.github,
+                leading: GitHubMark(
+                  size: 20,
+                  color: AppColors.ink,
+                ),
                 title: 'GitHub',
                 subtitle: 'github.com/$_githubUser',
+                iconColor: AppColors.ink,
+                iconBackground: AppColors.surfaceSoft,
                 trailing: const AppChevron(),
                 onTap: () => _openGithub(context),
               ),
@@ -273,7 +277,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // link, so the number travels and the teacher pastes it into
               // their wallet app.
               AppListRow(
-                icon: FontAwesomeIcons.mugHot,
+                icon: Icons.coffee,
                 title: 'Buy me a coffee',
                 subtitle: 'GCash $_gcashNumber',
                 iconColor: AppColors.warning,

@@ -5,6 +5,7 @@ import '../../providers/app_state.dart';
 import '../../providers/sync_provider.dart';
 import '../../services/classcast_client.dart';
 import '../../widgets/app_scaffold.dart';
+import '../../widgets/chrome_toggle.dart';
 import '../../widgets/lazy_tab_stack.dart';
 import '../common/network_help_screen.dart';
 import '../common/settings_screen.dart';
@@ -24,6 +25,10 @@ class StudentShell extends StatefulWidget {
 class _StudentShellState extends State<StudentShell> {
   int _index = 0;
 
+  /// Clears the app bar and the bottom navigation away while the student is
+  /// looking at the slide, so the page is the only thing on the phone.
+  final ChromeController _chrome = ChromeController();
+
   static const _destinations = [
     AppDestination(
         label: 'Join',
@@ -40,6 +45,12 @@ class _StudentShellState extends State<StudentShell> {
   ];
 
   @override
+  void dispose() {
+    _chrome.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final sync = context.watch<SyncProvider>();
     final joined = sync.link == LinkState.live ||
@@ -54,45 +65,61 @@ class _StudentShellState extends State<StudentShell> {
         ? (sync.snapshot?.name ?? _destinations[_index].label)
         : _destinations[_index].label;
 
-    return AppScaffold(
-      title: title,
-      destinations: _destinations,
-      currentIndex: _index,
-      onNavigate: (i) => setState(() => _index = i),
-      // Back from the Join (QR / session ID) flow returns to role selection.
-      // Leaving first matters: otherwise the socket and participant entry
-      // would outlive the screen.
-      onBack: () async {
-        if (joined) await sync.leave();
-        if (context.mounted) {
-          context.read<AppState>().resetRole();
-        }
-      },
-      actions: [
-        if (joined)
-          TextButton.icon(
-            onPressed: () async {
-              await sync.leave();
-              if (context.mounted) setState(() => _index = 0);
-            },
-            icon: const Icon(Icons.logout, size: 18),
-            label: const Text('Leave'),
-          ),
-      ],
-      body: LazyTabStack(
-        index: _index,
-        builders: [
-          () => JoinScreen(
-                onJoined: () =>
-                    setState(() => _index = presenting ? 1 : _index),
-              ),
-          () => presenting
-              ? const StudentViewerScreen()
-              : StudentWaitingScreen(
-                  onLeave: () => setState(() => _index = 0),
-                ),
-          () => const _StudentConnectionTab(),
+    // Only the viewer hides chrome: the join and connection tabs are chrome
+    // themselves, so clearing them would leave nothing behind.
+    final hideChrome = _index == 1 && presenting && _chrome.hidden;
+
+    return ChromeToggleScope(
+      controller: _chrome,
+      child: AppScaffold(
+        title: title,
+        destinations: _destinations,
+        currentIndex: _index,
+        showChrome: !hideChrome,
+        onNavigate: (i) {
+          // Leaving the viewer restores the navigation, so the student is
+          // never stranded on a hidden screen they cannot get out of.
+          if (i != 1) _chrome.show();
+          setState(() => _index = i);
+        },
+        // Back from the Join (QR / session ID) flow returns to role selection.
+        // Leaving first matters: otherwise the socket and participant entry
+        // would outlive the screen.
+        onBack: () async {
+          _chrome.show();
+          if (joined) await sync.leave();
+          if (context.mounted) {
+            context.read<AppState>().resetRole();
+          }
+        },
+        actions: [
+          if (_index == 1 && presenting) const ChromeAppBarAction(),
+          if (joined)
+            TextButton.icon(
+              onPressed: () async {
+                _chrome.show();
+                await sync.leave();
+                if (context.mounted) setState(() => _index = 0);
+              },
+              icon: const Icon(Icons.logout, size: 18),
+              label: const Text('Leave'),
+            ),
         ],
+        body: LazyTabStack(
+          index: _index,
+          builders: [
+            () => JoinScreen(
+                  onJoined: () =>
+                      setState(() => _index = presenting ? 1 : _index),
+                ),
+            () => presenting
+                ? const StudentViewerScreen()
+                : StudentWaitingScreen(
+                    onLeave: () => setState(() => _index = 0),
+                  ),
+            () => const _StudentConnectionTab(),
+          ],
+        ),
       ),
     );
   }

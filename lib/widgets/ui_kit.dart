@@ -10,7 +10,9 @@ import 'app_logo.dart';
 /// and a logo lockup. Building each screen from the same primitives is what
 /// makes the app read as one designed thing instead of fifteen assembled ones.
 class AppIconTile extends StatelessWidget {
-  final IconData icon;
+  /// Either [icon] or [child] must be given; [child] wins when both are.
+  final IconData? icon;
+  final Widget? child;
   final double size;
   final double iconSize;
   final Color color;
@@ -20,14 +22,15 @@ class AppIconTile extends StatelessWidget {
 
   const AppIconTile({
     super.key,
-    required this.icon,
+    this.icon,
+    this.child,
     this.size = 40,
     this.iconSize = 20,
     this.color = AppColors.primary,
     this.background = AppColors.primarySoft,
     this.borderRadius,
     this.circular = false,
-  });
+  }) : assert(icon != null || child != null, 'give an icon or a child');
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +45,7 @@ class AppIconTile extends StatelessWidget {
             ? null
             : (borderRadius ?? BorderRadius.circular(AppRadius.input)),
       ),
-      child: Icon(icon, size: iconSize, color: color),
+      child: child ?? Icon(icon, size: iconSize, color: color),
     );
   }
 }
@@ -51,7 +54,11 @@ class AppIconTile extends StatelessWidget {
 /// trailing slot. This is the shape of the settings list, the sessions list,
 /// the file-type list and the student roster — one widget, not four.
 class AppListRow extends StatelessWidget {
-  final IconData icon;
+  /// Either [icon] or [leading] must be given; [leading] wins when both are,
+  /// and exists so a row can carry a drawn mark (see [GitHubMark]) instead of
+  /// a Material glyph.
+  final IconData? icon;
+  final Widget? leading;
   final String title;
   final String? subtitle;
   final Widget? trailing;
@@ -64,7 +71,8 @@ class AppListRow extends StatelessWidget {
 
   const AppListRow({
     super.key,
-    required this.icon,
+    this.icon,
+    this.leading,
     required this.title,
     this.subtitle,
     this.trailing,
@@ -74,7 +82,7 @@ class AppListRow extends StatelessWidget {
     this.iconColor = AppColors.primary,
     this.iconBackground = AppColors.primarySoft,
     this.iconSize = 40,
-  });
+  }) : assert(icon != null || leading != null, 'give an icon or a leading');
 
   @override
   Widget build(BuildContext context) {
@@ -85,6 +93,7 @@ class AppListRow extends StatelessWidget {
         children: [
           AppIconTile(
             icon: icon,
+            child: leading,
             size: iconSize,
             iconSize: iconSize * 0.5,
             color: iconColor,
@@ -363,6 +372,81 @@ class AppBrandLockup extends StatelessWidget {
       ],
     );
   }
+}
+
+/// The GitHub mark, drawn rather than shipped.
+///
+/// Material's icon set has no GitHub logo, and the package that does —
+/// `font_awesome_flutter` — builds its icons by subclassing `IconData`, which
+/// is now a `final class`, so it no longer compiles on current Flutter. Rather
+/// than go without the mark, it is drawn: the real silhouette is one disc with
+/// three holes cut out of it, the gap under the head, the notch between the
+/// legs, and the tail on the lower left.
+///
+/// Nine lines of geometry instead of a dependency that broke the build.
+class GitHubMark extends StatelessWidget {
+  final double size;
+  final Color color;
+
+  const GitHubMark({super.key, this.size = 24, this.color = AppColors.ink});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _GitHubPainter(color)),
+    );
+  }
+}
+
+class _GitHubPainter extends CustomPainter {
+  final Color color;
+  _GitHubPainter(this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final s = size.shortestSide / 24;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    var path = Path()
+      ..addOval(Rect.fromCircle(
+          center: Offset(12 * s, 12 * s), radius: 10 * s));
+
+    // The gap under the head.
+    path = Path.combine(
+      PathOperation.difference,
+      path,
+      Path()
+        ..addOval(Rect.fromCenter(
+            center: Offset(12 * s, 8.8 * s), width: 8.4 * s, height: 2.0 * s)),
+    );
+    // The notch between the legs.
+    path = Path.combine(
+      PathOperation.difference,
+      path,
+      Path()
+        ..addOval(Rect.fromCenter(
+            center: Offset(12.4 * s, 20.4 * s),
+            width: 3.0 * s,
+            height: 5.4 * s)),
+    );
+    // The tail on the lower left.
+    path = Path.combine(
+      PathOperation.difference,
+      path,
+      Path()
+        ..addOval(Rect.fromCenter(
+            center: Offset(4.4 * s, 15.4 * s), width: 4.2 * s, height: 4.6 * s)),
+    );
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _GitHubPainter old) => old.color != color;
 }
 
 /// The soft overlapping wave that closes the splash and the end screen.
