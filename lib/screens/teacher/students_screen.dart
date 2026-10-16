@@ -6,8 +6,8 @@ import '../../providers/session_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/formatters.dart';
 import '../../utils/responsive.dart';
-import '../../widgets/motion.dart';
 import '../../widgets/state_cards.dart';
+import '../../widgets/ui_kit.dart';
 
 /// Connected students: total, list, status, device, join time,
 /// refresh, remove (teacher only).
@@ -21,6 +21,7 @@ class StudentsScreen extends StatelessWidget {
     final items = sessions.participants;
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Connected Students'),
         actions: [
@@ -32,36 +33,49 @@ class StudentsScreen extends StatelessWidget {
         ],
       ),
       body: ContentWidth(
-        maxWidth: 640,
-        child: ListView(
-          padding: EdgeInsets.all(context.pagePadding),
-          children: [
-            FadeIn(
-              child: Text('${sessions.connectedCount} online',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.ink,
-                  )),
-            ),
-            const SizedBox(height: 8),
-            if (items.isEmpty)
-              const EmptyState(
-                icon: Icons.people_outline,
-                title: 'No students yet',
-                subtitle: 'Show the QR code — students join by scanning it.',
-              )
-            else
-              for (final p in items)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _StudentRow(
-                    participant: p,
-                    onRemove: () =>
-                        sessions.removeParticipant(p.id),
+        maxWidth: 560,
+        child: items.isEmpty
+            ? ListView(
+                padding: EdgeInsets.only(top: context.pagePadding),
+                children: const [
+                  EmptyState(
+                    icon: Icons.people_outline,
+                    title: 'No students yet',
+                    subtitle: 'Show the QR code — students join by scanning it.',
                   ),
-                ),
-          ],
-        ),
+                ],
+              )
+            : ListView(
+                padding: const EdgeInsets.only(bottom: 24),
+                children: [
+                  AppSectionTitle('${sessions.connectedCount} Online'),
+                  Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (var i = 0; i < items.length; i++) ...[
+                          if (i > 0) const Divider(height: 1),
+                          _StudentRow(
+                            participant: items[i],
+                            onRemove: () =>
+                                sessions.removeParticipant(items[i].id),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Raise a hand from the student screen and it appears here '
+                    'straight away.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -78,83 +92,50 @@ class _StudentRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final connected =
-        participant.status == Presence.connected;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: AppColors.primarySoft,
-                borderRadius: BorderRadius.circular(21),
-              ),
-              child: const Icon(Icons.person,
-                  color: AppColors.primary),
+    final connected = participant.status == Presence.connected;
+    // The design shows one dot. "Reconnecting" and "Left" used to share the
+    // same colour *and* be told apart by an 11px caption, so two different
+    // states looked identical at a glance — and the caption failed contrast
+    // while doing it.
+    final live = participant.status == Presence.reconnecting;
+
+    return AppListRow(
+      icon: Icons.person_outline,
+      title: participant.name,
+      subtitle: '${participant.deviceType} · '
+          'Joined ${formatTime(participant.joinedAt)}',
+      circularIcon: true,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          LiveDot(
+            active: connected,
+            activeColor: live ? AppColors.warning : AppColors.success,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            connected
+                ? 'Connected'
+                : live
+                    ? 'Reconnecting'
+                    : 'Left',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: connected
+                  ? AppColors.success
+                  : live
+                      ? AppColors.warning
+                      : AppColors.muted,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(participant.name,
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.ink,
-                      )),
-                  Text(
-                    '${participant.deviceType} · Joined ${formatTime(participant.joinedAt)}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: AppColors.muted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: connected
-                        ? AppColors.success
-                        : AppColors.warning,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  connected
-                      ? 'Connected'
-                      : participant.status ==
-                              Presence.reconnecting
-                          ? 'Reconnecting'
-                          : 'Left',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: connected
-                        ? AppColors.success
-                        : AppColors.warning,
-                  ),
-                ),
-              ],
-            ),
-            IconButton(
-              tooltip: 'Remove',
-              icon: const Icon(Icons.person_remove_outlined,
-                  size: 20, color: AppColors.muted),
-              onPressed: () => _confirmRemove(context),
-            ),
-          ],
-        ),
+          ),
+          IconButton(
+            tooltip: 'Remove',
+            icon: const Icon(Icons.person_remove_outlined,
+                size: 20, color: AppColors.muted),
+            onPressed: () => _confirmRemove(context),
+          ),
+        ],
       ),
     );
   }
@@ -164,8 +145,7 @@ class _StudentRow extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Remove participant?'),
-        content:
-            Text('${participant.name} will leave the session.'),
+        content: Text('${participant.name} will leave the session.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),

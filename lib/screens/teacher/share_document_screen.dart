@@ -27,19 +27,23 @@ class ShareDocumentScreen extends StatelessWidget {
     final notice = DocumentService.conversionNotice(doc);
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Share Document')),
       body: ContentWidth(
-        maxWidth: 720,
+        maxWidth: 560,
         child: ListView(
-          padding: EdgeInsets.all(context.pagePadding),
+          padding: const EdgeInsets.only(bottom: 32),
           children: [
             _previewBox(context, theme),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Text('${doc.name}.${doc.extension}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                   color: AppColors.ink,
                 )),
+            const SizedBox(height: 2),
             Text(
               '${doc.kind.name.toUpperCase()} · ${doc.sizeBytes > 0 ? formatBytes(doc.sizeBytes) : '—'}'
               '${doc.pageCount > 0 ? ' · ${doc.pageCount} pages' : ''}',
@@ -48,7 +52,7 @@ class ShareDocumentScreen extends StatelessWidget {
               ),
             ),
             if (notice != null) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -79,7 +83,7 @@ class ShareDocumentScreen extends StatelessWidget {
                 ),
               ),
             ],
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             if (active == null)
               const ErrorHint(
                   message:
@@ -109,8 +113,11 @@ class ShareDocumentScreen extends StatelessWidget {
                                 const TeacherPresentationScreen()),
                       );
                     },
-              icon: const Icon(Icons.cast_connected),
+              icon: const Icon(Icons.cast_connected, size: 20),
               label: const Text('Share to Active Session'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 52),
+              ),
             ),
             const SizedBox(height: 8),
             Row(
@@ -119,7 +126,7 @@ class ShareDocumentScreen extends StatelessWidget {
                   child: OutlinedButton.icon(
                     onPressed: () =>
                         Navigator.of(context).pop(),
-                    icon: const Icon(Icons.swap_horiz),
+                    icon: const Icon(Icons.swap_horiz, size: 18),
                     label: const Text('Replace'),
                   ),
                 ),
@@ -129,14 +136,14 @@ class ShareDocumentScreen extends StatelessWidget {
                     onPressed: active?.documentId == doc.id
                         ? () => sessions.clearDocument()
                         : null,
-                    icon: const Icon(Icons.remove_circle_outline),
+                    icon: const Icon(Icons.remove_circle_outline, size: 18),
                     label: const Text('Unshare'),
                   ),
                 ),
               ],
             ),
             if (active?.documentId == doc.id) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               const StatusChip(
                   label: 'Sharing now',
                   icon: Icons.sensors,
@@ -151,10 +158,10 @@ class ShareDocumentScreen extends StatelessWidget {
 
   Widget _previewBox(BuildContext context, ThemeData theme) {
     return Container(
-      height: 220,
+      height: 200,
       decoration: BoxDecoration(
         color: AppColors.surfaceSoft,
-        borderRadius: BorderRadius.circular(AppRadius.large),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(color: AppColors.border),
       ),
       child: Center(
@@ -164,7 +171,7 @@ class ShareDocumentScreen extends StatelessWidget {
             FileTypeIcon(
                 kind: doc.kind,
                 extension: doc.extension,
-                size: 64),
+                size: 56),
             const SizedBox(height: 8),
             Text(
               doc.pageCount > 0

@@ -10,6 +10,11 @@ class AppTheme {
   static ThemeData light() {
     final base = ThemeData(
       useMaterial3: true,
+      // Inter has to be set here, not only on the text theme. Every raw
+      // `const TextStyle(...)` in the app inherits `fontFamily` from here, so
+      // before this line roughly forty text runs silently rendered in the
+      // platform default and the UI read as "assembled" rather than designed.
+      fontFamily: 'Inter',
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.primary,
         primary: AppColors.primary,
@@ -54,30 +59,34 @@ class AppTheme {
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
         foregroundColor: AppColors.ink,
         titleTextStyle: TextStyle(
           fontFamily: 'Inter',
-          fontSize: 18,
+          fontSize: 17,
           fontWeight: FontWeight.w700,
           color: AppColors.ink,
         ),
       ),
       cardTheme: CardThemeData(
         color: AppColors.surface,
-        elevation: 0,
+        // A hairline plus a whisper of shadow: enough to lift a card off the
+        // page without the "sticker" look of a heavy border. Elevation 1 with a
+        // near-transparent shadow colour and no surface tint is what actually
+        // paints it — at elevation 0 the shadow colour is never used at all.
+        elevation: 1,
         margin: EdgeInsets.zero,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: const Color(0x0F14213D),
         shape: RoundedRectangleBorder(
           borderRadius:
               BorderRadius.all(Radius.circular(AppRadius.card)),
           side: BorderSide(color: AppColors.border, width: 1),
         ),
       ),
-      // A hairline plus a whisper of shadow: enough to lift a card off the
-      // page without the "sticker" look of a heavy border.
-      shadowColor: const Color(0x14000000),
       dividerTheme: const DividerThemeData(
         color: AppColors.border,
         thickness: 1,
@@ -140,20 +149,35 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.input),
           ),
+          // Filled and outlined used to label at 15px and 14px respectively, so
+          // two buttons of identical weight sat next to each other and looked
+          // like two different sizes.
+          textStyle: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primary,
+          minimumSize: const Size(0, 44),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.input),
+          ),
           textStyle:
               const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
+        // White field on a hairline, not grey on nothing: this is what the
+        // design calls for, and a bordered box also gives the eye an edge to
+        // aim at when the keyboard is up.
         filled: true,
-        fillColor: AppColors.surfaceSoft,
+        fillColor: AppColors.surface,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         labelStyle: const TextStyle(
           fontFamily: 'Inter',
           fontSize: 14,
@@ -166,7 +190,11 @@ class AppTheme {
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.input),
-          borderSide: BorderSide.none,
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.input),
+          borderSide: const BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.input),

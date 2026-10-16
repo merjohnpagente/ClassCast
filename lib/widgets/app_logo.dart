@@ -4,11 +4,16 @@ import '../theme/app_colors.dart';
 
 /// ClassCast Offline logo: a presentation screen + wireless cast arcs.
 /// Minimal, blue, scalable — launcher, splash, header, favicon.
+///
+/// [color] exists so the mark can sit on the blue splash as well as on white.
+/// The splash used to draw a blue mark on a blue field, which is a logo you
+/// cannot see.
 class AppLogo extends StatelessWidget {
   final double size;
   final bool filled;
+  final Color? color;
 
-  const AppLogo({super.key, this.size = 64, this.filled = false});
+  const AppLogo({super.key, this.size = 64, this.filled = false, this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +22,7 @@ class AppLogo extends StatelessWidget {
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: AppColors.primary,
+          color: color ?? AppColors.primary,
           borderRadius: BorderRadius.circular(size * 0.24),
         ),
         child: CustomPaint(painter: _LogoPainter(Colors.white)),
@@ -27,7 +32,7 @@ class AppLogo extends StatelessWidget {
       width: size,
       height: size,
       child: CustomPaint(
-        painter: _LogoPainter(AppColors.primary),
+        painter: _LogoPainter(color ?? AppColors.primary),
       ),
     );
   }

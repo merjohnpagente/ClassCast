@@ -41,8 +41,16 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1600));
     await tester.tap(find.text('Teacher'));
     await tester.pumpAndSettle();
-    expect(find.text('Welcome back'), findsOneWidget);
     expect(find.text('Create New Session'), findsOneWidget);
+    // Home offers exactly one way to start a class, at the top. It used to
+    // render both this button and an action inside the empty state, so the
+    // same instruction shouted twice and neither spot felt canonical.
+    expect(find.text('Create session'), findsNothing);
+    // Three tabs, matching the design: the session list lives on Home.
+    expect(find.text('Home'), findsWidgets);
+    expect(find.text('Files'), findsWidgets);
+    expect(find.text('Settings'), findsWidgets);
+    expect(find.text('Sessions'), findsNothing);
     // The dashboard waits on a network probe with a timeout, so the timer has
     // to be allowed to fire or the test ends with a pending one.
     await tester.pump(const Duration(seconds: 5));
@@ -63,6 +71,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Join Classroom'), findsWidgets);
+    // The design's join screen: brand lockup, one labelled field, one Join
+    // button. Asserted on the field label, not on 'Join' — the bottom nav tab
+    // is also labelled "Join", so that string matches twice.
+    expect(find.text('Enter Session ID'), findsOneWidget);
   });
 
   testWidgets('teacher shell has a back button to role selection',

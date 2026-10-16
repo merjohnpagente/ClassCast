@@ -28,18 +28,19 @@ class QrCard extends StatelessWidget {
     final theme = Theme.of(context);
     return Card(
       margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
         child: Column(
           children: [
-            // Centered so the code is the optical anchor of the sheet, not an
+            // Centered so the code is the optical anchor of the card, not an
             // element that drifts with the surrounding text.
             Center(
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
                   border: Border.all(color: AppColors.border),
                 ),
                 child: QrImageView(
@@ -51,24 +52,22 @@ class QrCard extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Text('Scan to Join',
-                style: theme.textTheme.bodyMedium?.copyWith(
+                style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                   color: AppColors.ink,
                 )),
-            Text(sessionId,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.muted,
-                )),
+            const SizedBox(height: 2),
+            Text(
+              address.isEmpty ? sessionId : address,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.muted,
+              ),
+              textAlign: TextAlign.center,
+            ),
             if (address.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(address,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.muted,
-                  ),
-                  textAlign: TextAlign.center),
-              const SizedBox(height: 8),
+              const SizedBox(height: 14),
               OutlinedButton.icon(
                 onPressed: () async {
                   await Clipboard.setData(

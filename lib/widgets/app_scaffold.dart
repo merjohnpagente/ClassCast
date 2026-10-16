@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
 import '../utils/responsive.dart';
 import 'motion.dart';
 
@@ -162,51 +161,4 @@ class AppDestination {
     required this.icon,
     this.selectedIcon,
   });
-}
-
-/// Compact nav header card used above page content on phones.
-class PageHeader extends StatelessWidget {
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-
-  const PageHeader({
-    super.key,
-    required this.title,
-    this.subtitle,
-    this.trailing,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
-                    )),
-                if (subtitle != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(subtitle!,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: AppColors.muted,
-                        )),
-                  ),
-              ],
-            ),
-          ),
-          if (trailing != null) trailing!,
-        ],
-      ),
-    );
-  }
 }

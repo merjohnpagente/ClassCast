@@ -11,6 +11,7 @@ import '../../services/session_store.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/motion.dart';
+import '../../widgets/ui_kit.dart';
 import '../../utils/validators.dart';
 
 /// Student join: scan QR or enter session ID / address + name.
@@ -103,125 +104,113 @@ class _JoinScreenState extends State<JoinScreen> {
     final sync = context.watch<SyncProvider>();
     final joining = _joining || sync.link == LinkState.connecting;
 
+    // The design's join screen: brand lockup, one field, one button, then the
+    // scanner as the quiet alternative below it. Not a form with a camera
+    // bolted on top.
     return ContentWidth(
-      maxWidth: 520,
+      maxWidth: 440,
       child: ListView(
-      children: [
-        FadeIn(
-          child: Text('Join Classroom',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: AppColors.ink,
-              )),
-        ),
-        FadeIn(
-          delay: Motion.stagger(1),
-          child: Text('Scan the teacher QR or enter the details below.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.muted,
-              )),
-        ),
-        const SizedBox(height: 16),
-        // Scanning is the primary way into a classroom, so it comes first —
-        // buried under a divider it looked like the fallback, not the main
-        // action.
-        FadeIn(
-          delay: Motion.stagger(2),
-          child: FilledButton.icon(
-            onPressed: joining ? null : _openScanner,
-            icon: const Icon(Icons.qr_code_scanner),
-            label: const Text('Scan Teacher QR Code'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, 52),
-              textStyle: const TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.w700),
+        padding: EdgeInsets.only(bottom: 24),
+        children: [
+          const SizedBox(height: 24),
+          const Center(child: AppBrandLockup(logoSize: 64, gap: 14)),
+          const SizedBox(height: 32),
+          Text(
+            'Join Classroom',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: AppColors.ink,
             ),
           ),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            const Expanded(child: Divider()),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text('or enter it manually',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: AppColors.muted)),
-            ),
-            const Expanded(child: Divider()),
-          ],
-        ),
-        const SizedBox(height: 12),
-        FadeIn(
-          delay: Motion.stagger(3),
-          child: Form(
-            key: _form,
-            child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextFormField(
-                controller: _name,
-                validator: (v) => Validators.studentName(v,
-                    allowAnonymous: _allowAnonymous),
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'Your name (optional)',
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _input,
-                validator: Validators.sessionId,
-                textInputAction: TextInputAction.done,
-                decoration: const InputDecoration(
-                  labelText: 'Session ID or address',
-                  hintText: 'CLASS-101 or 192.168.43.1:8080',
-                  prefixIcon: Icon(Icons.tag_outlined),
-                ),
-              ),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: joining ? null : _join,
-                child: joining
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Colors.white),
-                      )
-                    : const Text('Join Classroom'),
-              ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.wifi,
-                    color: AppColors.primary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'First connect to the teacher hotspot or classroom Wi-Fi. '
-                    'No mobile data or internet needed.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: AppColors.muted,
+          const SizedBox(height: 20),
+          const AppFieldLabel('Enter Session ID'),
+          FadeIn(
+            delay: Motion.stagger(1),
+            child: Form(
+              key: _form,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextFormField(
+                    controller: _name,
+                    validator: (v) => Validators.studentName(v,
+                        allowAnonymous: _allowAnonymous),
+                    textInputAction: TextInputAction.next,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Your name (optional)',
+                      prefixIcon: Icon(Icons.person_outline),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _input,
+                    validator: Validators.sessionId,
+                    textInputAction: TextInputAction.done,
+                    // A session code is not prose: autocorrect would "helpfully"
+                    // turn CLASS-101 into Class-l0l and the join would fail.
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    decoration: const InputDecoration(
+                      hintText: 'CLASS-101 or 192.168.43.1:8080',
+                      prefixIcon: Icon(Icons.tag_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: joining ? null : _join,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 52),
+                    ),
+                    child: joining
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2.5, color: Colors.white),
+                          )
+                        : const Text('Join'),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+          const OrDivider(),
+          // Scanning stays available, but as the alternative it is: a soft row
+          // under the form instead of a filled button above it, so the screen
+          // has one clear action instead of two competing ones.
+          FadeIn(
+            delay: Motion.stagger(2),
+            child: Card(
+              clipBehavior: Clip.antiAlias,
+              child: AppListRow(
+                icon: Icons.qr_code_scanner,
+                title: 'Scan QR Code',
+                subtitle: 'Use the camera to scan the teacher screen',
+                trailing: const AppChevron(),
+                onTap: joining ? null : _openScanner,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.wifi, size: 18, color: AppColors.muted),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'First connect to the teacher hotspot or classroom Wi-Fi. '
+                  'No mobile data or internet needed.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.muted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -392,33 +381,33 @@ class _QrScanPageState extends State<_QrScanPage> {
               children: [
                 const Spacer(),
                 Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Text(
                     _usingFrontCamera
-                        ? 'Front camera — hold the phone facing the QR code.'
-                        : 'Point the camera at the QR code on the teacher screen.',
+                        ? 'Front camera — face the QR code.'
+                        : 'Point the camera at the QR code.',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.white70,
                         ),
                   ),
                 ),
                 const SizedBox(height: 8),
+                // The manual escape hatch is a safety net, not a second
+                // action: a filled 48px button down here competed with the
+                // viewfinder for attention on every single frame.
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.white24,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(0, 48),
-                      ),
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.keyboard),
-                      label: const Text('Enter session ID instead'),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white70,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      minimumSize: const Size(0, 40),
                     ),
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.keyboard, size: 18),
+                    label: const Text('Enter session ID instead'),
                   ),
                 ),
               ],
@@ -430,14 +419,59 @@ class _QrScanPageState extends State<_QrScanPage> {
   }
 
   /// Simple framing guide so the teacher knows where to hold the phone.
+  ///
+  /// Corner brackets rather than a full box: the same target, drawn with a
+  /// quarter of the ink, so the camera preview is what the eye lands on.
   Widget _scanOverlay(BuildContext context) {
+    const size = 180.0;
     return Center(
-      child: Container(
-        width: 220,
-        height: 220,
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.white70, width: 2),
-          borderRadius: BorderRadius.circular(20),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          children: [
+            for (final corner in _corners) Align(alignment: corner, child: _bracket(corner)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static const _corners = [
+    Alignment.topLeft,
+    Alignment.topRight,
+    Alignment.bottomLeft,
+    Alignment.bottomRight,
+  ];
+
+  Widget _bracket(Alignment alignment) {
+    final isLeft = alignment.x < 0;
+    final isTop = alignment.y < 0;
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        border: Border(
+          top: isTop
+              ? const BorderSide(color: Colors.white, width: 2.5)
+              : BorderSide.none,
+          bottom: isTop
+              ? BorderSide.none
+              : const BorderSide(color: Colors.white, width: 2.5),
+          left: isLeft
+              ? const BorderSide(color: Colors.white, width: 2.5)
+              : BorderSide.none,
+          right: isLeft
+              ? BorderSide.none
+              : const BorderSide(color: Colors.white, width: 2.5),
+        ),
+        borderRadius: BorderRadius.only(
+          topLeft: isTop && isLeft ? const Radius.circular(6) : Radius.zero,
+          topRight: isTop && !isLeft ? const Radius.circular(6) : Radius.zero,
+          bottomLeft:
+              !isTop && isLeft ? const Radius.circular(6) : Radius.zero,
+          bottomRight:
+              !isTop && !isLeft ? const Radius.circular(6) : Radius.zero,
         ),
       ),
     );
@@ -521,8 +555,14 @@ class _QrScanPageState extends State<_QrScanPage> {
                     color: Colors.white38, fontSize: 11, height: 1.4),
               ),
               const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              // A Wrap, not a Row: "Try again" and "Enter session ID" together
+              // need ~338px, and the camera-error panel only has 272px on a
+              // 320px phone, so the row overflowed on the screen whose whole
+              // job is telling a stuck student what to do next.
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 10,
+                runSpacing: 8,
                 children: [
                   // A camera that failed once often works after a clean
                   // stop-then-start: the student may have just granted the
@@ -536,7 +576,6 @@ class _QrScanPageState extends State<_QrScanPage> {
                     icon: const Icon(Icons.refresh, size: 18),
                     label: const Text('Try again'),
                   ),
-                  const SizedBox(width: 10),
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
                       backgroundColor: Colors.white,

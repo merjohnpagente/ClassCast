@@ -139,7 +139,7 @@ dart run bin/classcast_server.dart --port 8080 --dir ./shared --web ../build/web
 
 1. Open the GitHub **Actions** tab → latest run → download `classcast-apk`
    (or grab it from **Releases**).
-2. Teacher flow: Role → Teacher → Create New Session → share a file → Present.
+2. Teacher flow: Role → Teacher → Create session → share a file → Present.
 3. Student flow: join the teacher hotspot → Role → Student → scan QR or type
    the address → watch live.
 

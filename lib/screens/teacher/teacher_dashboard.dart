@@ -8,30 +8,21 @@ import '../../providers/app_state.dart';
 import '../../providers/session_provider.dart';
 import '../../services/network_service.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/formatters.dart';
 import '../../widgets/motion.dart';
 import '../../widgets/session_actions_sheet.dart';
 import '../../widgets/qr_card.dart';
-import '../../widgets/session_card.dart';
 import '../../widgets/state_cards.dart';
-import '../../widgets/status_bits.dart';
+import '../../widgets/ui_kit.dart';
 import '../common/network_help_screen.dart';
 import 'create_session_screen.dart';
 import 'presentation_screen.dart';
 import 'students_screen.dart';
 
-/// Teacher dashboard: welcome, create button, active session,
-/// recent sessions, students, documents, network + QR shortcuts.
+/// Teacher dashboard: one create button, the network address students join on,
+/// and the session list with the live session at the top.
 class TeacherDashboard extends StatefulWidget {
-  final VoidCallback onOpenSessions;
-  final VoidCallback onOpenFiles;
-  final VoidCallback onOpenSettings;
-
-  const TeacherDashboard({
-    super.key,
-    required this.onOpenSessions,
-    required this.onOpenFiles,
-    required this.onOpenSettings,
-  });
+  const TeacherDashboard({super.key});
 
   @override
   State<TeacherDashboard> createState() => _TeacherDashboardState();
@@ -84,9 +75,9 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   }
 
   Future<void> _loadIp() async {
-    // Same reason as the settings tab: a platform channel that never answers
-    // left the dashboard reading "Checking network…" indefinitely. Cancelled
-    // on dispose so the deadline never outlives the screen.
+    // Same reason the settings tab needs a deadline: a platform channel that
+    // never answers left the dashboard reading "Checking network…" for good.
+    // Cancelled on dispose so the deadline never outlives the screen.
     _probe?.cancel();
     _probe = Timer(const Duration(seconds: 4), () {
       if (!mounted) return;
@@ -107,6 +98,12 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     }
   }
 
+  void _openCreateSession() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const CreateSessionScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -119,143 +116,103 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         await _loadIp();
       },
       child: ListView(
+        padding: EdgeInsets.only(bottom: 24),
         children: [
-          Text('Welcome back',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: AppColors.ink,
-              )),
-          Text(
-            'Start a class, share files, present.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: AppColors.muted,
-            ),
-          ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                  builder: (_) => const CreateSessionScreen()),
-            ),
-            icon: const Icon(Icons.add),
-            label: const Text('Create New Session'),
-          ),
-          const SizedBox(height: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _networkCard(theme),
-              _connectionCheck(context),
-            ],
-          ),
-          const SectionHeader(title: 'Active session'),
-          if (active == null)
-            EmptyState(
-              icon: Icons.meeting_room_outlined,
-              title: 'No active session',
-              subtitle:
-                  'Create a session to get a QR code and joining address.',
-              actionLabel: 'Create session',
-              onAction: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                    builder: (_) => const CreateSessionScreen()),
+          // One create button, at the top, in the same place every time. It
+          // used to be duplicated by an action inside the empty state, so the
+          // empty dashboard shouted the same instruction twice and neither
+          // spot felt canonical.
+          FadeIn(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: FilledButton.icon(
+                onPressed: _openCreateSession,
+                icon: const Icon(Icons.add, size: 20),
+                label: const Text('Create New Session'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 52),
+                ),
               ),
-            )
-          else
-            SessionCard(
-              session: active,
-              connectedCount: sessions.connectedCount,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                    builder: (_) =>
-                        const TeacherPresentationScreen()),
+            ),
+          ),
+          const SizedBox(height: 16),
+          FadeIn(
+            delay: Motion.stagger(1),
+            child: _networkRow(theme),
+          ),
+          if (_checkMessage != null)
+            FadeIn(child: _connectionCheck(theme)),
+          AppSectionTitle('My Sessions', trailing: _sessionCount(sessions)),
+          if (active != null) ...[
+            FadeIn(
+              delay: Motion.stagger(2),
+              child: _ActiveSessionCard(
+                session: active,
+                connectedCount: sessions.connectedCount,
+                raisedHands: sessions.raisedHands.length,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const TeacherPresentationScreen(),
+                  ),
+                ),
+                onQr: () => _showQrSheet(context, active),
+                onStudents: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const StudentsScreen()),
+                ),
+                onEnd: () => _confirmEnd(context, sessions),
               ),
-              onQr: () => _showQrSheet(context, active),
-              onEnd: () => sessions.endSession(),
             ),
-          SectionHeader(
-            title: 'Quick actions',
-            action: TextButton(
-              onPressed: widget.onOpenSessions,
-              child: const Text('All sessions'),
-            ),
+            const SizedBox(height: 10),
+          ],
+          FadeIn(
+            delay: Motion.stagger(3),
+            child: const TeacherDashboardSessionList(),
           ),
-          GridView.count(
-            crossAxisCount:
-                MediaQuery.sizeOf(context).width >= 720 ? 4 : 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-            childAspectRatio: 1.6,
-            children: [
-              _quickAction(context,
-                  icon: Icons.people,
-                  label:
-                      '${sessions.connectedCount} connected',
-                  onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                            builder: (_) =>
-                                const StudentsScreen()),
-                      )),
-              _quickAction(context,
-                  icon: Icons.folder,
-                  label: 'Files',
-                  onTap: widget.onOpenFiles),
-              _quickAction(context,
-                  icon: Icons.qr_code_2,
-                  label: 'QR to join',
-                  onTap: active == null
-                      ? null
-                      : () => _showQrSheet(context, active)),
-              _quickAction(context,
-                  icon: Icons.settings,
-                  label: 'Settings',
-                  onTap: widget.onOpenSettings),
-            ],
-          ),
-          const SectionHeader(title: 'Recent sessions'),
-          const TeacherDashboardSessionList(),
-          const SizedBox(height: 24),
         ],
       ),
     );
   }
 
-  Widget _networkCard(ThemeData theme) {
+  String? _sessionCount(SessionProvider sessions) {
+    final total = sessions.recent.length;
+    if (total == 0) return null;
+    return '$total';
+  }
+
+  /// The address students join on, in one line, plus the two things a teacher
+  /// needs to know about it: is it reachable, and how do I fix it if not.
+  Widget _networkRow(ThemeData theme) {
+    final port = context.read<AppState>().serverPort;
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.successBg,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.wifi,
-                  color: AppColors.success),
+            const AppIconTile(
+              icon: Icons.wifi,
+              color: AppColors.success,
+              background: AppColors.successBg,
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     _probingIp
                         ? 'Checking network…'
                         : _ip.isEmpty
                             ? 'No local network yet'
-                            : 'Hosting at $_ip:${context.read<AppState>().serverPort}',
+                            : '$_ip:$port',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                       color: AppColors.ink,
                     ),
                   ),
                   Text(
-                    'Students join over Wi-Fi or hotspot — no internet needed.',
+                    'Students join over Wi-Fi or hotspot',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: AppColors.muted,
                     ),
@@ -263,43 +220,31 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 ],
               ),
             ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  tooltip: 'Can students reach me?',
-                  icon: _checking
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(
-                          _reachable == true
-                              ? Icons.check_circle
-                              : Icons.network_check,
-                          color: _reachable == true
-                              ? AppColors.success
-                              : AppColors.primary,
-                        ),
-                  onPressed: _checking ? null : _checkConnection,
-                ),
-                Text(
-                  'Check',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: AppColors.muted,
-                  ),
-                ),
-              ],
+            IconButton(
+              tooltip: 'Can students reach me?',
+              icon: _checking
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      _reachable == true
+                          ? Icons.check_circle
+                          : Icons.network_check,
+                      color: _reachable == true
+                          ? AppColors.success
+                          : AppColors.primary,
+                    ),
+              onPressed: _checking ? null : _checkConnection,
             ),
             IconButton(
               tooltip: 'Connection guide',
-              icon: const Icon(Icons.help_outline,
-                  color: AppColors.primary),
+              icon: const Icon(Icons.help_outline, color: AppColors.primary),
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(
-                    builder: (_) =>
-                        const NetworkHelpScreen(isTeacher: true)),
+                  builder: (_) => const NetworkHelpScreen(isTeacher: true),
+                ),
               ),
             ),
           ],
@@ -310,9 +255,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
 
   /// Honest one-liner under the network card: either it works, or exactly
   /// what to change.
-  Widget _connectionCheck(BuildContext context) {
-    final message = _checkMessage;
-    if (message == null) return const SizedBox.shrink();
+  Widget _connectionCheck(ThemeData theme) {
     final ok = _reachable == true;
     return Padding(
       padding: const EdgeInsets.only(top: 8),
@@ -327,10 +270,10 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: ok ? AppColors.success : AppColors.inkSecondary,
-                  ),
+              _checkMessage!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: ok ? AppColors.success : AppColors.inkSecondary,
+              ),
             ),
           ),
         ],
@@ -338,40 +281,36 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     );
   }
 
-  Widget _quickAction(BuildContext context,
-      {required IconData icon,
-      required String label,
-      VoidCallback? onTap}) {
-    final disabled = onTap == null;
-    return Pressable(
-      onTap: onTap,
-      child: Card(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon,
-                color: disabled ? AppColors.muted : AppColors.primary),
-            const SizedBox(height: 8),
-            Text(label,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: disabled ? AppColors.muted : AppColors.ink,
-                )),
-          ],
+  /// Ending a session drops every student on the floor. One tap should not be
+  /// enough for that, and the dashboard's End button sits right next to a
+  /// card a teacher taps constantly.
+  void _confirmEnd(BuildContext context, SessionProvider sessions) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('End session?'),
+        content: const Text(
+          'Students will be disconnected and the join code stops working.',
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              sessions.endSession();
+            },
+            child: const Text('End session'),
+          ),
+        ],
       ),
     );
   }
 
   /// Shows the real, scannable QR code for a live session.
-  ///
-  /// This used to print the raw join payload as text, which is useless in a
-  /// classroom: students have to point a camera at it. The code is drawn large
-  /// enough to scan from a student's desk.
   void _showQrSheet(BuildContext context, ClassroomSession active) {
     final address = active.joinAddress;
     final payload = NetworkService.qrPayload(
@@ -437,7 +376,130 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   }
 }
 
-/// Recent session list shared by dashboard + sessions tab.
+/// The live session, drawn as the design's "Students 12 Connected" card: the
+/// document being shown, the room size, and the two controls a teacher
+/// actually reaches for mid-lesson.
+class _ActiveSessionCard extends StatelessWidget {
+  final ClassroomSession session;
+  final int connectedCount;
+  final int raisedHands;
+  final VoidCallback onTap;
+  final VoidCallback onQr;
+  final VoidCallback onStudents;
+  final VoidCallback onEnd;
+
+  const _ActiveSessionCard({
+    required this.session,
+    required this.connectedCount,
+    required this.raisedHands,
+    required this.onTap,
+    required this.onQr,
+    required this.onStudents,
+    required this.onEnd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  AppIconTile(
+                    icon: session.documentName == null
+                        ? Icons.meeting_room_outlined
+                        : Icons.description_outlined,
+                    size: 44,
+                    iconSize: 22,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          session.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          session.documentName == null
+                              ? 'Live · no document shared'
+                              : session.documentName!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AppColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  LiveDot(active: session.isActive),
+                ],
+              ),
+            ),
+          ),
+          const Divider(height: 1),
+          AppListRow(
+            icon: Icons.people,
+            title: connectedCount == 0
+                ? 'Waiting for students'
+                : '$connectedCount connected',
+            subtitle: raisedHands == 0
+                ? 'Share the QR code so they can join'
+                : '$raisedHands hand(s) raised',
+            trailing: const AppChevron(),
+            onTap: onStudents,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onQr,
+                    icon: const Icon(Icons.qr_code_2, size: 18),
+                    label: const Text('QR code'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onEnd,
+                    icon: const Icon(Icons.stop, size: 18),
+                    label: const Text('End'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                      side: const BorderSide(color: AppColors.error),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The session list. The active session is rendered by the dashboard above,
+/// so this is the history underneath it.
 class TeacherDashboardSessionList extends StatelessWidget {
   const TeacherDashboardSessionList({super.key});
 
@@ -450,27 +512,38 @@ class TeacherDashboardSessionList extends StatelessWidget {
     final items =
         sessions.recent.where((s) => s.id != sessions.active?.id).toList();
     if (items.isEmpty) {
-      return const EmptyState(
-        icon: Icons.history,
-        title: 'No past classes yet',
-        subtitle: 'Classes you teach show up here, ready to revive.',
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: EmptyState(
+          icon: Icons.history,
+          title: 'No past classes yet',
+          subtitle: 'Classes you teach show up here, ready to revive.',
+        ),
       );
     }
     // Every recent session is a menu: revive it, edit it, or delete it. This
     // is the teacher's way back into yesterday's class without starting over.
-    return Column(
-      children: [
-        for (final s in items.take(5))
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            // SessionCard has its own tap handling; wrapping it in another
-            // gesture detector would fire the action twice.
-            child: SessionCard(
-              session: s,
-              onTap: () => showSessionActions(context, s),
+    final shown = items.take(8).toList();
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < shown.length; i++) ...[
+            if (i > 0) const Divider(height: 1),
+            AppListRow(
+              icon: Icons.meeting_room_outlined,
+              title: shown[i].name,
+              subtitle: shown[i].subject.isEmpty
+                  ? formatDateTime(shown[i].createdAt)
+                  : '${shown[i].subject} · '
+                      '${formatDateTime(shown[i].createdAt)}',
+              trailing: LiveDot(active: shown[i].isActive),
+              onTap: () => showSessionActions(context, shown[i]),
             ),
-          ),
-      ],
+          ],
+        ],
+      ),
     );
   }
 }

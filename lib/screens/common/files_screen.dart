@@ -10,8 +10,8 @@ import '../../providers/session_provider.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/document_card.dart';
 import '../../widgets/motion.dart';
-import '../../widgets/status_bits.dart';
 import '../../widgets/state_cards.dart';
+import '../../widgets/ui_kit.dart';
 import '../teacher/share_document_screen.dart';
 
 /// Reusable document management: recent, search, filters,
@@ -53,58 +53,31 @@ class _FilesScreenState extends State<FilesScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        FadeIn(
-          child: SectionHeader(
-            title: widget.sharing ? 'Documents' : 'Files',
-            subtitle: library.items.isEmpty
-                ? null
-                : '${library.items.length} file'
-                    '${library.items.length == 1 ? '' : 's'}',
-          ),
-        ),
-        FadeIn(
-          delay: Motion.stagger(1),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _search,
-                  onChanged: (v) => library.setQuery(v),
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    hintText: 'Search files',
-                    prefixIcon: const Icon(Icons.search, size: 20),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 14),
-                  ),
-                ),
+        Row(
+          children: [
+            Expanded(
+              child: AppSearchField(
+                hint: 'Search files…',
+                controller: _search,
+                onChanged: library.setQuery,
               ),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: () async {
-                  final messenger = ScaffoldMessenger.of(context);
-                  final ok = await library.pickAndAdd();
-                  if (!mounted) return;
-                  if (!ok && library.error != null) {
-                    messenger.showSnackBar(
-                      SnackBar(content: Text(library.error!)),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, 48),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                ),
+            ),
+            const SizedBox(width: 8),
+            // Icon-only so it does not steal the width the search box needs on
+            // a 320px phone, but still a full 48dp target.
+            FilledButton(
+              onPressed: _addFiles,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(52, 48),
+                padding: EdgeInsets.zero,
               ),
-            ],
-          ),
+              child: const Icon(Icons.add, size: 22),
+            ),
+          ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         _filters(context, library),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         // Cross-fade between loading / empty / list instead of a hard swap.
         Expanded(
           child: AnimatedSwitcher(
@@ -114,6 +87,16 @@ class _FilesScreenState extends State<FilesScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _addFiles() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final library = context.read<LibraryProvider>();
+    final ok = await library.pickAndAdd();
+    if (!mounted) return;
+    if (!ok && library.error != null) {
+      messenger.showSnackBar(SnackBar(content: Text(library.error!)));
+    }
   }
 
   Widget _filters(BuildContext context, LibraryProvider library) {
@@ -181,7 +164,7 @@ class _FilesScreenState extends State<FilesScreen> {
       itemCount: visible.length,
       itemBuilder: (_, i) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
-        child: _card(context, visible[i] as dynamic),
+        child: _card(context, visible[i]),
       ),
     );
   }

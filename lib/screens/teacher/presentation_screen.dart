@@ -15,6 +15,7 @@ import '../../widgets/motion.dart';
 import '../../widgets/office/office_document_scroll_view.dart';
 import '../../widgets/state_cards.dart';
 import '../../widgets/status_bits.dart';
+import '../../widgets/ui_kit.dart';
 import 'student_preview_screen.dart';
 import 'students_screen.dart';
 
@@ -83,7 +84,7 @@ class _TeacherPresentationScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(active?.name ?? 'Presentation'),
+        title: Text(active?.name ?? 'Classroom Session'),
         actions: [
           // Honest about delivery: if the host is not reachable, the teacher
           // is presenting locally only and students are NOT in sync.
@@ -116,6 +117,23 @@ class _TeacherPresentationScreenState
                   icon: Icons.sensors,
                   color: AppColors.success,
                   background: AppColors.successBg),
+            ),
+          if (_supportsScrollMode)
+            IconButton(
+              tooltip: _viewMode == OfficeViewMode.pages
+                  ? 'Switch to scrolling'
+                  : 'Switch to one page at a time',
+              icon: Icon(
+                _viewMode == OfficeViewMode.pages
+                    ? Icons.swipe_vertical
+                    : Icons.crop_free,
+                size: 20,
+              ),
+              onPressed: () => setState(() {
+                _viewMode = _viewMode == OfficeViewMode.pages
+                    ? OfficeViewMode.scroll
+                    : OfficeViewMode.pages;
+              }),
             ),
           IconButton(
             tooltip: sessions.raisedHands.isEmpty
@@ -172,7 +190,11 @@ class _TeacherPresentationScreenState
         subtitle: 'Pick a file from the library to start presenting.',
       );
     }
-    if (doc.kind != DocKind.pdf) _syncPdfPage(active.page);
+    // Only the PDF viewer has its own controller to steer, so only a PDF gets
+    // its page pushed here. This read `!=` for years, which meant the arrows
+    // moved every Office document and never moved the one format where the
+    // teacher could actually see the page they were on.
+    if (doc.kind == DocKind.pdf) _syncPdfPage(active.page);
     final sessions = context.read<SessionProvider>();
     final viewer = DocumentViewer(
       doc: doc,
@@ -222,19 +244,169 @@ class _TeacherPresentationScreenState
       ClassroomSession active) {
     return Column(
       children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(
-              context.pagePadding, 8, context.pagePadding, 0),
-          child: _docHeader(context, active),
-        ),
         Expanded(
           child: Padding(
-            padding: EdgeInsets.all(context.pagePadding),
+            padding: EdgeInsets.fromLTRB(
+                context.pagePadding,
+                context.pagePadding,
+                context.pagePadding,
+                8),
             child: _preview(context, active),
           ),
         ),
-        _controlBar(context, sessions, active),
+        _pageRow(context, sessions, active),
+        _sessionBar(context, sessions, active),
       ],
+    );
+  }
+
+  /// The page control as the design draws it: a quiet arrow, the counter, and
+  /// the play button in the middle — on a single row that cannot overflow.
+  ///
+  /// This used to be two arrows flanking a column of five controls. The
+  /// column was not a flex child, so it was measured at its natural width and
+  /// the row overflowed by over a hundred pixels on every phone narrower than
+  /// ~436px. The extra controls moved to their own bar below.
+  Widget _pageRow(BuildContext context, SessionProvider sessions,
+      ClassroomSession active) {
+    final theme = Theme.of(context);
+    final atStart = active.page <= 1;
+    final atEnd = active.totalPages > 0 && active.page >= active.totalPages;
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: context.pagePadding),
+      child: Row(
+        children: [
+          _ArrowButton(
+            icon: Icons.skip_previous,
+            tooltip: 'Previous page',
+            onPressed: atStart ? null : () => _goTo(sessions, active.page - 1),
+          ),
+          Expanded(
+            child: Text(
+              active.totalPages > 0
+                  ? 'Page ${active.page} of ${active.totalPages}'
+                  : 'Page ${active.page}',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+          _ArrowButton(
+            icon: Icons.skip_next,
+            tooltip: 'Next page',
+            onPressed: atEnd ? null : () => _goTo(sessions, active.page + 1),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The session controls the teacher reaches for mid-lesson: sync pause,
+  /// pull-everyone-back, student preview, and the room size.
+  Widget _sessionBar(BuildContext context, SessionProvider sessions,
+      ClassroomSession active) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+          context.pagePadding, 10, context.pagePadding, 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () =>
+                        sessions.setPaused(!active.syncPaused),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.inkSecondary,
+                    ),
+                    icon: Icon(
+                      active.syncPaused
+                          ? Icons.play_arrow
+                          : Icons.pause,
+                      size: 20,
+                    ),
+                    label: Text(active.syncPaused ? 'Resume' : 'Pause'),
+                  ),
+                ),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () => sessions.takeControl(),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.inkSecondary,
+                    ),
+                    icon: const Icon(Icons.my_location, size: 20),
+                    label: const Text('Sync all'),
+                  ),
+                ),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            StudentPreviewScreen(session: active),
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.inkSecondary,
+                    ),
+                    icon: const Icon(Icons.visibility_outlined, size: 20),
+                    label: const Text('Preview'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            AppListRow(
+              icon: Icons.people,
+              title: sessions.connectedCount == 0
+                  ? 'No students yet'
+                  : '${sessions.connectedCount} connected',
+              subtitle: sessions.raisedHands.isEmpty
+                  ? 'Share the QR code so they can join'
+                  : '${sessions.raisedHands.length} hand(s) raised',
+              trailing: const AppChevron(),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const StudentsScreen()),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// A circular arrow button. Sized at 48 so it is a real tap target on a
+  /// phone, which the previous 36px shrink-wrapped button was not.
+  Widget _ArrowButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onPressed,
+  }) {
+    final enabled = onPressed != null;
+    return Semantics(
+      button: true,
+      label: tooltip,
+      child: IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        iconSize: 24,
+        icon: Icon(icon),
+        style: IconButton.styleFrom(
+          backgroundColor:
+              enabled ? AppColors.primarySoft : AppColors.surfaceSoft,
+          foregroundColor:
+              enabled ? AppColors.primary : AppColors.muted,
+          minimumSize: const Size(48, 48),
+          shape: const CircleBorder(),
+        ),
+      ),
     );
   }
 
@@ -300,108 +472,35 @@ class _TeacherPresentationScreenState
             ],
           ),
         ),
-        StatusChip.connected(),
+        const StatusChip.connected(),
       ],
     );
   }
 
-  Widget _controlBar(BuildContext context, SessionProvider sessions,
-      ClassroomSession active) {
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-          context.pagePadding, 8, context.pagePadding, 16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: [
-            Expanded(
-              child: _navBtn(Icons.skip_previous, 'Previous',
-                  active.page <= 1
-                      ? null
-                      : () => _goTo(sessions, active.page - 1)),
-            ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '${active.page}'
-                  '${active.totalPages > 0 ? ' / ${active.totalPages}' : ''}',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (_supportsScrollMode)
-                      IconButton(
-                        tooltip: _viewMode == OfficeViewMode.pages
-                            ? 'Switch to scrolling'
-                            : 'Switch to one page at a time',
-                        icon: Icon(
-                          _viewMode == OfficeViewMode.pages
-                              ? Icons.swipe_vertical
-                              : Icons.crop_free,
-                          size: 20,
-                        ),
-                        onPressed: () => setState(() {
-                          _viewMode = _viewMode == OfficeViewMode.pages
-                              ? OfficeViewMode.scroll
-                              : OfficeViewMode.pages;
-                        }),
-                      ),
-                    IconButton(
-                      tooltip: active.syncPaused
-                          ? 'Resume sync'
-                          : 'Pause sync',
-                      icon: Icon(active.syncPaused
-                          ? Icons.play_arrow
-                          : Icons.pause),
-                      onPressed: () => sessions.setPaused(!active.syncPaused),
-                    ),
-                    IconButton(
-                      tooltip: 'Bring every student back to this page',
-                      icon: const Icon(Icons.my_location),
-                      onPressed: () => sessions.takeControl(),
-                    ),
-                    IconButton(
-                      tooltip: 'See what the students see',
-                      icon: const Icon(Icons.visibility_outlined),
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              StudentPreviewScreen(session: active),
-                        ),
-                      ),
-                    ),
-                    FilledButton.icon(
-                      onPressed: () => sessions.endSession(),
-                      icon: const Icon(Icons.stop, size: 18),
-                      label: const Text('End'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.error,
-                        minimumSize: const Size(48, 44),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: _navBtn(Icons.skip_next, 'Next',
-                    active.totalPages > 0 &&
-                            active.page >= active.totalPages
-                        ? null
-                        : () => _goTo(sessions, active.page + 1)),
-              ),
-            ),
-          ],
+  /// Ending a session drops every student. One tap should not be enough —
+  /// especially from a control the teacher reaches for mid-lesson.
+  void _confirmEnd(BuildContext context, SessionProvider sessions) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('End session?'),
+        content: const Text(
+          'Students will be disconnected and the join code stops working.',
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              sessions.endSession();
+            },
+            child: const Text('End session'),
+          ),
+        ],
       ),
     );
   }
@@ -459,7 +558,7 @@ class _TeacherPresentationScreenState
             ),
             const SizedBox(height: 8),
             FilledButton.icon(
-              onPressed: () => sessions.endSession(),
+              onPressed: () => _confirmEnd(context, sessions),
               icon: const Icon(Icons.stop),
               label: const Text('End Presentation'),
               style: FilledButton.styleFrom(
@@ -628,25 +727,6 @@ class _TeacherPresentationScreenState
           ),
         ),
       ),
-    );
-  }
-
-  /// Page arrows stay out of the way: the deck is the content, and two big
-  /// filled circles next to it looked louder than the slide itself.
-  Widget _navBtn(IconData icon, String tip, VoidCallback? onTap) {
-    return IconButton(
-      tooltip: tip,
-      iconSize: 18,
-      visualDensity: VisualDensity.compact,
-      style: IconButton.styleFrom(
-        foregroundColor: AppColors.inkSecondary.withAlpha(170),
-        disabledForegroundColor: AppColors.muted.withAlpha(70),
-        minimumSize: const Size(36, 36),
-        padding: EdgeInsets.zero,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      icon: Icon(icon),
-      onPressed: onTap,
     );
   }
 }

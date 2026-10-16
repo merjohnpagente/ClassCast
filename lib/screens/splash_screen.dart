@@ -3,10 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
-import '../widgets/app_logo.dart';
 import '../widgets/motion.dart';
+import '../widgets/ui_kit.dart';
 
-/// Splash: the logo settles in, then the app moves on.
+/// Splash: the mark settles in on a full-bleed blue field, then the app moves
+/// on.
 ///
 /// Everything is finite — a looping animation here would keep the CPU awake
 /// during the one moment the app has nothing to do.
@@ -37,7 +38,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
   void _hold() {
     if (_done) return;
-    _timer = Timer(const Duration(milliseconds: 1100), _finish);
+    _timer = Timer(const Duration(milliseconds: 1400), _finish);
   }
 
   void _finish() {
@@ -54,141 +55,120 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _finish,
-          child: Column(
-            children: [
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                        // The mark grows out of nothing, then the wordmark follows it:
-                        // one gesture, so the screen feels composed rather than stacked.
-                        TweenAnimationBuilder<double>(
-                          tween: Tween<double>(begin: 0.86, end: 1),
-                          duration: Motion.page,
-                          curve: Curves.easeOutBack,
-                          builder: (context, value, child) => Transform.scale(
-                            scale: value,
-                            child: Opacity(opacity: value.clamp(0, 1), child: child),
-                          ),
-                          child: const AppLogo(size: 88),
+      backgroundColor: AppColors.primary,
+      body: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _finish,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // The blue field: a single diagonal gradient rather than a flat
+            // fill, which is what stops a full-screen brand colour from
+            // looking like a stuck loading state.
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [AppColors.primary, AppColors.primaryDark],
+                ),
+              ),
+            ),
+            // The wave closes the bottom edge; without it the screen is just a
+            // rectangle of blue.
+            const Align(
+              alignment: Alignment.bottomCenter,
+              child: SoftWave(
+                color: Color(0xFF6E8AFB),
+                flipped: true,
+              ),
+            ),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Column(
+                  children: [
+                    const Spacer(),
+                    // The mark grows out of nothing, then the wordmark follows:
+                    // one gesture, so the screen feels composed, not stacked.
+                    TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0.86, end: 1),
+                      duration: Motion.page,
+                      curve: Curves.easeOutBack,
+                      builder: (context, value, child) => Transform.scale(
+                        scale: value,
+                        child: Opacity(
+                          opacity: value.clamp(0, 1),
+                          child: child,
                         ),
-                        FadeIn(
-                          delay: Motion.stagger(2),
-                          child: Column(
-                            children: [
-                              const SizedBox(height: 18),
-                              Text(
-                                'ClassCast',
-                                style: theme.textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.ink,
-                                  letterSpacing: -0.5,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'OFFLINE',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.primary,
-                                  letterSpacing: 3,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                'Share. Present. Learn.',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: AppColors.muted,
-                                ),
-                              ),
-                            ],
-                          ),
+                      ),
+                      child: const AppBrandLockup(
+                        logoSize: 96,
+                        title: 'ClassCast',
+                        subtitle: 'Offline',
+                        onBlue: true,
+                        gap: 20,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    FadeIn(
+                      delay: Motion.stagger(2),
+                      rise: 8,
+                      child: const Text(
+                        'Share • Present • Learn',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.4,
                         ),
-                        const SizedBox(height: 30),
-                        // A determinate-looking sweep instead of an endless spinner:
-                        // it finishes exactly as the app hands over to the role screen.
-                        SizedBox(
-                          width: 120,
-                          child: TweenAnimationBuilder<double>(
-                    tween: Tween<double>(begin: 0, end: 1),
-                    duration: const Duration(milliseconds: 1000),
-                            curve: Curves.easeInOutCubic,
-                            builder: (context, value, _) => ClipRRect(
-                              borderRadius: BorderRadius.circular(2),
-                              child: LinearProgressIndicator(
-                                value: value,
-                                minHeight: 3,
-                                backgroundColor: AppColors.primarySoft,
-                                valueColor:
-                                    const AlwaysStoppedAnimation(AppColors.primary),
+                      ),
+                    ),
+                    const Spacer(),
+                    FadeIn(
+                      delay: Motion.stagger(5),
+                      rise: 10,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 110,
+                            child: TweenAnimationBuilder<double>(
+                              tween: Tween<double>(begin: 0, end: 1),
+                              duration: const Duration(milliseconds: 1200),
+                              curve: Curves.easeInOutCubic,
+                              builder: (context, value, _) => ClipRRect(
+                                borderRadius: BorderRadius.circular(2),
+                                child: LinearProgressIndicator(
+                                  value: value,
+                                  minHeight: 3,
+                                  backgroundColor: Colors.white24,
+                                  valueColor:
+                                      const AlwaysStoppedAnimation(Colors.white),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 14),
-                        Text(
-                          'Works without internet',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppColors.muted,
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Works without internet',
+                            style: TextStyle(
+                              color: Colors.white60,
+                              fontSize: 13,
+                            ),
                           ),
-                        ),
-                    ],
-                  ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                  ],
                 ),
               ),
-              // The credit sits at the very bottom, and arrives last: a hairline
-              // draws itself, then the name lifts in under it. Both are finite,
-              // so the splash settles exactly as the app hands over.
-              FadeIn(
-                delay: Motion.stagger(6),
-                rise: 10,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 26),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TweenAnimationBuilder<double>(
-                        tween: Tween<double>(begin: 0, end: 1),
-                        duration: Motion.standard,
-                        curve: Curves.easeOutCubic,
-                        builder: (context, value, child) => Opacity(
-                          opacity: value.clamp(0, 1),
-                          child: SizedBox(
-                            width: 44 * value,
-                            child: child,
-                          ),
-                        ),
-                        child: Container(
-                          height: 1,
-                          color: AppColors.primarySoft,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'By MerjDev',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: AppColors.ink,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
-

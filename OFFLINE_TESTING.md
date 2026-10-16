@@ -23,7 +23,7 @@ before Office conversion or Android-hosted sessions.
    dart run bin/classcast_server.dart --port 8080 --dir ./shared
    ```
    Note the printed URL, e.g. `http://192.168.43.1:8080/`.
-3. **Teacher app:** Role → Teacher → Create New Session
+3. **Teacher app:** Role → Teacher → Create session
    (`Introduction to Physics`) → note the session ID + QR + address.
 4. **Put a PDF in `./shared`** (or pick one in the app library) and share it.
 

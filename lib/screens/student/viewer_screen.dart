@@ -162,14 +162,14 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
           ),
         ),
         if (sync.link == LinkState.reconnecting)
-          StatusChip.reconnecting()
+          const StatusChip.reconnecting()
         else if (sync.link == LinkState.live)
-          StatusChip.live()
+          const StatusChip.live()
         else
-          StatusChip.offline(),
+          const StatusChip.offline(),
         if (sync.syncPaused) ...[
           const SizedBox(width: 6),
-          StatusChip.paused(),
+          const StatusChip.paused(),
         ],
       ],
     );
@@ -214,73 +214,158 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
     final sync = context.watch<SyncProvider>();
     final canNav = sync.canNavigate;
     final canDownload = active.allowDownload;
-    return Row(
-      children: [
-        IconButton(
-          tooltip: 'Previous',
-          icon: const Icon(Icons.chevron_left),
-          onPressed: !canNav || active.page <= 1
-              ? null
-              : () {
+
+    // The page bar is the design's: arrow, counter, arrow.
+    final pageBar = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            _ArrowButton(
+              icon: Icons.chevron_left,
+              tooltip: 'Previous page',
+              onPressed: !canNav || active.page <= 1
+                  ? null
+: () {
                   final next = active.page - 1;
-                  _pdf.previousPage();
+                  // The controller is only attached for a PDF. An Office
+                  // page or an image has no `SfPdfViewer` behind it, so an
+                  // unguarded nextPage()/previousPage() threw on exactly the
+                  // documents that support student navigation. The Office
+                  // canvas follows the page through `_reportLocalPage`.
+                  try {
+                    _pdf.previousPage();
+                  } catch (_) {/* not a PDF */}
                   _reportLocalPage(next);
                 },
-        ),
-        Expanded(
-          child: Text(
-            sync.takenOver
-                ? 'The teacher took control — back on the class page'
-                : 'Teacher controls the presentation'
-                    '${canNav ? ' · you may also turn pages' : ''}',
-            textAlign: TextAlign.center,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: AppColors.muted),
-          ),
-        ),
-        IconButton(
-          tooltip: 'Next',
-          icon: const Icon(Icons.chevron_right),
-          onPressed: !canNav ||
-                  (active.totalPages > 0 &&
-                      active.page >= active.totalPages)
-              ? null
-              : () {
+            ),
+            Expanded(
+              child: Text(
+                active.totalPages > 0
+                    ? '${active.page} / ${active.totalPages}'
+                    : '${active.page}',
+                textAlign: TextAlign.center,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
+            _ArrowButton(
+              icon: Icons.chevron_right,
+              tooltip: 'Next page',
+              onPressed: !canNav ||
+                      (active.totalPages > 0 &&
+                          active.page >= active.totalPages)
+                  ? null
+: () {
                   final next = active.page + 1;
-                  _pdf.nextPage();
+                  try {
+                    _pdf.nextPage();
+                  } catch (_) {/* not a PDF */}
                   _reportLocalPage(next);
                 },
+            ),
+          ],
         ),
-        // Raise a hand: the teacher sees it straight away on their screen.
-        IconButton(
-          tooltip: sync.handRaised ? 'Lower hand' : 'Raise hand',
-          icon: Icon(
-            sync.handRaised ? Icons.pan_tool : Icons.pan_tool_outlined,
-            color: sync.handRaised ? AppColors.warning : null,
+      ),
+    );
+
+    // Everything else goes on its own row with a label. It used to be five
+    // bare icons sharing one row with the explanatory text, which left the
+    // text 48px — and zero, with downloads enabled — on a 320px phone, so the
+    // one sentence telling a student what they are allowed to do was
+    // unreadable exactly when it mattered.
+    final actions = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              sync.takenOver
+                  ? 'The teacher took control — back on the class page'
+                  : 'Teacher controls the presentation'
+                      '${canNav ? ' · you may also turn pages' : ''}',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AppColors.muted),
+            ),
           ),
-          onPressed: () => sync.setHandRaised(!sync.handRaised),
-        ),
-        IconButton(
-          tooltip: 'Full screen',
-          icon: const Icon(Icons.fullscreen),
-          onPressed: () =>
-              setState(() => _fullscreen = true),
-        ),
-        if (canDownload)
           IconButton(
-            tooltip: 'Download (allowed by teacher)',
-            icon: const Icon(Icons.download_outlined),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text(
-                        'Download starts when the host serves the file.')),
-              );
-            },
+            tooltip: sync.handRaised ? 'Lower hand' : 'Raise hand',
+            icon: Icon(
+              sync.handRaised ? Icons.pan_tool : Icons.pan_tool_outlined,
+              color: sync.handRaised ? AppColors.warning : null,
+            ),
+            onPressed: () => sync.setHandRaised(!sync.handRaised),
           ),
+          IconButton(
+            tooltip: 'Full screen',
+            icon: const Icon(Icons.fullscreen),
+            onPressed: () => setState(() => _fullscreen = true),
+          ),
+          if (canDownload)
+            IconButton(
+              tooltip: 'Download (allowed by teacher)',
+              icon: const Icon(Icons.download_outlined),
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text(
+                          'Download starts when the host serves the file.')),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        actions,
+        const SizedBox(height: 4),
+        pageBar,
       ],
+    );
+  }
+}
+
+/// A circular arrow button sized to be a real tap target on a phone.
+class _ArrowButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  const _ArrowButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+    return Semantics(
+      button: true,
+      label: tooltip,
+      child: IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        icon: Icon(icon),
+        style: IconButton.styleFrom(
+          backgroundColor: enabled ? AppColors.primarySoft : AppColors.surfaceSoft,
+          foregroundColor: enabled ? AppColors.primary : AppColors.muted,
+          minimumSize: const Size(48, 48),
+          shape: const CircleBorder(),
+        ),
+      ),
     );
   }
 }

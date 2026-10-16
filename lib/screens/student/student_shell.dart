@@ -48,8 +48,14 @@ class _StudentShellState extends State<StudentShell> {
     final presenting =
         joined && sync.snapshot?.documentId != null;
 
+    // The design titles the viewer with the class the student is actually in,
+    // not with the word "Viewer".
+    final title = _index == 1 && joined
+        ? (sync.snapshot?.name ?? _destinations[_index].label)
+        : _destinations[_index].label;
+
     return AppScaffold(
-      title: _destinations[_index].label,
+      title: title,
       destinations: _destinations,
       currentIndex: _index,
       onNavigate: (i) => setState(() => _index = i),
