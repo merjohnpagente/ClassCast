@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../services/ooxml/docx_document.dart';
@@ -50,6 +52,25 @@ class OfficeDocumentScrollView extends StatefulWidget {
 class _OfficeDocumentScrollViewState extends State<OfficeDocumentScrollView> {
   final ScrollController _controller = ScrollController();
 
+  /// Used to turn a double tap into a point in this view's own coordinates.
+  final GlobalKey _surface = GlobalKey();
+
+  /// Where the last half of a double tap landed.
+  Offset? _pendingTap;
+
+  /// Whether the list's viewer is allowed to pan — only once the document is
+  /// actually zoomed in and there is something to drag.
+  ///
+  /// This is deliberately *not* read straight off the transform inside build,
+  /// or inside a ListenableBuilder on it. Rebuilding the viewer while the
+  /// fingers are still on it calls its `didUpdateWidget`, which throws away
+  /// the cached transform — and that cached transform *is* the gesture in
+  /// flight. Rebuilding on every tick of a pinch is precisely how you make
+  /// pinch stop working, so the flag only moves once the transform has been
+  /// still long enough to say the gesture is over.
+  bool _panning = false;
+  Timer? _settle;
+
   /// Page this view last *reported*, so the teacher's own scrolling is not
   /// mistaken for an external page change.
   int _reported = 0;
@@ -61,11 +82,18 @@ class _OfficeDocumentScrollViewState extends State<OfficeDocumentScrollView> {
     super.initState();
     _controller.addListener(_onScroll);
     _reported = widget.page;
+    widget.zoom?.transform.addListener(_onTransform);
   }
 
   @override
   void didUpdateWidget(covariant OfficeDocumentScrollView old) {
     super.didUpdateWidget(old);
+    if (old.zoom != widget.zoom) {
+      old.zoom?.transform.removeListener(_onTransform);
+      _settle?.cancel();
+      _panning = false;
+      widget.zoom?.transform.addListener(_onTransform);
+    }
     // A page change that did not come from our own scrolling — the arrows, a
     // late join — should bring that page into view.
     if (widget.page != old.page && widget.page != _reported) {
@@ -76,10 +104,24 @@ class _OfficeDocumentScrollViewState extends State<OfficeDocumentScrollView> {
 
   @override
   void dispose() {
+    _settle?.cancel();
+    widget.zoom?.transform.removeListener(_onTransform);
     _controller
       ..removeListener(_onScroll)
       ..dispose();
     super.dispose();
+  }
+
+  /// Re-latches [_panning] once the transform has stopped moving.
+  void _onTransform() {
+    _settle?.cancel();
+    _settle = Timer(const Duration(milliseconds: 220), () {
+      if (!mounted) return;
+      final zoom = widget.zoom;
+      if (zoom == null) return;
+      final next = zoom.transform.value.getMaxScaleOnAxis() > 1.01;
+      if (next != _panning) setState(() => _panning = next);
+    });
   }
 
   void _onScroll() {
@@ -152,36 +194,48 @@ class _OfficeDocumentScrollViewState extends State<OfficeDocumentScrollView> {
         // Scroll mode had no zoom at all, which made a dense Word page
         // impossible to read on a phone.
         if (zoom == null) return list;
-        return ListenableBuilder(
-          listenable: zoom.transform,
-          builder: (context, _) {
-            // The viewer must not claim the vertical drag while the list is at
-            // 1x. A scale recogniser between the finger and the list wins the
-            // arena every time, so the list could not be scrolled at all and
-            // continuous mode looked frozen — the pages were there, you just
-            // could not reach them. Panning only takes over once there is
-            // something to pan.
-            final zoomedIn = zoom.transform.value.getMaxScaleOnAxis() > 1.01;
-            return Stack(
-              children: [
-                InteractiveViewer(
-                  transformationController: zoom.transform,
-                  minScale: 1,
-                  maxScale: kZoomMax,
-                  panEnabled: zoomedIn,
-                  boundaryMargin: const EdgeInsets.all(120),
-                  trackpadScrollCausesScale: true,
-                  scaleFactor: 200,
+        return Stack(
+          children: [
+            KeyedSubtree(
+              key: _surface,
+              child: InteractiveViewer(
+                transformationController: zoom.transform,
+                minScale: 1,
+                maxScale: kZoomMax,
+                // Off while the document fits, on once it does not. A scale
+                // recogniser between the finger and a scrollable wins the
+                // gesture arena every time, so with this on the list could
+                // never be dragged and continuous mode looked frozen — the
+                // pages were all there, you just could not reach them.
+                panEnabled: _panning,
+                boundaryMargin: const EdgeInsets.all(120),
+                trackpadScrollCausesScale: true,
+                scaleFactor: 200,
+                child: GestureDetector(
+                  // The list's viewer owns the gesture here, so the double tap
+                  // that zooms into a spot has to be claimed at the same level.
+                  // Each page's own canvas is inert in this mode; without this
+                  // the gesture was simply gone.
+                  onDoubleTapDown: (d) => _pendingTap = d.globalPosition,
+                  onDoubleTap: () {
+                    final tap = _pendingTap;
+                    _pendingTap = null;
+                    if (tap == null) return;
+                    final box =
+                        _surface.currentContext?.findRenderObject() as RenderBox?;
+                    if (box == null) return;
+                    zoom.toggleZoomAt(box.globalToLocal(tap), box.size);
+                  },
                   child: list,
                 ),
-                Positioned(
-                  right: 10,
-                  bottom: 10,
-                  child: DocumentZoomBar(target: zoom.target),
-                ),
-              ],
-            );
-          },
+              ),
+            ),
+            Positioned(
+              right: 10,
+              bottom: 10,
+              child: DocumentZoomBar(target: zoom.target),
+            ),
+          ],
         );
       },
     );
