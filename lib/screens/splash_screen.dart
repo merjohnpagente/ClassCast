@@ -6,12 +6,6 @@ import '../theme/app_colors.dart';
 import '../widgets/motion.dart';
 import '../widgets/ui_kit.dart';
 
-/// How long the splash stays up, and how long the progress bar takes to
-/// cross. They are deliberately the same length: the bar finishes exactly as
-/// the app hands over, so the wait reads as the bar filling rather than as
-/// the bar filling and then something else happening.
-static const _duration = Duration(milliseconds: 4000);
-
 /// Splash: the mark settles in on a full-bleed blue field, then the app moves
 /// on.
 ///
@@ -28,6 +22,11 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  /// How long the splash stays up, and how long the progress bar takes to
+  /// cross. They are deliberately the same length: the bar finishes exactly
+  /// as the app hands over, so the wait reads as the bar filling rather than
+  /// as the bar filling and then something else happening.
+  static const _duration = Duration(milliseconds: 4000);
   Timer? _timer;
   bool _done = false;
 
