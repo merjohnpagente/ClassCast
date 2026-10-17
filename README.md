@@ -8,6 +8,14 @@ hotspot. No mobile data, no internet, no accounts.
 - **Students** (Flutter app or any web browser): scan the QR or enter the
   local address, then watch the synchronized presentation.
 
+## Download the Android app
+
+**[⬇ Download Class-cast.apk](https://github.com/merjohnpagente/ClassCast/releases/latest/download/Class-cast.apk)**
+— open the link on the phone, tap the downloaded file, and allow *Install
+unknown apps* if Android asks. Android 12 and up; no account, no Play Store.
+
+That link always serves the newest release.
+
 UI is built in this repo. **APK + Web builds run on GitHub Actions** — no
 Flutter SDK needed on your machine. Push to `main` (or tag `v*`) and download
 the artifacts.
@@ -139,8 +147,9 @@ dart run bin/classcast_server.dart --port 8080 --dir ./shared --web ../build/web
 
 ## Run the Android app
 
-1. Open the GitHub **Actions** tab → latest run → download `Class-cast-apk`
-   (or grab `Class-cast.apk` from **Releases**).
+1. Open the download link on the phone:
+   [Class-cast.apk](https://github.com/merjohnpagente/ClassCast/releases/latest/download/Class-cast.apk)
+   (from a computer, the same file is on the latest **Releases** page).
 2. Teacher flow: Role → Teacher → Create session → share a file → Present.
 3. Student flow: join the teacher hotspot → Role → Student → scan QR or type
    the address → watch live.
