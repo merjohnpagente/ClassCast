@@ -231,7 +231,7 @@ class _SessionActionsSheetState extends State<SessionActionsSheet> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Icon(Icons.description_outlined,
+                       Icon(Icons.description_outlined,
                           size: 18, color: AppColors.primary),
                       const SizedBox(width: 8),
                       Expanded(
@@ -262,7 +262,7 @@ class _SessionActionsSheetState extends State<SessionActionsSheet> {
                   label: const Text('Delete session'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.error,
-                    side: const BorderSide(color: AppColors.error),
+                    side: BorderSide(color: AppColors.error),
                   ),
                 ),
               ],

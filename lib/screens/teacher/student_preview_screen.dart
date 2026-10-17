@@ -136,7 +136,7 @@ final viewer = DocumentViewer(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Row(
         children: [
-          const Icon(Icons.visibility_outlined,
+           Icon(Icons.visibility_outlined,
               size: 16, color: AppColors.muted),
           const SizedBox(width: 8),
           Expanded(
@@ -171,8 +171,8 @@ final viewer = DocumentViewer(
     final total = session.totalPages;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
       child: SafeArea(

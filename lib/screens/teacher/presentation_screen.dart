@@ -177,7 +177,7 @@ class _TeacherPresentationScreenState
                           ),
                         ),
                       if (active?.syncPaused ?? false)
-                        const Padding(
+                         Padding(
                           padding: EdgeInsets.only(right: 4),
                           child: StatusChip(
                               label: 'Paused',
@@ -186,7 +186,7 @@ class _TeacherPresentationScreenState
                               background: AppColors.surfaceSoft),
                         )
                       else
-                        const Padding(
+                         Padding(
                           padding: EdgeInsets.only(right: 4),
                           child: StatusChip(
                               label: 'Live',
@@ -479,8 +479,8 @@ class _TeacherPresentationScreenState
     return Container(
       padding: EdgeInsets.fromLTRB(
           context.pagePadding, 10, context.pagePadding, 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
       child: SafeArea(
@@ -790,7 +790,7 @@ void _openFiles(BuildContext context) {
             Text('Session ID: ${active.id}'),
             if (active.joinAddress.isNotEmpty)
               Text(active.joinAddress,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: AppColors.muted, fontSize: 13)),
             const SizedBox(height: 10),
             // Who is actually watching, live — a teacher needs this to know
@@ -808,7 +808,7 @@ void _openFiles(BuildContext context) {
     if (students.isEmpty) {
       return Row(
         children: [
-          const Icon(Icons.groups_outlined, size: 18, color: AppColors.muted),
+          Icon(Icons.groups_outlined, size: 18, color: AppColors.muted),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -826,7 +826,7 @@ void _openFiles(BuildContext context) {
       children: [
         Row(
           children: [
-            const Icon(Icons.groups, size: 18, color: AppColors.success),
+            Icon(Icons.groups, size: 18, color: AppColors.success),
             const SizedBox(width: 8),
             Text('${students.length} connected',
                 style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -834,10 +834,10 @@ void _openFiles(BuildContext context) {
             if (sessions.raisedHands.isNotEmpty)
               Row(
                 children: [
-                  const Icon(Icons.pan_tool, size: 14, color: AppColors.warning),
+                  Icon(Icons.pan_tool, size: 14, color: AppColors.warning),
                   const SizedBox(width: 4),
                   Text('${sessions.raisedHands.length} hand(s)',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 12, color: AppColors.warning)),
                 ],
               ),
@@ -870,14 +870,14 @@ void _openFiles(BuildContext context) {
                 // Where this student is, when the teacher let them browse.
                 if (sessions.studentPages[student.id] != null)
                   Text('p${sessions.studentPages[student.id]}',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 11, color: AppColors.muted)),
                 if (sessions.raisedHands.containsKey(student.id))
                   IconButton(
                     tooltip: 'Lower hand',
                     visualDensity: VisualDensity.compact,
                     iconSize: 16,
-                    icon: const Icon(Icons.check, color: AppColors.success),
+                    icon: Icon(Icons.check, color: AppColors.success),
                     onPressed: () => sessions.lowerHand(student.id),
                   ),
                 // Pull a wandering student back onto the class page.
@@ -885,14 +885,14 @@ void _openFiles(BuildContext context) {
                   tooltip: 'Take control',
                   visualDensity: VisualDensity.compact,
                   iconSize: 16,
-                  icon: const Icon(Icons.my_location,
+                  icon: Icon(Icons.my_location,
                       color: AppColors.primary),
                   onPressed: () => sessions.takeControl(
                       participantId: student.id),
                 ),
                 if (student.deviceType.isNotEmpty)
                   Text(student.deviceType,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 11, color: AppColors.muted)),
               ],
             ),

@@ -394,8 +394,8 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
     // directly (when it was attached at all) never moved an Office document.
     final pageBar = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
       child: SafeArea(

@@ -144,7 +144,7 @@ class ShareDocumentScreen extends StatelessWidget {
             ),
             if (active?.documentId == doc.id) ...[
               const SizedBox(height: 12),
-              const StatusChip(
+               StatusChip(
                   label: 'Sharing now',
                   icon: Icons.sensors,
                   color: AppColors.success,
@@ -203,7 +203,7 @@ class ErrorHint extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.info_outline,
+           Icon(Icons.info_outline,
               color: AppColors.error),
           const SizedBox(width: 10),
           Expanded(child: Text(message)),

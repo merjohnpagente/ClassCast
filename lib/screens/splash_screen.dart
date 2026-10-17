@@ -72,7 +72,7 @@ class _SplashScreenState extends State<SplashScreen> {
             // The blue field: a single diagonal gradient rather than a flat
             // fill, which is what stops a full-screen brand colour from
             // looking like a stuck loading state.
-            const DecoratedBox(
+             DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,

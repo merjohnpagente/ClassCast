@@ -92,7 +92,7 @@ class NetworkHelpBody extends StatelessWidget {
               'Wait for the teacher to share. Your screen follows the teacher page automatically.',
         ),
         const SectionHeader(title: 'Connection states'),
-        const Card(
+         Card(
           child: Column(
             children: [
               _StateRow(

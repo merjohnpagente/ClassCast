@@ -19,42 +19,42 @@ class StatusChip extends StatelessWidget {
     required this.background,
   });
 
-  factory StatusChip.live() => const StatusChip(
+  factory StatusChip.live() =>  StatusChip(
         label: 'Live',
         icon: Icons.sensors,
         color: AppColors.success,
         background: AppColors.successBg,
       );
 
-  factory StatusChip.connected() => const StatusChip(
+  factory StatusChip.connected() =>  StatusChip(
         label: 'Connected',
         icon: Icons.wifi,
         color: AppColors.success,
         background: AppColors.successBg,
       );
 
-  factory StatusChip.waiting() => const StatusChip(
+  factory StatusChip.waiting() =>  StatusChip(
         label: 'Waiting',
         icon: Icons.hourglass_bottom,
         color: AppColors.warning,
         background: AppColors.warningBg,
       );
 
-  factory StatusChip.reconnecting() => const StatusChip(
+  factory StatusChip.reconnecting() =>  StatusChip(
         label: 'Reconnecting',
         icon: Icons.sync,
         color: AppColors.warning,
         background: AppColors.warningBg,
       );
 
-  factory StatusChip.offline() => const StatusChip(
+  factory StatusChip.offline() =>  StatusChip(
         label: 'Offline',
         icon: Icons.wifi_off,
         color: AppColors.error,
         background: AppColors.errorBg,
       );
 
-  factory StatusChip.paused() => const StatusChip(
+  factory StatusChip.paused() =>  StatusChip(
         label: 'Paused',
         icon: Icons.pause_circle_outline,
         color: AppColors.muted,

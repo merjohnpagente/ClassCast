@@ -61,13 +61,13 @@ class FileTypeIcon extends StatelessWidget {
         return (
           Icons.picture_as_pdf,
           AppColors.pdf,
-          const Color(0xFFFFEBEB)
+          AppColors.pdf.withValues(alpha: 0.14)
         );
       case DocKind.powerpoint:
         return (
           Icons.slideshow,
           AppColors.ppt,
-          const Color(0xFFFFF1E3)
+          AppColors.ppt.withValues(alpha: 0.14)
         );
       case DocKind.word:
         return (
@@ -97,7 +97,7 @@ class FileTypeIcon extends StatelessWidget {
         return (
           Icons.play_circle_outline,
           AppColors.video,
-          const Color(0xFFFCEAF3)
+          AppColors.video.withValues(alpha: 0.14)
         );
       case DocKind.unknown:
         return (
@@ -200,14 +200,14 @@ class DocumentCard extends StatelessWidget {
               if (onOpen != null)
                 IconButton(
                   tooltip: 'Open',
-                  icon: const Icon(Icons.open_in_new,
+                  icon: Icon(Icons.open_in_new,
                       color: AppColors.primary),
                   onPressed: onOpen,
                 ),
               if (onRemove != null)
                 IconButton(
                   tooltip: 'Remove',
-                  icon: const Icon(Icons.close,
+                  icon: Icon(Icons.close,
                       color: AppColors.muted),
                   onPressed: onRemove,
                 ),

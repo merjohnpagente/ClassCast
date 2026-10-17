@@ -131,7 +131,7 @@ class _StudentRow extends StatelessWidget {
           ),
           IconButton(
             tooltip: 'Remove',
-            icon: const Icon(Icons.person_remove_outlined,
+            icon: Icon(Icons.person_remove_outlined,
                 size: 20, color: AppColors.muted),
             onPressed: () => _confirmRemove(context),
           ),

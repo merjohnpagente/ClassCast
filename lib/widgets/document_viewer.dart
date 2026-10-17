@@ -277,27 +277,27 @@ class _DocumentViewerState extends State<DocumentViewer>
         Image.network(
           remoteUrl!,
           fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined,
+          errorBuilder: (_, __, ___) =>  Icon(Icons.broken_image_outlined,
               size: 44, color: AppColors.muted),
         ),
       );
     }
     final path = doc.localPath;
     if (path == null || path.isEmpty) {
-      return const Icon(Icons.broken_image_outlined,
+      return  Icon(Icons.broken_image_outlined,
           size: 44, color: AppColors.muted);
     }
     return _LocalFile<Uint8List>(
       path: path,
       load: localFileReadBytes,
-      onMissing: const Icon(Icons.broken_image_outlined,
+      onMissing: Icon(Icons.broken_image_outlined,
           size: 44, color: AppColors.muted),
       builder: (context, bytes) => _zoomable(
         Image.memory(
           bytes,
           fit: BoxFit.contain,
           errorBuilder: (_, __, ___) =>
-              const Icon(Icons.broken_image_outlined,
+               Icon(Icons.broken_image_outlined,
                   size: 44, color: AppColors.muted),
         ),
       ),
@@ -446,12 +446,12 @@ class _MissingFile extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.insert_drive_file_outlined,
+             Icon(Icons.insert_drive_file_outlined,
                 size: 40, color: AppColors.muted),
             const SizedBox(height: 8),
             Text(
               '$name is no longer on this device.',
-              style: const TextStyle(color: AppColors.muted, fontSize: 12),
+              style: TextStyle(color: AppColors.muted, fontSize: 12),
             ),
           ],
         ),
@@ -542,7 +542,7 @@ class _ConversionPanel extends StatelessWidget {
             Text(
               body,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                   color: AppColors.muted, fontSize: 12, height: 1.4),
             ),
           ],

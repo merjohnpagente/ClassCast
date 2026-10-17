@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 
@@ -63,6 +64,30 @@ class AppState extends ChangeNotifier {
   void setServerPort(int port) {
     _serverPort = port;
     notifyListeners();
+  }
+
+  /// Light, dark, or whatever the phone does.
+  ///
+  /// This device's own choice, like the video mute — a classroom where the
+  /// teacher reads on a dark screen and a student reads on a light one is not
+  /// a disagreement. Defaults to following the phone.
+  ThemeMode _themeMode = ThemeMode.system;
+  ThemeMode get themeMode => _themeMode;
+
+  Future<void> loadThemeMode() async {
+    final raw = await _store.loadThemeMode();
+    _themeMode = ThemeMode.values.firstWhere(
+      (mode) => mode.name == raw,
+      orElse: () => ThemeMode.system,
+    );
+    notifyListeners();
+  }
+
+  void setThemeMode(ThemeMode mode) {
+    if (_themeMode == mode) return;
+    _themeMode = mode;
+    notifyListeners();
+    unawaited(_store.saveThemeMode(mode.name));
   }
 
   /// Whether this phone plays a shared video without sound.

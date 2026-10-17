@@ -417,7 +417,7 @@ class _VideoCastPlayerState extends State<VideoCastPlayer> {
                   Text(
                     '${_format(position)} / ${_format(duration)}',
                     style:
-                        const TextStyle(fontSize: 12, color: AppColors.muted),
+                        TextStyle(fontSize: 12, color: AppColors.muted),
                   ),
                   const SizedBox(width: 4),
                   // One tap, and it stays: thirty phones playing a lecture at
@@ -444,7 +444,7 @@ class _VideoCastPlayerState extends State<VideoCastPlayer> {
                           ? 'Following the teacher'
                           : 'Paused by the teacher',
                   style:
-                      const TextStyle(fontSize: 11, color: AppColors.muted),
+                      TextStyle(fontSize: 11, color: AppColors.muted),
                 ),
             ],
           ),
@@ -459,13 +459,13 @@ class _VideoCastPlayerState extends State<VideoCastPlayer> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.movie_outlined,
+               Icon(Icons.movie_outlined,
                   size: 40, color: AppColors.muted),
               const SizedBox(height: 8),
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                style: TextStyle(color: AppColors.muted, fontSize: 12),
               ),
             ],
           ),

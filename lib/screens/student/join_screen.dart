@@ -210,7 +210,7 @@ class _JoinScreenState extends State<JoinScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.qr_code_scanner,
+                   Icon(Icons.qr_code_scanner,
                       size: 18, color: AppColors.muted),
                   const SizedBox(width: 8),
                   Expanded(
@@ -227,7 +227,7 @@ class _JoinScreenState extends State<JoinScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.wifi, size: 18, color: AppColors.muted),
+              Icon(Icons.wifi, size: 18, color: AppColors.muted),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(

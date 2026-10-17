@@ -174,7 +174,7 @@ return Scaffold(
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size(double.infinity, 52),
                           foregroundColor: AppColors.error,
-                          side: const BorderSide(color: AppColors.error),
+                          side: BorderSide(color: AppColors.error),
                         ),
                       ),
                     ],
@@ -320,7 +320,7 @@ return Scaffold(
             children: [
               Row(
                 children: [
-                  const Icon(Icons.warning_amber_rounded,
+                   Icon(Icons.warning_amber_rounded,
                       color: AppColors.warning),
                   const SizedBox(width: 10),
                   Expanded(
@@ -354,7 +354,7 @@ return Scaffold(
         padding: const EdgeInsets.all(14),
         child: Row(
           children: [
-            const Icon(Icons.check_circle, color: AppColors.success),
+            Icon(Icons.check_circle, color: AppColors.success),
             const SizedBox(width: 10),
             Expanded(
               child: Column(

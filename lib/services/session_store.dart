@@ -13,6 +13,7 @@ class SessionStore {
   static const _studentNameKey = 'classcast_student_name';
   static const _videoMutedKey = 'classcast_video_muted';
   static const _scrollViewKey = 'classcast_scroll_view';
+  static const _themeModeKey = 'classcast_theme_mode';
 
   Future<List<ClassroomSession>> loadRecent() async {
     try {
@@ -116,6 +117,21 @@ class SessionStore {
       return await localStore().read(_scrollViewKey) == '1';
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Which theme this device reads in: `system`, `light` or `dark`.
+  Future<void> saveThemeMode(String mode) async {
+    try {
+      await localStore().write(_themeModeKey, mode);
+    } catch (_) {/* ignore */}
+  }
+
+  Future<String> loadThemeMode() async {
+    try {
+      return await localStore().read(_themeModeKey) ?? 'system';
+    } catch (_) {
+      return 'system';
     }
   }
 }

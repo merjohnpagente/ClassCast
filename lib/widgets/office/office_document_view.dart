@@ -206,7 +206,7 @@ class _OfficeDocumentViewState extends State<OfficeDocumentView>
           return OfficeCanvas(
             widthPt: kSheetPageWidthPt,
             heightPt: 200,
-            child: const Center(
+            child: Center(
               child: Text(
                 'This workbook has no visible sheets.',
                 style: TextStyle(color: AppColors.muted),

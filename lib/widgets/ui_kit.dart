@@ -15,8 +15,12 @@ class AppIconTile extends StatelessWidget {
   final Widget? child;
   final double size;
   final double iconSize;
-  final Color color;
-  final Color background;
+
+  /// Null means "the palette's default", resolved at build time. A literal
+  /// default would freeze the light values into the widget at compile time,
+  /// and dark mode would never reach it.
+  final Color? color;
+  final Color? background;
   final BorderRadius? borderRadius;
   final bool circular;
 
@@ -26,8 +30,8 @@ class AppIconTile extends StatelessWidget {
     this.child,
     this.size = 40,
     this.iconSize = 20,
-    this.color = AppColors.primary,
-    this.background = AppColors.primarySoft,
+    this.color,
+    this.background,
     this.borderRadius,
     this.circular = false,
   }) : assert(icon != null || child != null, 'give an icon or a child');
@@ -39,13 +43,13 @@ class AppIconTile extends StatelessWidget {
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: background,
+        color: background ?? AppColors.primarySoft,
         shape: circular ? BoxShape.circle : BoxShape.rectangle,
         borderRadius: circular
             ? null
             : (borderRadius ?? BorderRadius.circular(AppRadius.input)),
       ),
-      child: child ?? Icon(icon, size: iconSize, color: color),
+      child: child ?? Icon(icon, size: iconSize, color: color ?? AppColors.primary),
     );
   }
 }
@@ -65,8 +69,8 @@ class AppListRow extends StatelessWidget {
   final VoidCallback? onTap;
   final bool selected;
   final bool circularIcon;
-  final Color iconColor;
-  final Color iconBackground;
+  final Color? iconColor;
+  final Color? iconBackground;
   final double iconSize;
 
   const AppListRow({
@@ -79,8 +83,8 @@ class AppListRow extends StatelessWidget {
     this.onTap,
     this.selected = false,
     this.circularIcon = false,
-    this.iconColor = AppColors.primary,
-    this.iconBackground = AppColors.primarySoft,
+    this.iconColor,
+    this.iconBackground,
     this.iconSize = 40,
   }) : assert(icon != null || leading != null, 'give an icon or a leading');
 
@@ -272,7 +276,7 @@ class AppSearchField extends StatelessWidget {
       style: const TextStyle(fontSize: 14),
       decoration: InputDecoration(
         hintText: hint,
-        prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.muted),
+        prefixIcon: Icon(Icons.search, size: 20, color: AppColors.muted),
         prefixIconConstraints: const BoxConstraints(minWidth: 40),
         suffixIcon: controller.text.isEmpty
             ? null
@@ -298,13 +302,13 @@ class AppSearchField extends StatelessWidget {
 class LiveDot extends StatelessWidget {
   final bool active;
   final double size;
-  final Color activeColor;
+  final Color? activeColor;
 
   const LiveDot({
     super.key,
     required this.active,
     this.size = 10,
-    this.activeColor = AppColors.success,
+    this.activeColor,
   });
 
   @override
@@ -316,7 +320,7 @@ class LiveDot extends StatelessWidget {
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: active ? activeColor : AppColors.muted,
+          color: active ? (activeColor ?? AppColors.success) : AppColors.muted,
         ),
       ),
     );
@@ -386,16 +390,16 @@ class AppBrandLockup extends StatelessWidget {
 /// Nine lines of geometry instead of a dependency that broke the build.
 class GitHubMark extends StatelessWidget {
   final double size;
-  final Color color;
+  final Color? color;
 
-  const GitHubMark({super.key, this.size = 24, this.color = AppColors.ink});
+  const GitHubMark({super.key, this.size = 24, this.color});
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: size,
       height: size,
-      child: CustomPaint(painter: _GitHubPainter(color)),
+      child: CustomPaint(painter: _GitHubPainter(color ?? AppColors.ink)),
     );
   }
 }
@@ -454,12 +458,12 @@ class _GitHubPainter extends CustomPainter {
 /// Drawn rather than shipped as an asset: it is two arcs, it scales to any
 /// width, and it costs no download on a phone that may be on a 2G tether.
 class SoftWave extends StatelessWidget {
-  final Color color;
+  final Color? color;
   final bool flipped;
 
   const SoftWave({
     super.key,
-    this.color = AppColors.primary,
+    this.color,
     this.flipped = false,
   });
 
@@ -469,7 +473,7 @@ class SoftWave extends StatelessWidget {
       height: 120,
       width: double.infinity,
       child: CustomPaint(
-        painter: _WavePainter(color, flipped),
+        painter: _WavePainter(color ?? AppColors.primary, flipped),
       ),
     );
   }

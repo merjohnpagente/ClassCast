@@ -98,6 +98,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Timer? _probe;
   static const _networkTimeout = Duration(seconds: 4);
 
+  /// Light or dark, per device. Following the phone is the default because a
+  /// classroom in the evening and a phone handed out in the morning should
+  /// not need different taps.
+  void _pickTheme(BuildContext context, AppState app) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Theme'),
+        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final mode in ThemeMode.values)
+              ListTile(
+                leading: Icon(switch (mode) {
+                  ThemeMode.system => Icons.brightness_auto_outlined,
+                  ThemeMode.light => Icons.light_mode_outlined,
+                  ThemeMode.dark => Icons.dark_mode_outlined,
+                }),
+                title: Text(switch (mode) {
+                  ThemeMode.system => 'Follow the phone',
+                  ThemeMode.light => 'Light',
+                  ThemeMode.dark => 'Dark',
+                }),
+                trailing: app.themeMode == mode
+                    ? const Icon(Icons.check, size: 20)
+                    : null,
+                onTap: () {
+                  app.setThemeMode(mode);
+                  Navigator.of(ctx).pop();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _probe?.cancel();
@@ -196,6 +234,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
+          const AppSectionTitle('Appearance'),
+          AppListGroup(
+            rows: [
+              AppListRow(
+                icon: switch (app.themeMode) {
+                  ThemeMode.system => Icons.brightness_auto_outlined,
+                  ThemeMode.light => Icons.light_mode_outlined,
+                  ThemeMode.dark => Icons.dark_mode_outlined,
+                },
+                title: 'Theme',
+                subtitle: switch (app.themeMode) {
+                  ThemeMode.system => 'Follow the phone',
+                  ThemeMode.light => 'Light',
+                  ThemeMode.dark => 'Dark',
+                },
+                iconColor: AppColors.secondary,
+                iconBackground: AppColors.secondarySoft,
+                trailing: const AppChevron(),
+                onTap: () => _pickTheme(context, app),
+              ),
+            ],
+          ),
           if (isTeacher) ...[
             const AppSectionTitle('Classroom session'),
             AppListGroup(
@@ -245,7 +305,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.dns_outlined,
                   title: 'Local server port',
                   subtitle: '${app.serverPort}',
-                  trailing: const Icon(Icons.edit_outlined,
+                  trailing: Icon(Icons.edit_outlined,
                       size: 20, color: AppColors.muted),
                   onTap: () => _editPort(context, app),
                 ),
@@ -284,7 +344,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       )
                     : null,
               ),
-              const AppListRow(
+               AppListRow(
                 icon: Icons.person_outline,
                 title: 'Developed by MerjDev',
                 iconColor: AppColors.secondary,
@@ -311,7 +371,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: 'GCash $_gcashNumber',
                 iconColor: AppColors.warning,
                 iconBackground: AppColors.warningBg,
-                trailing: const Icon(Icons.copy_all_outlined,
+                trailing: Icon(Icons.copy_all_outlined,
                     size: 20, color: AppColors.muted),
                 onTap: () => _copyGcash(context),
               ),

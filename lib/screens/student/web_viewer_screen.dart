@@ -30,7 +30,7 @@ class WebStudentViewer extends StatelessWidget {
         title: Text(sync.snapshot?.name ?? 'ClassCast Web Viewer'),
         actions: [
           if (sync.link == LinkState.live)
-            const Padding(
+             Padding(
               padding: EdgeInsets.only(right: 12),
               child: Center(
                 child: Text('Live',

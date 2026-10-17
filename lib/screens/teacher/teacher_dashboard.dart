@@ -191,7 +191,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           children: [
-            const AppIconTile(
+             AppIconTile(
               icon: Icons.wifi,
               color: AppColors.success,
               background: AppColors.successBg,
@@ -242,7 +242,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             ),
             IconButton(
               tooltip: 'Connection guide',
-              icon: const Icon(Icons.help_outline, color: AppColors.primary),
+              icon: Icon(Icons.help_outline, color: AppColors.primary),
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => const NetworkHelpScreen(isTeacher: true),
@@ -299,7 +299,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.card),
-          side: const BorderSide(color: AppColors.warning),
+          side: BorderSide(color: AppColors.warning),
         ),
         child: Padding(
           padding: const EdgeInsets.all(12),
@@ -309,7 +309,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.wifi_tethering_off,
+                   Icon(Icons.wifi_tethering_off,
                       size: 18, color: AppColors.warning),
                   const SizedBox(width: 8),
                   Expanded(
@@ -425,7 +425,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 if (active.hostIp.isEmpty)
                   // No LAN address yet: a QR without a host cannot be scanned,
                   // so say so instead of showing a dead code.
-                  const Padding(
+                   Padding(
                     padding: EdgeInsets.all(24),
                     child: Column(
                       children: [
@@ -574,7 +574,7 @@ class _ActiveSessionCard extends StatelessWidget {
                     label: const Text('End'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.error,
-                      side: const BorderSide(color: AppColors.error),
+                      side: BorderSide(color: AppColors.error),
                     ),
                   ),
                 ),
