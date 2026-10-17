@@ -201,11 +201,11 @@ final viewer = DocumentViewer(
 }
 
 /// The extension of a shared file's name, lowercased and without the dot.
-  static String _extensionOf(String? name) {
-    if (name == null || name.isEmpty) return '';
-    final dot = name.lastIndexOf('.');
-    return dot <= 0 ? '' : name.substring(dot + 1).toLowerCase();
-  }
+String _extensionOf(String? name) {
+  if (name == null || name.isEmpty) return '';
+  final dot = name.lastIndexOf('.');
+  return dot <= 0 ? '' : name.substring(dot + 1).toLowerCase();
+}
 
 /// A circular arrow shown in its disabled state, because the teacher does not
 /// turn pages from the preview. Same 48dp footprint as the student's, so the

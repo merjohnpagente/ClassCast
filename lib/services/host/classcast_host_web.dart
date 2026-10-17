@@ -20,6 +20,11 @@ class ClasscastHost {
   Duration presenceTimeout = const Duration(seconds: 30);
   Duration sweepInterval = const Duration(seconds: 10);
 
+  /// Nothing is ever open here: this build cannot host.
+  int get socketCount => 0;
+  int get participantCount => 0;
+  int get teacherSocketCount => 0;
+
   /// No web host exists, so the one reason it "failed" is fixed.
   String? get lastStartError =>
       'The browser cannot host a classroom. Use the app on a phone or laptop.';
