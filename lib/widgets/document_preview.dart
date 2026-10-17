@@ -20,6 +20,18 @@ class DocumentPreviewKey {
   final int page;
   final int total;
 
+  /// Where the file is fetched from. In the key because a classroom that moved
+  /// networks re-announces the same document at a new address, and a panel
+  /// holding the old one would fetch from an address that no longer exists.
+  final String? documentUrl;
+
+  /// Video playback. The class follows the teacher's position, and this gate
+  /// decides whether the player is handed that position at all: without these
+  /// two here the subtree stayed identical while a video played, and every
+  /// student sat still while the teacher's recording moved.
+  final int videoPositionMs;
+  final bool videoPlaying;
+
   /// Anything else the document reads that is not part of the session — the
   /// teacher's view mode today. Kept `Object?` so this file does not have to
   /// know what it might hold later.
@@ -29,6 +41,9 @@ class DocumentPreviewKey {
     this.documentId,
     required this.page,
     required this.total,
+    this.documentUrl,
+    this.videoPositionMs = 0,
+    this.videoPlaying = false,
     this.mode,
   });
 
@@ -39,22 +54,29 @@ class DocumentPreviewKey {
           other.documentId == documentId &&
           other.page == page &&
           other.total == total &&
+          other.documentUrl == documentUrl &&
+          other.videoPositionMs == videoPositionMs &&
+          other.videoPlaying == videoPlaying &&
           other.mode == mode;
 
   @override
-  int get hashCode => Object.hash(documentId, page, total, mode);
+  int get hashCode => Object.hash(
+      documentId, page, total, documentUrl, videoPositionMs, videoPlaying, mode);
 }
 
-/// The teacher's selection: the student's three values plus the view mode.
+/// The teacher's selection: the student's four values plus the view mode.
 DocumentPreviewKey _sessionKey(SessionProvider sessions, OfficeViewMode mode) =>
     DocumentPreviewKey(
       documentId: sessions.active?.documentId,
       page: sessions.active?.page ?? 1,
       total: sessions.active?.totalPages ?? 0,
+      documentUrl: sessions.active?.documentUrl,
+      videoPositionMs: sessions.active?.videoPositionMs ?? 0,
+      videoPlaying: sessions.active?.videoPlaying ?? false,
       mode: mode,
     );
 
-/// The student's selection: same three values, plus whatever extra the student
+/// The student's selection: same four values, plus whatever extra the student
 /// screen varies the document by. That is its own page when the teacher allows
 /// independent navigation: two students on different pages must not share one
 /// cached subtree, and a student turning a page must see it turn.
@@ -63,6 +85,9 @@ DocumentPreviewKey _syncKey(SyncProvider sync, Object? mode) =>
       documentId: sync.snapshot?.documentId,
       page: sync.snapshot?.page ?? 1,
       total: sync.snapshot?.totalPages ?? 0,
+      documentUrl: sync.snapshot?.documentUrl,
+      videoPositionMs: sync.snapshot?.videoPositionMs ?? 0,
+      videoPlaying: sync.snapshot?.videoPlaying ?? false,
       mode: mode,
     );
 
