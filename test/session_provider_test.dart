@@ -245,6 +245,69 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 150));
     expect(sessions.active, isNull);
   });
+
+  test('a cast video moves the class, and the echo changes nothing',
+      () async {
+    await sessions.createSession(name: 'Physics', hostIp: '127.0.0.1');
+
+    sessions.setVideo(durationMs: 600000);
+    sessions.setVideo(positionMs: 4200, playing: true);
+
+    final active = sessions.active!;
+    expect(active.videoDurationMs, 600000);
+    expect(active.videoPositionMs, 4200);
+    expect(active.videoPlaying, isTrue);
+
+    // The host broadcasts straight back down the teacher's own socket. A
+    // second tap while the first is still in flight must publish what actually
+    // happened, not what the session happened to hold a moment ago.
+    final before = sessions.active!.videoPositionMs;
+    sessions.setVideo(positionMs: before, playing: false);
+    expect(sessions.active!.videoPlaying, isFalse);
+    expect(sessions.active!.videoPositionMs, before);
+
+    // Past the end is clamped rather than published: a phone would sit at the
+    // end forever trying to reach a moment that does not exist.
+    sessions.setVideo(positionMs: 99999999);
+    expect(sessions.active!.videoPositionMs, 600000);
+  });
+
+  test('an inbound video frame is applied, not re-published', () async {
+    await sessions.createSession(name: 'Physics', hostIp: '127.0.0.1');
+
+    sessions.applyEvent(SyncEvent(
+      type: SyncEventType.videoChanged,
+      sessionId: sessions.active!.id,
+      videoPositionMs: 12000,
+      videoPlaying: true,
+      videoDurationMs: 60000,
+    ));
+
+    final active = sessions.active!;
+    expect(active.videoPositionMs, 12000);
+    expect(active.videoPlaying, isTrue);
+    expect(active.videoDurationMs, 60000);
+  });
+
+  test('a new document puts the class back to the start of nothing',
+      () async {
+    await sessions.createSession(name: 'Physics', hostIp: '127.0.0.1');
+    sessions.setVideo(positionMs: 4200, playing: true, durationMs: 600000);
+
+    // What the host sends when the teacher shares the next file.
+    sessions.applyEvent(SyncEvent(
+      type: SyncEventType.documentChanged,
+      sessionId: sessions.active!.id,
+      documentId: 'doc-2',
+      documentName: 'next.mp4',
+    ));
+
+    final active = sessions.active!;
+    expect(active.videoPositionMs, 0,
+        reason: 'a new document has no playback to follow');
+    expect(active.videoPlaying, isFalse);
+    expect(active.videoDurationMs, 0);
+  });
 }
 
 /// A student joining the session that is actually running — applyEvent drops

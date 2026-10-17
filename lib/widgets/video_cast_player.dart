@@ -45,7 +45,10 @@ class VideoCastPlayer extends StatefulWidget {
   final bool muted;
 
   /// Teacher: the class was paused or played.
-  final VoidCallback? onPlayPause;
+  /// Teacher: the class was played ([true]) or paused ([false]). Carries the
+  /// new state rather than being a bare callback, so what is published is what
+  /// the player actually did.
+  final ValueChanged<bool>? onPlayPause;
 
   /// Teacher: the class was moved to this position, in milliseconds.
   final ValueChanged<int>? onSeek;
@@ -113,7 +116,17 @@ class _VideoCastPlayerState extends State<VideoCastPlayer> {
     }
     _applyMute();
     if (widget.isTeacher) return;
-    _followClass();
+    // Only a real change in the class's playback re-anchors this player. It
+    // also rebuilds for the roster, the link chip and the mute icon, and
+    // re-anchoring on those would put the target back at the last broadcast
+    // position — which is then "behind" a video that has been playing for a
+    // minute, so the drift check would drag every student back to the start,
+    // over and over.
+    if (old.positionMs != widget.positionMs ||
+        old.playing != widget.playing ||
+        old.frozen != widget.frozen) {
+      _followClass();
+    }
   }
 
   Future<void> _dropController() async {
@@ -236,6 +249,11 @@ class _VideoCastPlayerState extends State<VideoCastPlayer> {
   }
 
   /// Nudges a playing student back into step without re-seeking constantly.
+  ///
+  /// The target is the teacher's anchor plus the time since the frame that
+  /// carried it, which is only meaningful if the anchor is left alone. So this
+  /// reads the widget's own values and never rewrites them — the teacher is the
+  /// one who publishes positions.
   void _startDriftCheck() {
     _driftCheck?.cancel();
     _driftCheck = Timer.periodic(const Duration(seconds: 2), (_) {
@@ -243,10 +261,9 @@ class _VideoCastPlayerState extends State<VideoCastPlayer> {
       if (controller == null || !controller.value.isPlaying) return;
       final since = _syncedAt;
       if (since == null) return;
-      // Where the class should be now: the teacher's anchor plus the time that
-      // has passed since the frame that carried it.
+      final anchor = widget.positionMs;
       final elapsed = DateTime.now().difference(since).inMilliseconds;
-      final target = Duration(milliseconds: widget.positionMs + elapsed);
+      final target = Duration(milliseconds: anchor + elapsed);
       if ((controller.value.position - target).abs() > _driftTolerance) {
         _syncedAt = DateTime.now();
         unawaited(controller.seekTo(target));
@@ -265,16 +282,33 @@ class _VideoCastPlayerState extends State<VideoCastPlayer> {
     super.dispose();
   }
 
+  /// The teacher's play and pause, which is a change to the whole class.
+  ///
+  /// Two details that are not obvious and were both wrong before: pressing
+  /// play at the end of a recording has to start it again rather than sit
+  /// there looking broken, and the class is told what actually happened rather
+  /// than what the session happened to have on file.
   void _togglePlay() {
     final controller = _controller;
     if (controller == null) return;
-    if (controller.value.isPlaying) {
-      unawaited(controller.pause());
-    } else {
+    final duration = controller.value.duration;
+    final atEnd = duration > Duration.zero &&
+        controller.value.position >=
+            duration - const Duration(milliseconds: 400);
+    final willPlay = !controller.value.isPlaying;
+    if (atEnd && willPlay) {
+      unawaited(controller.seekTo(Duration.zero));
+      // The class has to come back to the start too, or every phone would
+      // keep sitting at the end of the recording the teacher just replayed.
+      widget.onSeek?.call(0);
+    }
+    if (willPlay) {
       _applyMute();
       unawaited(controller.play());
+    } else {
+      unawaited(controller.pause());
     }
-    widget.onPlayPause?.call();
+    widget.onPlayPause?.call(willPlay);
   }
 
   /// [fraction] is where along the bar the teacher dragged to, 0 to 1.

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
@@ -19,6 +21,14 @@ void enterHostingMode(BuildContext context) {
   context.read<AppState>().setRole(AppRole.teacher);
   context.read<SessionProvider>().load();
   context.read<LibraryProvider>().load();
+}
+
+/// Switches this device into joining mode.
+void enterStudentMode(BuildContext context) {
+  context.read<AppState>().setRole(AppRole.student);
+  // A phone that has never played a class should not start one out loud: the
+  // stored choice is this device's, and the default is sound on.
+  unawaited(context.read<AppState>().loadVideoMuted());
 }
 
 /// Global app state: role, server settings, sync preferences.
@@ -55,14 +65,21 @@ class AppState extends ChangeNotifier {
   /// Whether this phone plays a shared video without sound.
   ///
   /// Per device and never broadcast: one row of phones going quiet must not
-  /// silence the rest of the class, and a student who muted once expects to
-  /// still be muted for the next lesson.
+  /// silence the rest of the class. Restored on launch, because the default is
+  /// sound *on* and a student in a silent row has to make this choice on every
+  /// single start otherwise.
   bool _videoMuted = false;
   bool get videoMuted => _videoMuted;
+
+  Future<void> loadVideoMuted() async {
+    _videoMuted = await SessionStore().loadVideoMuted();
+    notifyListeners();
+  }
 
   void setVideoMuted(bool muted) {
     if (_videoMuted == muted) return;
     _videoMuted = muted;
     notifyListeners();
+    unawaited(SessionStore().saveVideoMuted(muted));
   }
 }

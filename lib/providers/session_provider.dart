@@ -476,9 +476,12 @@ class SessionProvider extends ChangeNotifier {
     if (_active == null) return;
     final active = _active!;
     final changed = active.hostIp != hostIp || active.port != port;
+    // Nothing moved, so say nothing. This is called on a timer while a session
+    // is live, and notifying anyway rebuilt the teacher's whole screen — the
+    // document subtree included — every few seconds for the length of a lesson.
+    if (!changed) return;
     _active = active.copyWith(hostIp: hostIp, port: port);
     notifyListeners();
-    if (!changed) return;
     // The host serves the document from the address it was given, not the one
     // the session happens to hold: it turns `_advertisedIp` into the URL every
     // student downloads from. Updating only the session is what let students

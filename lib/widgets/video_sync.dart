@@ -27,7 +27,7 @@ class VideoSync {
   /// Muted on this device. A local choice, never broadcast.
   final bool muted;
 
-  final VoidCallback? onPlayPause;
+  final ValueChanged<bool>? onPlayPause;
   final ValueChanged<int>? onSeek;
   final ValueChanged<int>? onDuration;
   final ValueChanged<bool>? onMutedChanged;

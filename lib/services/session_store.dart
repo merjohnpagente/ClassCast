@@ -11,6 +11,7 @@ class SessionStore {
   static const _recentKey = 'classcast_recent_sessions';
   static const _lastRoleKey = 'classcast_last_role';
   static const _studentNameKey = 'classcast_student_name';
+  static const _videoMutedKey = 'classcast_video_muted';
 
   Future<List<ClassroomSession>> loadRecent() async {
     try {
@@ -76,6 +77,25 @@ class SessionStore {
       return await localStore().read(_studentNameKey);
     } catch (_) {
       return null;
+    }
+  }
+
+  /// Whether this phone plays a shared video without sound.
+  ///
+  /// Saved, not just remembered: a student who muted because their phone is
+  /// in a silent row of thirty has to make that choice again after every
+  /// restart otherwise, and the default is *sound on*.
+  Future<void> saveVideoMuted(bool muted) async {
+    try {
+      await localStore().write(_videoMutedKey, muted ? '1' : '0');
+    } catch (_) {/* ignore */}
+  }
+
+  Future<bool> loadVideoMuted() async {
+    try {
+      return await localStore().read(_videoMutedKey) == '1';
+    } catch (_) {
+      return false;
     }
   }
 }

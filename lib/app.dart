@@ -57,8 +57,7 @@ class _RootRouterState extends State<_RootRouter> {
       AppRole.student => const StudentShell(),
       AppRole.none => RoleSelectionScreen(
           onTeacher: () => enterHostingMode(context),
-          onStudent: () =>
-              app.setRole(AppRole.student),
+          onStudent: () => enterStudentMode(context),
         ),
     };
   }
