@@ -118,6 +118,10 @@ void main() {
     );
     joinWatch.stop();
 
+    // Let any late announcement land before counting, so "exactly one per
+    // student" is a real check rather than a race: a student that announces
+    // itself twice doubles the roster traffic of the whole class.
+    await Future<void>.delayed(const Duration(milliseconds: 500));
     final joined = teacherEvents
         .where((e) => e.type == SyncEventType.participantJoined)
         .toList();
@@ -280,6 +284,10 @@ class _Phone {
       type: SyncEventType.join,
       sessionId: 'CLASS-LOAD',
       participantName: 'Phone$index',
+      // The device, exactly as the real client sends it: the socket was
+      // already upgraded with the same name and device in its URL, and a
+      // hello that says something *different* is a change worth announcing.
+      message: 'Android',
     )));
     // The client's own timer, shortened so a load test does not have to run
     // for half a minute to prove heartbeats work.
