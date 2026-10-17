@@ -35,4 +35,8 @@ class ClasscastHost {
   void registerDocument(String name, String path) {}
 
   void clearDocument() {}
+
+  /// Nothing to point anywhere: this build does not host, and the analyzer
+  /// resolves this stub rather than the real one.
+  void setAdvertisedIp(String ip) {}
 }
