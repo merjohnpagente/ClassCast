@@ -726,6 +726,54 @@ void main() {
     expect(bytes, isNotNull);
     expect(utf8.decode(bytes!), '%PDF mixed');
   });
+
+  test('a student joins on the second address in the code, and the file still '
+      'comes', () async {
+    // The teacher is casting over *someone else's* hotspot: their phone is a
+    // client on a network somebody else owns, holding 192.168.43.123 rather
+    // than a gateway address. Every student on that hotspot can reach it, and
+    // so can the teacher — but a student standing somewhere else cannot, which
+    // is why the code carries more than one address and the phone keeps the one
+    // that answers.
+    const teacherKey = 'ALTKEY';
+    await send('POST', '/api/session',
+        {'id': 'CLASS-ALT', 'teacherKey': teacherKey});
+    host.setAdvertisedIp('192.168.43.123');
+    final dir = Directory.systemTemp.createTempSync('alt');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/alt.pdf')..writeAsStringSync('%PDF alt');
+    host.registerDocument('alt.pdf', file.path);
+    await send('POST', '/api/document', {
+      'teacherKey': teacherKey,
+      'documentName': 'alt.pdf',
+    });
+
+    final sync = SyncProvider();
+    addTearDown(sync.dispose);
+
+    // Exactly the code the teacher's phone shows: its own address on that
+    // network, plus the others it has.
+    final joined = await sync.join(
+      rawInput: NetworkService.qrPayload(
+        host: '192.168.43.123',
+        port: port,
+        sessionId: 'CLASS-ALT',
+        altHosts: ['127.0.0.1'],
+      ),
+      studentName: 'Ana',
+    );
+
+    expect(joined, isTrue,
+        reason: 'one unreachable address must not fail the whole join');
+    expect(sync.host, '127.0.0.1',
+        reason: 'the student keeps the address that answered');
+    expect(sync.snapshot!.documentUrl, startsWith('http://127.0.0.1:$port/'),
+        reason: 'and the document comes from that same address');
+
+    final bytes = await DocumentDownloader.fetch(sync.snapshot!.documentUrl!);
+    expect(bytes, isNotNull);
+    expect(utf8.decode(bytes!), '%PDF alt');
+  });
 }
 
 /// Minimal queue over a socket stream, so a test can await frames in order
