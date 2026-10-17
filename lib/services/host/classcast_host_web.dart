@@ -14,6 +14,12 @@ class ClasscastHost {
   String get advertisedIp => '';
   String get joinUrl => '';
 
+  /// Presence policy lives on the io host; these exist so the API matches for
+  /// the analyzer (which resolves this stub) and for any shared caller. The
+  /// browser cannot host, so nothing here reads them.
+  Duration presenceTimeout = const Duration(seconds: 30);
+  Duration sweepInterval = const Duration(seconds: 10);
+
   /// No web host exists, so the one reason it "failed" is fixed.
   String? get lastStartError =>
       'The browser cannot host a classroom. Use the app on a phone or laptop.';

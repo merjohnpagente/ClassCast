@@ -226,6 +226,8 @@ class SyncProvider extends ChangeNotifier {
         case SyncEventType.participantLeft:
         case SyncEventType.join:
         case SyncEventType.connectionStatus:
+        case SyncEventType.heartbeat:
+          // Heartbeats go student-to-host; the host never sends one back.
           break;
       }
     });

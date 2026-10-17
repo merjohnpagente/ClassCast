@@ -630,8 +630,10 @@ class SessionProvider extends ChangeNotifier {
       case SyncEventType.sessionState:
       case SyncEventType.connectionStatus:
       case SyncEventType.takeControl:
+      case SyncEventType.heartbeat:
         // The host answers the teacher's take-control with a page change on the
         // student's own socket only; the teacher's screen has nothing to do.
+        // Heartbeats are student-to-host only and are never broadcast.
         break;
     }
   }
