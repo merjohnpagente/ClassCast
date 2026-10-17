@@ -31,7 +31,7 @@ jobs:
 
       - name: Bootstrap platform folders if missing
         run: |
-          if [ ! -d android ]; then
+          if [ ! -d android/app ]; then
             flutter create . --project-name classcast_offline --org com.classcast.offline
           fi
           # flutter create drops a default counter test — ours is test/app_test.dart
@@ -67,7 +67,7 @@ jobs:
 
       - name: Bootstrap platform folders if missing
         run: |
-          if [ ! -d android ]; then
+          if [ ! -d android/app ]; then
             flutter create . --project-name classcast_offline --org com.classcast.offline
           fi
           rm -f test/widget_test.dart
