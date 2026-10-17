@@ -39,8 +39,9 @@ before Office conversion or Android-hosted sessions.
 | 6 | Teacher pauses sync, changes page | Student screens stay frozen |
 | 7 | Teacher resumes, changes page | Students jump to the new page |
 | 8 | Teacher ends session | Students see “Session ended” + Leave |
-| 9 | Wrong ID (`CLASS-XXXX`) | Clear “Session unavailable” error, no fake Connected state |
+| 9 | Wrong ID (`CLASS-XXXX`) | Clear "teacher answered, but the session could not be read" error, no fake Connected state |
 | 10 | Student tries Prev/Next | Disabled — teacher controls only |
+| 11 | Join from a network that isolates clients (school/guest Wi-Fi) | Student sees the "Could not reach the teacher … switch on a hotspot" message; after ~1 min the teacher dashboard shows "No student has reached this session yet" |
 
 ## Known limits (this build)
 
@@ -48,3 +49,8 @@ before Office conversion or Android-hosted sessions.
   laptop with LibreOffice. Animations/macros do not survive PDF conversion.
 - Android-hosted teacher server is stubbed (permissions + lifecycle vary by
   vendor); use the laptop host for real sessions.
+- The teacher's "Can students reach me?" check runs on the teacher's own
+  device, so it answers even when the Wi-Fi isolates clients — it proves the
+  server is up, not that students can get in. The student's own error message
+  and the dashboard's "no student has reached this session yet" hint are the
+  honest signals; treat a green check plus zero joins as isolation.

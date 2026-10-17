@@ -142,6 +142,8 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
           ),
           if (_checkMessage != null)
             FadeIn(child: _connectionCheck(theme)),
+          if (active != null && sessions.reachabilityHintDue)
+            FadeIn(child: _reachabilityHint(theme, active)),
           AppSectionTitle('My Sessions', trailing: _sessionCount(sessions)),
           if (active != null) ...[
             FadeIn(
@@ -277,6 +279,87 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// The honest answer to "why is nobody joining?".
+  ///
+  /// The teacher's own check cannot see client isolation: a self-check to
+  /// this phone's address connects over the loopback route no matter what the
+  /// Wi-Fi does to student traffic. So this is a time-based nudge, not a fake
+  /// verdict — a live session that no student has reached after a minute is
+  /// very likely sitting behind a network that blocks device-to-device
+  /// traffic, and the surest fix is the teacher's own hotspot.
+  Widget _reachabilityHint(ThemeData theme, ClassroomSession active) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Card(
+        color: AppColors.warningBg,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          side: const BorderSide(color: AppColors.warning),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.wifi_tethering_off,
+                      size: 18, color: AppColors.warning),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'No student has reached this session yet',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'School and guest Wi-Fi often block devices from '
+                          'seeing each other. If students are on it and cannot '
+                          'join, turn on your phone\'s hotspot and show the '
+                          'new QR code — that is the surest fix.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AppColors.inkSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: () => _showQrSheet(context, active),
+                    icon: const Icon(Icons.qr_code_2, size: 18),
+                    label: const Text('Show QR'),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const NetworkHelpScreen(isTeacher: true),
+                      ),
+                    ),
+                    icon: const Icon(Icons.help_outline, size: 18),
+                    label: const Text('Guide'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

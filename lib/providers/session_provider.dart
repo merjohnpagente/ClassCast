@@ -37,6 +37,7 @@ class SessionProvider extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _closeHostEvents();
+    _reachabilityHintTimer?.cancel();
     super.dispose();
   }
 
@@ -163,6 +164,54 @@ class SessionProvider extends ChangeNotifier {
   final Map<String, int> _studentPages = {};
   Map<String, int> get studentPages => Map.unmodifiable(_studentPages);
 
+  /// How long a live session may sit with nobody joining before the dashboard
+  /// says so. Mutable so tests do not have to wait a real minute.
+  Duration reachabilityHintAfter = const Duration(seconds: 60);
+
+  /// When the current session went live. Set by create/revive and cleared by
+  /// end, so a session revived from history starts the clock over instead of
+  /// inheriting its old `createdAt`.
+  DateTime? _activeSince;
+
+  /// True once any student has ever joined the current session — a student who
+  /// joins and later leaves still counts, because this tracks whether the
+  /// network lets students through at all, not who is in the room now.
+  bool _everHadParticipant = false;
+
+  Timer? _reachabilityHintTimer;
+
+  /// True when a live, locally hosted session has had no student join for
+  /// [reachabilityHintAfter].
+  ///
+  /// The teacher's own device cannot see client isolation: its reachability
+  /// check connects to its own address over the loopback route, so it answers
+  /// no matter what the Wi-Fi does to student traffic. Time with zero joins is
+  /// the honest signal that the network may be blocking students.
+  bool get reachabilityHintDue {
+    final active = _active;
+    if (active == null || _everHadParticipant) return false;
+    if (!_hostReachable || !hostingLocally) return false;
+    if (active.hostIp.isEmpty) return false;
+    final since = _activeSince;
+    if (since == null) return false;
+    return DateTime.now().difference(since) >= reachabilityHintAfter;
+  }
+
+  /// One shot, so the dashboard can redraw when the window has passed even if
+  /// nothing else happens in the lesson. The first join cancels it.
+  void _startReachabilityHintTimer() {
+    _reachabilityHintTimer?.cancel();
+    if (_disposed) return;
+    _reachabilityHintTimer = Timer(reachabilityHintAfter, _safeNotify);
+  }
+
+  void _noteFirstParticipant() {
+    if (_everHadParticipant) return;
+    _everHadParticipant = true;
+    _reachabilityHintTimer?.cancel();
+    _reachabilityHintTimer = null;
+  }
+
   /// Clear a raised hand (the student answered, or it was dismissed).
   void lowerHand(String participantId) {
     if (_raisedHands.remove(participantId) == null) return;
@@ -212,6 +261,11 @@ class SessionProvider extends ChangeNotifier {
       teacherKey: _uuid.v4().substring(0, 8),
     );
     _active = session;
+    // A fresh session gets a fresh clock and a clean slate for the
+    // reachability hint; the previous session's verdict must not carry over.
+    _activeSince = DateTime.now();
+    _everHadParticipant = false;
+    _startReachabilityHintTimer();
     await _store.saveSession(session);
     _recent = await _store.loadRecent();
     notifyListeners();
@@ -330,6 +384,10 @@ class SessionProvider extends ChangeNotifier {
     await _store.saveSession(ended);
     _recent = await _store.loadRecent();
     _active = null;
+    _activeSince = null;
+    _everHadParticipant = false;
+    _reachabilityHintTimer?.cancel();
+    _reachabilityHintTimer = null;
     _participants = [];
     // Hands and reported pages belong to the class that just ended. Left
     // behind, they attached themselves to the next session's roster ids and
@@ -489,6 +547,9 @@ class SessionProvider extends ChangeNotifier {
       documentUrl: () => null,
     );
     _active = session;
+    _activeSince = DateTime.now();
+    _everHadParticipant = false;
+    _startReachabilityHintTimer();
     await _store.saveSession(session);
     _recent = await _store.loadRecent();
     notifyListeners();
@@ -579,6 +640,9 @@ class SessionProvider extends ChangeNotifier {
         endSession();
         break;
       case SyncEventType.participantJoined:
+        // Any join at all — named or not — proves students can reach this
+        // device, which is exactly what the dashboard hint doubts.
+        _noteFirstParticipant();
         if (event.participantName != null) {
           addParticipant(Participant(
             id: event.participantId ??

@@ -66,12 +66,15 @@ class NetworkHelpBody extends StatelessWidget {
               ? 'Tap Check on the dashboard'
               : 'Still not joining?',
           subtitle: isTeacher
-              ? 'It asks your own phone whether students can reach it. Green '
-                  'means the address in the QR works; red tells you what to '
-                  'change.'
+              ? 'It checks that this phone is serving the address in the QR. '
+                  'It cannot see a Wi-Fi that blocks phones from seeing each '
+                  'other — if the check is green but nobody can join, turn on '
+                  'your hotspot and show the new QR.'
               : 'Both phones must be on the same network — same hotspot or '
                   'same Wi-Fi. Turn mobile data off so the phone does not '
-                  'leave that network.',
+                  'leave that network. School and guest Wi-Fi often block '
+                  'phones from seeing each other; if joining keeps failing, '
+                  'ask the teacher to switch on a hotspot.',
         ),
         StepTile(
           step: 3,

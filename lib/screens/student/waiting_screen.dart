@@ -71,6 +71,18 @@ class StudentWaitingScreen extends StatelessWidget {
                 StatusChip.waiting()
               else
                 StatusChip.offline(),
+              if (sync.link == LinkState.reconnecting) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Still trying to reach the teacher. If this does not '
+                  'recover, the Wi-Fi may be blocking phones from seeing '
+                  'each other — ask the teacher to switch on a hotspot.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.muted,
+                  ),
+                ),
+              ],
               const SizedBox(height: 8),
               TextButton.icon(
                 onPressed: () async {

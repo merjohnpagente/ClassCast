@@ -93,7 +93,13 @@ class SyncProvider extends ChangeNotifier {
     final ok = await NetworkService.probeHost(host: _host, port: _port);
     if (!ok) {
       _link = LinkState.offline;
-      _error = 'Session unavailable. Check the hotspot / Wi-Fi and address.';
+      // This phone is the only one that can actually see the block: its
+      // packets to the teacher either arrive or they do not. Name the likely
+      // cause instead of sending the student to re-check an address the QR
+      // filled in correctly.
+      _error = 'Could not reach the teacher. On school or guest Wi-Fi, '
+          'phones often cannot see each other — ask the teacher to switch on '
+          'a hotspot, then scan the new QR code.';
       notifyListeners();
       return false;
     }

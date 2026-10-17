@@ -133,9 +133,12 @@ class NetworkService {
   /// One tap check for the teacher: is the address in the QR code actually
   /// serving?
   ///
-  /// Tries the advertised address rather than loopback, because "the server
-  /// is running" and "students can reach it" are two different questions — a
-  /// router with client isolation answers differently.
+  /// This runs on the teacher's own device, so a connection to its own
+  /// address short-circuits over the loopback route: it proves the host is
+  /// up and answering, but it can never prove that students can reach it —
+  /// whatever the Wi-Fi does to device-to-device traffic, this check answers
+  /// the same. The success message says exactly that instead of implying a
+  /// green result means the room is fine.
   static Future<({bool reachable, String? message})> checkHost({
     required String host,
     required int port,
@@ -156,7 +159,12 @@ class NetworkService {
         path: '/api/ping',
       )).timeout(timeout);
       if (res.statusCode == 200) {
-        return (reachable: true, message: 'Reachable at http://$host:$port');
+        return (
+          reachable: true,
+          message: 'This phone answered at http://$host:$port. If students '
+              'still cannot join, the Wi-Fi may be blocking device-to-device '
+              'traffic — try a hotspot.',
+        );
       }
       return (
         reachable: false,

@@ -68,14 +68,20 @@
   hotspot) is dropped from the roster after 30 seconds of silence: student
   clients heartbeat every 10 seconds, and both hosts sweep the room. The
   teacher's roster only shows students who are actually there.
+- **Client isolation is named, not silent**: the teacher's own "can students
+  reach me?" check runs on this device, so it connects over the loopback route
+  and can never see a network that blocks device-to-device traffic — its
+  success message says exactly that. What actually detects the block is the
+  student's app, which names the cause and the hotspot fix when its probe
+  fails. And if a live session has had no student join at all after a minute,
+  the dashboard says so with the same hotspot advice. No fake verdicts.
 
 ## Still TODO (per spec phases)
 
 - **Phase 2 (remainder):** teacher POST `/api/document` from the web build
   (the browser cannot read a picked file's bytes, so a teacher on the laptop
   still shares out of the host's `--dir` folder).
-- **Phase 4:** QR shortcut actions polish, multi-session host, Android hotspot
-  client-isolation detection + warning.
+- **Phase 4:** QR shortcut actions polish, multi-session host.
 - **Phase 5:** optional server-side conversion for the legacy binary formats
   (`.ppt` / `.doc` / `.xls`) that no device can render; advanced XLS
   (charts, formulas, multiple print areas).

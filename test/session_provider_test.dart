@@ -134,6 +134,49 @@ void main() {
     expect(sessions.raisedHands, isEmpty);
     expect(sessions.studentPages, isEmpty);
   });
+
+  test('a fresh session does not doubt the network yet', () async {
+    // The loopback address keeps the teacher's own control calls on this
+    // machine, so the test does not depend on the runner's LAN interface.
+    await sessions.createSession(name: 'Physics', hostIp: '127.0.0.1');
+
+    expect(sessions.reachabilityHintDue, isFalse);
+  });
+
+  test('a live session with no joins raises the hint after the window',
+      () async {
+    sessions.reachabilityHintAfter = const Duration(milliseconds: 40);
+    await sessions.createSession(name: 'Physics', hostIp: '127.0.0.1');
+
+    await Future<void>.delayed(const Duration(milliseconds: 90));
+
+    expect(sessions.reachabilityHintDue, isTrue);
+  });
+
+  test('the first student join clears the reachability hint', () async {
+    sessions.reachabilityHintAfter = const Duration(milliseconds: 40);
+    await sessions.createSession(name: 'Physics', hostIp: '127.0.0.1');
+    await Future<void>.delayed(const Duration(milliseconds: 90));
+    expect(sessions.reachabilityHintDue, isTrue);
+
+    sessions.applyEvent(_joined(sessions, 'stu-1', 'Ana'));
+
+    // A student who joins and later leaves still proves the network lets
+    // students through, so the hint must not come back.
+    expect(sessions.reachabilityHintDue, isFalse);
+  });
+
+  test('ending resets the hint clock for the next session', () async {
+    sessions.reachabilityHintAfter = const Duration(milliseconds: 40);
+    await sessions.createSession(name: 'Physics', hostIp: '127.0.0.1');
+    await Future<void>.delayed(const Duration(milliseconds: 90));
+    expect(sessions.reachabilityHintDue, isTrue);
+
+    await sessions.endSession();
+    await sessions.createSession(name: 'Chemistry', hostIp: '127.0.0.1');
+
+    expect(sessions.reachabilityHintDue, isFalse);
+  });
 }
 
 /// A student joining the session that is actually running — applyEvent drops
