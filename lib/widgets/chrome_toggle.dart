@@ -65,14 +65,14 @@ class ChromeAppBarAction extends StatelessWidget {
 }
 
 /// The way back from hidden chrome, so the eye button is not the only way to
-/// get the interface back. A small dark circle in the bottom-left corner,
-/// shown only while the chrome is away.
+/// get the interface back.
 ///
-/// It used to be a labelled pill along the bottom centre, where on a phone it
-/// sat right on top of the zoom bar anchored to the bottom-right — the pill
-/// covered the −/+/Fit buttons and, being the top layer of the stack, stole
-/// their taps. A corner circle cannot collide with anything: the zoom bar owns
-/// the bottom-right, this owns the bottom-left.
+/// Top-left, and it used to be bottom-left: a bottom corner was chosen because
+/// the zoom bar owns the bottom-*right*. Then a video arrived, and its controls
+/// span the whole bottom edge — so the button landed on top of play/pause and
+/// a tap meant two different things. The top of the page is the one edge no
+/// document control claims: the app bar is gone by definition, and everything
+/// else — zoom bar, page row, video transport — lives at the bottom.
 class ChromeToggleHint extends StatelessWidget {
   final String label;
 
@@ -83,9 +83,9 @@ class ChromeToggleHint extends StatelessWidget {
     final chrome = ChromeToggleScope.maybeOf(context);
     if (chrome == null || !chrome.hidden) return const SizedBox.shrink();
     return Align(
-      alignment: Alignment.bottomLeft,
+      alignment: Alignment.topLeft,
       child: SafeArea(
-        top: false,
+        bottom: false,
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.s16),
           child: Semantics(

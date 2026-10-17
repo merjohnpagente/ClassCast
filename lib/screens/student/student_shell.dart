@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/doc_types.dart';
 import '../../providers/app_state.dart';
 import '../../providers/sync_provider.dart';
 import '../../services/classcast_client.dart';
@@ -53,11 +54,21 @@ class _StudentShellState extends State<StudentShell> {
   @override
   Widget build(BuildContext context) {
     final sync = context.watch<SyncProvider>();
+    final app = context.watch<AppState>();
     final joined = sync.link == LinkState.live ||
         sync.link == LinkState.reconnecting;
     if (joined) sync.bind();
     final presenting =
         joined && sync.snapshot?.documentId != null;
+
+    // Page-by-page or a long scroll only means something for the formats the
+    // app draws itself. A PDF already scrolls inside its own viewer, an image
+    // and a video are not paged at all — offering the choice there would be a
+    // switch that visibly does nothing.
+    final kind = _sharedKind(sync);
+    final supportsViewChoice = kind == DocKind.powerpoint ||
+        kind == DocKind.word ||
+        kind == DocKind.excel;
 
     // The design titles the viewer with the class the student is actually in,
     // not with the word "Viewer".
@@ -108,6 +119,25 @@ class _StudentShellState extends State<StudentShell> {
             },
             actions: [
               if (_index == 1 && presenting) const ChromeAppBarAction(),
+              // How this phone reads the document: the teacher's page, or one
+              // long scroll. It was the teacher's choice only, and a student
+              // flicking through a twenty-page worksheet had to swipe the
+              // canvas by hand. A student device is not the teacher's device —
+              // a phone flat on a desk wants scrolling, one held in a hand wants
+              // the page — so it is their choice, and it is local to them.
+              if (_index == 1 && presenting && supportsViewChoice)
+                IconButton(
+                  tooltip: app.scrollView
+                      ? 'Show page by page'
+                      : 'Scroll the whole document',
+                  icon: Icon(
+                    app.scrollView
+                        ? Icons.swipe_vertical
+                        : Icons.crop_free,
+                    size: 20,
+                  ),
+                  onPressed: () => app.setScrollView(!app.scrollView),
+                ),
               if (joined)
                 TextButton.icon(
                   onPressed: () async {
@@ -142,6 +172,20 @@ class _StudentShellState extends State<StudentShell> {
         },
       ),
     );
+  }
+
+  /// What kind of file the teacher is showing, from the session snapshot.
+  ///
+  /// Read here rather than from the library: a student never picked this file
+  /// and their library may hold nothing at all. The extension is the only
+  /// thing the wire carries, and it is enough — the choice is offered for the
+  /// kinds the app draws itself.
+  DocKind? _sharedKind(SyncProvider sync) {
+    final name = sync.snapshot?.documentName;
+    if (name == null || name.isEmpty) return null;
+    final dot = name.lastIndexOf('.');
+    if (dot <= 0 || dot == name.length - 1) return null;
+    return SupportedFiles.kindOf(name.substring(dot + 1).toLowerCase());
   }
 }
 

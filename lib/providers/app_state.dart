@@ -29,6 +29,9 @@ void enterStudentMode(BuildContext context) {
   // A phone that has never played a class should not start one out loud: the
   // stored choice is this device's, and the default is sound on.
   unawaited(context.read<AppState>().loadVideoMuted());
+  // Same for how this device reads a document: asking again after every
+  // restart would be the app not believing the answer it was given.
+  unawaited(context.read<AppState>().loadScrollView());
 }
 
 /// Global app state: role, server settings, sync preferences.
@@ -81,5 +84,27 @@ class AppState extends ChangeNotifier {
     _videoMuted = muted;
     notifyListeners();
     unawaited(SessionStore().saveVideoMuted(muted));
+  }
+
+  /// Whether a student reads the shared document as one long scroll instead of
+  /// page by page.
+  ///
+  /// A student device is not the teacher's: a phone on a desk wants to flick
+  /// through a worksheet, and one held in a hand wants the teacher's page. It
+  /// is this device's own choice and it never reaches anyone else — two
+  /// students scrolling and two students following the class are both correct.
+  bool _scrollView = false;
+  bool get scrollView => _scrollView;
+
+  Future<void> loadScrollView() async {
+    _scrollView = await SessionStore().loadScrollView();
+    notifyListeners();
+  }
+
+  void setScrollView(bool scroll) {
+    if (_scrollView == scroll) return;
+    _scrollView = scroll;
+    notifyListeners();
+    unawaited(SessionStore().saveScrollView(scroll));
   }
 }

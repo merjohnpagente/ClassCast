@@ -39,11 +39,15 @@ class DocumentViewer extends StatefulWidget {
   /// sync a real total.
   final ValueChanged<int>? onPageCount;
 
-  /// Page-by-page or continuous scrolling. Only the teacher normally switches
-  /// this; students follow the teacher's page either way.
+  /// Page-by-page or continuous scrolling. The teacher's choice drives the
+  /// class page either way; a student may also choose it for their own screen,
+  /// because how one phone reads a worksheet is that phone's business.
   final OfficeViewMode viewMode;
 
   /// Reports the page being scrolled, so the session can follow along.
+  ///
+  /// Fires for whoever scrolled: the teacher publishing the class page, or a
+  /// student allowed to navigate, reporting where they landed.
   final ValueChanged<int>? onPageChanged;
 
   /// When true, show the conversion panel instead of a preview.

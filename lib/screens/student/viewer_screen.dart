@@ -14,6 +14,7 @@ import '../../widgets/chrome_toggle.dart';
 import '../../widgets/document_preview.dart';
 import '../../widgets/document_viewer.dart';
 import '../../widgets/motion.dart';
+import '../../widgets/office/office_document_scroll_view.dart';
 import '../../widgets/state_cards.dart';
 import '../../widgets/status_bits.dart';
 import '../../widgets/video_sync.dart';
@@ -196,6 +197,12 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
           ),
         ),
         if (hideChrome)
+          // Top corner, and never over the content. The button used to sit in
+          // the bottom-left, chosen because the zoom bar owns the
+          // bottom-right — but then came video, whose own bar runs the full
+          // width of the bottom edge, and the eye landed on top of play/pause
+          // so neither could be used. The widget owns the placement now; this
+          // stack only decides that it exists at all.
           const Positioned.fill(child: ChromeToggleHint()),
       ],
     );
@@ -228,9 +235,14 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
   /// all of it. The page passed as `mode` is the one being *drawn*: without it
   /// a student's own page turn changed nothing, because the cache still
   /// answered with the subtree built for the old page.
+  ///
+  /// The reading mode rides in the same value for the same reason: toggling
+  /// page-by-page to scroll is a different subtree, and a gate that compared
+  /// only the page would hand back the old one and leave the switch dead.
   Widget _previewPanel(BuildContext context, int viewPage, VideoSync? video) {
+    final scrollView = context.watch<AppState>().scrollView;
     return SyncDocumentPreview(
-      mode: viewPage,
+      mode: (viewPage, scrollView),
       builder: (context, snapshot) => _preview(snapshot, viewPage, video),
     );
   }
@@ -322,6 +334,10 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
             'The teacher is sending the file for this slide deck.',
       );
     }
+    // How this device reads an Office document: the teacher's page, or one
+    // long scroll. A PDF, an image and a video ignore this — they scroll or
+    // play on their own terms, and the switch is not offered for them.
+    final scrollView = context.watch<AppState>().scrollView;
     // Students stream the file from the teacher host over the local
     // network; no bundled sample asset is used.
     final viewer = DocumentViewer(
@@ -330,12 +346,24 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
       remoteUrl: doc.remoteUrl,
       page: viewPage,
       video: video,
+      viewMode: scrollView ? OfficeViewMode.scroll : OfficeViewMode.pages,
+      // Scrolling reports the page nearest the top, exactly as the teacher's
+      // own scroll does; the student's local page follows it so the counter
+      // and the arrows stay honest, and the teacher is told where they
+      // landed — a no-op unless students are allowed to navigate.
+      onPageChanged: _turnTo,
     );
     // A video is never wrapped: the page identity changes whenever the teacher
     // moves, and rebuilding the player each time would restart the recording
     // from the top.
     if (doc.kind != DocKind.video) {
-      return PageSwitcher(identity: 'page-$viewPage', child: viewer);
+      // Scroll mode keeps one identity: a scroll is a continuous movement, and
+      // re-keying it on every page boundary would restart the gesture under
+      // the student's finger.
+      return PageSwitcher(
+        identity: scrollView ? 'scroll' : 'page-$viewPage',
+        child: viewer,
+      );
     }
     return viewer;
   }

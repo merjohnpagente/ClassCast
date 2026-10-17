@@ -12,6 +12,7 @@ class SessionStore {
   static const _lastRoleKey = 'classcast_last_role';
   static const _studentNameKey = 'classcast_student_name';
   static const _videoMutedKey = 'classcast_video_muted';
+  static const _scrollViewKey = 'classcast_scroll_view';
 
   Future<List<ClassroomSession>> loadRecent() async {
     try {
@@ -94,6 +95,25 @@ class SessionStore {
   Future<bool> loadVideoMuted() async {
     try {
       return await localStore().read(_videoMutedKey) == '1';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Whether this phone reads the shared document as one long scroll.
+  ///
+  /// Saved for the same reason the mute is: it is how this device likes to be
+  /// taught, and asking again on every launch would be the app not believing
+  /// the answer it was given.
+  Future<void> saveScrollView(bool scroll) async {
+    try {
+      await localStore().write(_scrollViewKey, scroll ? '1' : '0');
+    } catch (_) {/* ignore */}
+  }
+
+  Future<bool> loadScrollView() async {
+    try {
+      return await localStore().read(_scrollViewKey) == '1';
     } catch (_) {
       return false;
     }
