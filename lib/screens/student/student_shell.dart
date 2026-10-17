@@ -132,11 +132,9 @@ class _StudentShellState extends State<StudentShell> {
                 () => JoinScreen(
                       onJoined: () => setState(() => _index = 1),
                     ),
-                () => presenting
-                    ? const StudentViewerScreen()
-                    : StudentWaitingScreen(
-                        onLeave: () => setState(() => _index = 0),
-                      ),
+                () => _StudentViewerTab(
+                      onLeave: () => setState(() => _index = 0),
+                    ),
                 () => const _StudentConnectionTab(),
               ],
             ),
@@ -167,5 +165,33 @@ class _StudentConnectionTab extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// The viewer tab: the live document when one is shared, the waiting room
+/// until then.
+///
+/// This is a widget rather than a ternary in the builder list on purpose:
+/// [LazyTabStack] keeps the first widget a builder returns for the lifetime
+/// of the shell, so a student who joined before the teacher shared anything
+/// stayed on the waiting room forever — the cached child never re-ran the
+/// condition when the document arrived, and the teacher sharing it changed
+/// nothing on that screen. Watching the provider inside the cached widget is
+/// what lets the viewer replace the waiting room the moment the document
+/// lands, without a manual tap on the tab.
+class _StudentViewerTab extends StatelessWidget {
+  final VoidCallback onLeave;
+
+  const _StudentViewerTab({required this.onLeave});
+
+  @override
+  Widget build(BuildContext context) {
+    final sync = context.watch<SyncProvider>();
+    final joined = sync.link == LinkState.live ||
+        sync.link == LinkState.reconnecting;
+    final presenting = joined && sync.snapshot?.documentId != null;
+    return presenting
+        ? const StudentViewerScreen()
+        : StudentWaitingScreen(onLeave: onLeave);
   }
 }
