@@ -778,9 +778,6 @@ class SessionProvider extends ChangeNotifier {
         );
         notifyListeners();
         break;
-      case SyncEventType.videoChanged:
-        _applyVideo(event);
-        break;
       case SyncEventType.sessionEnded:
         endSession();
         break;

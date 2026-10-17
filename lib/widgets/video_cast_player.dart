@@ -160,7 +160,7 @@ class _VideoCastPlayerState extends State<VideoCastPlayer> {
     // `File` is reached through the platform helper rather than an import: naming
     // it here would pull `dart:io` into the web build, where it is a compile
     // error rather than a missing feature.
-    final handle = hasLocal ? localFileHandle(local!) : null;
+    final handle = hasLocal ? localFileHandle(local) : null;
     final controller = handle != null
         ? VideoPlayerController.file(handle as dynamic)
         : VideoPlayerController.networkUrl(Uri.parse(remote!));
