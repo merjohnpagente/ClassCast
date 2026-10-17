@@ -33,7 +33,7 @@ jobs:
 
       - name: Bootstrap platform folders if missing
         run: |
-          if [ ! -d android ]; then
+          if [ ! -d android/app ]; then
             flutter create . --project-name classcast_offline --org com.classcast.offline
           fi
           # flutter create drops a default counter test — ours are test/app_test.dart + test/widget_smoke_test.dart
@@ -68,11 +68,27 @@ jobs:
 
       - name: Bootstrap platform folders if missing
         run: |
-          if [ ! -d android ]; then
+          if [ ! -d android/app ]; then
             flutter create . --project-name classcast_offline --org com.classcast.offline
           fi
           rm -f test/widget_test.dart
           git checkout -- web/index.html web/manifest.json || true
+
+      # The key is committed under android/, so every release installs over
+      # the last one instead of being signed with a throwaway debug key
+      # generated fresh on each runner. Both paths are covered: how the
+      # template resolves its debug signing config has changed across
+      # Flutter versions.
+      - name: Use the stable signing key
+        run: |
+          if [ -f android/classcast-release-key.jks ]; then
+            cp android/classcast-release-key.jks android/app/debug.keystore
+            mkdir -p "$HOME/.android"
+            cp android/classcast-release-key.jks "$HOME/.android/debug.keystore"
+            echo "Signed with the committed release key."
+          else
+            echo "No stable key in the repo — signing with a throwaway key."
+          fi
 
       - name: Configure Android (label, permissions, compileSdk 36)
         run: |

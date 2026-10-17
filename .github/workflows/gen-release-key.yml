@@ -42,6 +42,7 @@ jobs:
           # this file over android/app/debug.keystore.
           keytool -genkeypair -v \
             -keystore android/classcast-release-key.jks \
+            -storetype JKS \
             -storepass android \
             -keypass android \
             -alias androiddebugkey \
@@ -67,8 +68,8 @@ jobs:
           git add -f android/classcast-release-key.jks
           git commit -m "Add the release signing key
 
-Every release was signed with a throwaway key because android/ is not in the
-repo and 'flutter create .' ran fresh on each build. That made every version
-un-installable over the last one. This key has to be stable for as long as the
-app exists."
+          Every release was signed with a throwaway key because android/ is not
+          in the repo and 'flutter create .' ran fresh on each build. That made
+          every version un-installable over the last one. This key has to be
+          stable for as long as the app exists."
           git push origin HEAD:${{ github.ref_name }}
