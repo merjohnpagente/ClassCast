@@ -101,6 +101,19 @@ class ClasscastHost {
   bool get running => _server != null;
   int get port => _port;
 
+  /// How many sockets are open right now.
+  ///
+  /// For tests that prove nothing is leaked: a classroom that has emptied out
+  /// has to leave nothing behind, or the next lesson pays for the last one.
+  int get socketCount => _sockets.length;
+
+  /// How many students the host currently counts as present.
+  int get participantCount => _participants.length;
+
+  /// How many sockets are subscribed to the roster. One in a normal class:
+  /// the teacher's.
+  int get teacherSocketCount => _teacherSockets.length;
+
   /// Address students should use. Falls back to the interface list so a session
   /// is still reachable when the caller could not resolve an IP.
   String get advertisedIp => _advertisedIp;
@@ -1003,8 +1016,15 @@ Future<void> _endEndpoint(HttpRequest request) async {
   }
 
   /// Drops every map entry pointing at [socket], so a dead connection cannot
-  /// linger as a stale target for take control.
+  /// linger as a stale target for take control — or as a roster subscriber that
+  /// every later join is written to.
+  ///
+  /// Both sets are cleared together on purpose: a socket that failed inside one
+  /// broadcast is dead, and leaving it in the other one means the next event
+  /// of that kind writes to it again.
   void _forgetSocket(WebSocketChannel socket) {
+    _sockets.remove(socket);
+    _teacherSockets.remove(socket);
     _socketsById.removeWhere((_, value) => identical(value, socket));
   }
 

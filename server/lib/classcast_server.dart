@@ -547,7 +547,7 @@ class ClasscastServer {
 
   /// Removes a dropped student from the room and tells everyone who is left.
   void _dropStudent(WebSocketChannel channel, String pid, String sessionId) {
-    _sockets.remove(channel);
+    _forgetSocket(channel);
     _socketsById.remove(pid);
     if (_participants.remove(pid) == null) return;
     _stopSweepWhenEmpty();
@@ -962,7 +962,7 @@ class ClasscastServer {
       try {
         s.sink.add(frame);
       } catch (_) {
-        _sockets.remove(s);
+        _forgetSocket(s);
       }
     }
   }
@@ -977,10 +977,19 @@ class ClasscastServer {
       try {
         s.sink.add(frame);
       } catch (_) {
-        _teacherSockets.remove(s);
-        _sockets.remove(s);
+        _forgetSocket(s);
       }
     }
+  }
+
+  /// Drops every set pointing at [socket].
+  ///
+  /// A sink that failed to accept is dead, and leaving it in the other set
+  /// means every later event of that kind writes to it again.
+  void _forgetSocket(WebSocketChannel socket) {
+    _sockets.remove(socket);
+    _teacherSockets.remove(socket);
+    _socketsById.removeWhere((_, value) => identical(value, socket));
   }
 
   Future<Map<String, dynamic>> _readJson(Request req) async {

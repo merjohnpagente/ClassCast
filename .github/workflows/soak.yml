@@ -1,0 +1,84 @@
+name: Soak
+
+# The long run: a classroom that fills up, works for ten minutes, and empties
+# out again with nothing left behind.
+#
+# Not part of the build on purpose — the normal suite answers "is it correct
+# now", and this answers "is it still correct after ten minutes of a full
+# room". That takes ten minutes of wall clock, so it runs when it is asked for,
+# and nightly while nobody is waiting on it.
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: 'How long the class runs'
+        default: '10'
+      students:
+        description: 'How many phones are in it'
+        default: '100'
+  schedule:
+    # 03:10 UTC nightly. Off-peak, and off the hour so it does not pile up with
+    # every other scheduled job on the planet.
+    - cron: '10 3 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  # Two soaks at once would only measure each other.
+  group: soak
+  cancel-in-progress: false
+
+jobs:
+  soak:
+    name: Soak
+    # Ten minutes of waiting plus a build: half an hour is the honest ceiling.
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Flutter cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ~/Library/Caches
+            build
+          key: soak-flutter-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: soak-flutter-${{ runner.os }}-
+
+      - run: flutter pub get
+
+      - name: Run the soak
+        env:
+          CLASSCAST_SOAK: '1'
+          CLASSCAST_SOAK_MINUTES: ${{ inputs.minutes || '10' }}
+          CLASSCAST_SOAK_STUDENTS: ${{ inputs.students || '100' }}
+        run: flutter test test/soak_test.dart --reporter expanded
+
+  # The laptop host is a different implementation of the same protocol, so it
+  # gets the same treatment rather than being assumed to behave.
+  server-soak:
+    name: Server checks
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - run: dart pub get
+        working-directory: server
+
+      - run: dart analyze
+        working-directory: server
+
+      - run: dart test
+        working-directory: server
