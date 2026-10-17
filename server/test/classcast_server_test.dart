@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:classcast_server/classcast_server.dart';
 import 'package:shelf/shelf.dart';
 import 'package:test/test.dart';
+import 'package:web_socket_channel/io.dart';
 
 /// Black-box tests for the classroom host.
 ///
@@ -463,6 +465,163 @@ void main() {
     test('a socket with no session running is rejected', () async {
       final res = await call('GET', '/ws?session=CLASS-NOPE');
       expect(res.statusCode, 403);
+    });
+  });
+
+  // Presence needs real sockets: a WebSocket upgrade only exists on a real
+  // connection, and the case under test is exactly a socket that stays open
+  // while the student behind it has gone (phone slept, hotspot dropped them).
+  // So this group binds loopback and runs with short timeouts.
+  group('presence heartbeat', () {
+    late ClasscastServer live;
+    late HttpServer http;
+    late String sessionId;
+    late String teacherKey;
+
+    Future<Map<String, dynamic>> api(
+      String method,
+      String path, [
+      Object? body,
+    ]) async {
+      final res = await live.handler(Request(
+        method,
+        Uri.parse('http://localhost:8080$path'),
+        body: body,
+        headers: const {'content-type': 'application/json'},
+      ));
+      return Map<String, dynamic>.from(
+          jsonDecode(await res.readAsString()) as Map);
+    }
+
+    setUp(() async {
+      live = ClasscastServer(
+        port: 0,
+        filesDir: tmp.path,
+        presenceTimeout: const Duration(milliseconds: 500),
+        sweepInterval: const Duration(milliseconds: 100),
+      );
+      http = await live.serve();
+      final created = await api('POST', '/api/session',
+          jsonEncode({'name': 'Physics'}));
+      teacherKey = created['teacherKey'] as String;
+      sessionId = (created['session'] as Map)['id'] as String;
+    });
+
+    tearDown(() async {
+      await http.close(force: true);
+    });
+
+    /// Polls the collected frames for one matching [test], up to [limit].
+    /// Frames arrive on a stream; the sweep is time-based, so this waits.
+    Future<Map<String, dynamic>?> waitFor(
+      List<Map<String, dynamic>> log,
+      bool Function(Map<String, dynamic>) test,
+      Duration limit,
+    ) async {
+      final deadline = DateTime.now().add(limit);
+      while (DateTime.now().isBefore(deadline)) {
+        for (final frame in log) {
+          if (test(frame)) return frame;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      return null;
+    }
+
+    IOWebSocketChannel connect(String query, List<Map<String, dynamic>> log) {
+      final channel = IOWebSocketChannel.connect(
+          Uri.parse('ws://127.0.0.1:${http.port}/ws?$query'));
+      channel.stream.listen((frame) {
+        final decoded = jsonDecode(frame as String);
+        if (decoded is Map) {
+          log.add(Map<String, dynamic>.from(decoded));
+        }
+      });
+      addTearDown(() => channel.sink.close());
+      return channel;
+    }
+
+    test('a student who goes silent is dropped from the roster', () async {
+      final log = <Map<String, dynamic>>[];
+      connect('session=$sessionId&role=teacher&key=$teacherKey', log);
+      final student = connect('session=$sessionId&name=Ana', log);
+      student.sink.add(jsonEncode({
+        'type': 'join',
+        'sessionId': sessionId,
+        'participantName': 'Ana',
+      }));
+
+      final joined = await waitFor(
+          log, (m) => m['type'] == 'participant_joined',
+          const Duration(seconds: 3));
+      expect(joined, isNotNull,
+          reason: 'the student has to be on the roster first');
+      final pid = joined!['participantId'];
+
+      // No heartbeats: the socket stays open, the student does not.
+      final left = await waitFor(
+          log, (m) => m['type'] == 'participant_left',
+          const Duration(seconds: 3));
+      expect(left, isNotNull,
+          reason: 'a silent seat must be swept off the roster');
+      expect(left!['participantId'], pid);
+
+      // And the host really forgot them: take control has nobody to reach.
+      final ctrl = await api('POST', '/api/take-control',
+          jsonEncode({'teacherKey': teacherKey, 'participantId': pid}));
+      expect(ctrl['notified'], 0);
+    });
+
+    test('heartbeats keep a seat that silence would lose', () async {
+      final log = <Map<String, dynamic>>[];
+      connect('session=$sessionId&role=teacher&key=$teacherKey', log);
+      final student = connect('session=$sessionId&name=Ana', log);
+      student.sink.add(jsonEncode({
+        'type': 'join',
+        'sessionId': sessionId,
+        'participantName': 'Ana',
+      }));
+      await waitFor(log, (m) => m['type'] == 'participant_joined',
+          const Duration(seconds: 3));
+
+      final beat = Timer.periodic(const Duration(milliseconds: 100), (_) {
+        student.sink.add(jsonEncode({
+          'type': 'heartbeat',
+          'sessionId': sessionId,
+          'participantName': 'Ana',
+        }));
+      });
+      addTearDown(beat.cancel);
+
+      // Well past the 500 ms timeout, with the sweep running every 100 ms.
+      await Future<void>.delayed(const Duration(milliseconds: 1500));
+      expect(log.any((m) => m['type'] == 'participant_left'), isFalse,
+          reason: 'a heartbeating student must keep their seat');
+
+      // Stop saying "still here" and the sweeper has to notice — otherwise
+      // the test above passed because no sweep ever ran.
+      beat.cancel();
+      final left = await waitFor(
+          log, (m) => m['type'] == 'participant_left',
+          const Duration(seconds: 3));
+      expect(left, isNotNull,
+          reason: 'the sweeper must still be watching after heartbeats stop');
+    });
+
+    test('the teacher socket is never swept', () async {
+      final log = <Map<String, dynamic>>[];
+      connect('session=$sessionId&role=teacher&key=$teacherKey', log);
+
+      // The teacher never heartbeats; only students do. Past the timeout the
+      // socket must still be alive, proven by a page change reaching it.
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      await api('POST', '/api/page',
+          jsonEncode({'teacherKey': teacherKey, 'page': 2, 'totalPages': 5}));
+      final relayed = await waitFor(
+          log, (m) => m['type'] == 'page_changed',
+          const Duration(seconds: 3));
+      expect(relayed, isNotNull,
+          reason: 'the teacher socket must never be swept');
     });
   });
 }

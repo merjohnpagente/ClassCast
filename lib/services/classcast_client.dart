@@ -15,9 +15,17 @@ enum LinkState { idle, connecting, live, reconnecting, offline, ended, error }
 /// Student-side client: REST snapshot + WebSocket live updates with
 /// automatic re-subscribe and graceful reconnect.
 class ClasscastClient {
+  ClasscastClient({this.heartbeatInterval = SyncProtocol.heartbeatInterval});
+
+  /// How often to tell the host this student is still here. The host drops a
+  /// seat it has not heard from within its presence timeout, so this has to
+  /// keep running even while the class is quiet.
+  final Duration heartbeatInterval;
+
   WebSocketChannel? _channel;
   StreamSubscription? _sub;
   Timer? _reconnectTimer;
+  Timer? _heartbeatTimer;
   int _attempt = 0;
 
   final _events = StreamController<SyncEvent>.broadcast();
@@ -130,6 +138,7 @@ class ClasscastClient {
         participantName: name,
         message: device,
       )));
+      _startHeartbeat(sessionId: sessionId, name: name);
       _sub = channel.stream.listen(
         (frame) {
           // "Live" means the host answered, not that we asked. connect()
@@ -156,6 +165,22 @@ class ClasscastClient {
           host: host, port: port, sessionId: sessionId,
           name: name, device: device);
     }
+  }
+
+  /// Keeps the student's seat warm.
+  ///
+  /// A quiet class and a dead connection look the same from the host, and a
+  /// phone that slept or left the hotspot never sends a FIN — so the client
+  /// says "still here" on a timer. The host is the one that acts on it.
+  void _startHeartbeat({required String sessionId, required String name}) {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(heartbeatInterval, (_) {
+      send(SyncEvent(
+        type: SyncEventType.heartbeat,
+        sessionId: sessionId,
+        participantName: name,
+      ));
+    });
   }
 
   void _scheduleReconnect({
@@ -185,6 +210,8 @@ class ClasscastClient {
   /// every reconnect used to leak one. Nothing here is awaited on purpose: a
   /// close that is slow to finish must not delay the new connection.
   void _teardown() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
     final sub = _sub;
     final channel = _channel;
     _sub = null;

@@ -22,6 +22,16 @@ const int kMaxBodyBytes = 64 * 1024;
 /// Ceiling on a file the server will read into memory to derive a page count.
 const int kMaxDerivedBytes = 64 * 1024 * 1024;
 
+/// How long a student may stay silent before the roster drops them.
+///
+/// A phone that slept or slipped off the hotspot never sends a FIN, so its
+/// socket can look open while nobody is behind it. Students send a heartbeat
+/// every 10 seconds (the client's interval), so three misses is a departure.
+const Duration kPresenceTimeout = Duration(seconds: 30);
+
+/// How often the roster is checked for students past [kPresenceTimeout].
+const Duration kPresenceSweep = Duration(seconds: 10);
+
 /// Stops pulling once [limit] bytes have been seen, so a body of any size
 /// cannot be buffered whole.
 Stream<List<int>> _cappedBytes(Stream<List<int>> source, int limit) async* {
@@ -41,6 +51,10 @@ class ClasscastServer {
   final String filesDir;
   final String? webDir;
 
+  /// Presence policy. Tests shorten these; the classroom uses the defaults.
+  final Duration presenceTimeout;
+  final Duration sweepInterval;
+
   // --- session state (authoritative) ---
   Map<String, dynamic>? _session;
   String _teacherKey = '';
@@ -53,6 +67,10 @@ class ClasscastServer {
   int _totalPages = 0;
   bool _syncPaused = false;
   final Map<String, Map<String, dynamic>> _participants = {};
+
+  /// Checks [_participants] for silent students. Started when the first
+  /// student registers, stopped once the room is empty again.
+  Timer? _presenceTimer;
 
   final Set<WebSocketChannel> _sockets = {};
 
@@ -68,6 +86,8 @@ class ClasscastServer {
     required this.port,
     required this.filesDir,
     this.webDir,
+    this.presenceTimeout = kPresenceTimeout,
+    this.sweepInterval = kPresenceSweep,
   });
 
   Handler get handler {
@@ -256,6 +276,8 @@ class ClasscastServer {
       _page = 1;
       _syncPaused = false;
       _participants.clear();
+      _presenceTimer?.cancel();
+      _presenceTimer = null;
       // Close the room's sockets. Anything left open would keep receiving
       // frames from the session that starts next.
       for (final socket in _sockets.toList()) {
@@ -418,8 +440,14 @@ class ClasscastServer {
     }
     final pid =
         'ws-${_sockets.length}-${DateTime.now().microsecondsSinceEpoch}';
-    _participants[pid] = {'id': pid, 'name': name, 'device': device};
+    _participants[pid] = {
+      'id': pid,
+      'name': name,
+      'device': device,
+      'lastSeen': DateTime.now(),
+    };
     _socketsById[pid] = channel;
+    _ensurePresenceSweep();
     // Reconnecting students get the current state immediately.
     channel.sink.add(jsonEncode(_snapshotEvent('session_state')));
     _broadcast({
@@ -444,11 +472,64 @@ class ClasscastServer {
     _sockets.remove(channel);
     _socketsById.remove(pid);
     if (_participants.remove(pid) == null) return;
+    _stopSweepWhenEmpty();
     _broadcast({
       'type': 'participant_left',
       'sessionId': sessionId,
       'participantId': pid,
     });
+  }
+
+  /// Any frame from a student proves they are still there, so the sweep's
+  /// clock resets on all of them — not just heartbeats.
+  void _touch(String pid) {
+    _participants[pid]?['lastSeen'] = DateTime.now();
+  }
+
+  /// Starts the sweep when the first student registers. A room with nobody in
+  /// it needs no timer, and leaving one running kept the process busy for no
+  /// one's benefit.
+  void _ensurePresenceSweep() {
+    if (_presenceTimer != null || _participants.isEmpty) return;
+    _presenceTimer = Timer.periodic(sweepInterval, (_) => _sweepPresence());
+  }
+
+  void _stopSweepWhenEmpty() {
+    if (_participants.isNotEmpty) return;
+    _presenceTimer?.cancel();
+    _presenceTimer = null;
+  }
+
+  /// Drops students whose socket has been silent past [presenceTimeout].
+  ///
+  /// This is the half-open connection case: the TCP session still looks alive
+  /// (no FIN ever arrived), so the onDone/onError paths never fire, and the
+  /// teacher keeps seeing a student who left the hotspot half an hour ago.
+  void _sweepPresence() {
+    final cutoff = DateTime.now().subtract(presenceTimeout);
+    final stale = <String>[];
+    for (final entry in _participants.entries) {
+      final seen = entry.value['lastSeen'];
+      if (seen is DateTime && seen.isBefore(cutoff)) stale.add(entry.key);
+    }
+    for (final pid in stale) {
+      final socket = _socketsById.remove(pid);
+      _participants.remove(pid);
+      if (socket != null) {
+        _sockets.remove(socket);
+        try {
+          socket.sink.close();
+        } catch (_) {/* already gone */}
+      }
+      // Exactly the frame a clean disconnect would have produced, so the
+      // teacher's roster stays honest without any new client handling.
+      _broadcast({
+        'type': 'participant_left',
+        'sessionId': _session?['id'] ?? '',
+        'participantId': pid,
+      });
+    }
+    _stopSweepWhenEmpty();
   }
 
   /// A roster name comes straight off the wire, so it gets bounded: one
@@ -476,15 +557,22 @@ class ClasscastServer {
     // other frame a student sent fell on the floor.
     // Bounded the same way as a connect name: the roster display comes off the
     // wire, so a frame cannot stuff it with a megabyte of text.
+    // Any frame at all is proof of life, so the presence clock resets first.
+    _touch(pid);
     final name = _cleanName(msg['participantName'] as String?);
     switch (msg['type']) {
+      case 'heartbeat':
+        // Purely a liveness ping; the touch above is the whole effect.
+        return;
       case 'join':
         _participants[pid] = {
           'id': pid,
           'name': name,
-          'device': msg['message'] ?? ''
+          'device': msg['message'] ?? '',
+          'lastSeen': DateTime.now(),
         };
         _socketsById[pid] = channel;
+        _ensurePresenceSweep();
         channel.sink.add(jsonEncode(_snapshotEvent('session_state')));
         _broadcast({
           'type': 'participant_joined',

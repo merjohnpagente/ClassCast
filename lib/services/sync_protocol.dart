@@ -30,6 +30,15 @@ class SyncProtocol {
   static const endApi = '/api/end';
   static const takeControlApi = '/api/take-control';
 
+  /// How often a connected student says "still here" while nothing else is
+  /// happening. Sent as a [SyncEventType.heartbeat] frame over the live socket.
+  static const heartbeatInterval = Duration(seconds: 10);
+
+  /// How long a host waits before dropping a student it has not heard from.
+  /// Three missed heartbeats: a phone that slept or slipped off the hotspot
+  /// never sends a FIN, so the socket can look open while nobody is there.
+  static const presenceTimeout = Duration(seconds: 30);
+
   /// Encode an event for the socket.
   static String encode(SyncEvent event) => jsonEncode(event.toJson());
 

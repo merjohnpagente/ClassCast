@@ -91,7 +91,7 @@ join parsing, validators, and the OOXML parsers against real zipped
 .pptx/.docx/.xlsx fixtures) and widget tests that boot the real app and reach
 the role screen, teacher dashboard and student join screen; release APK and
 web builds both succeed. The laptop host has its own suite (session lifecycle,
-teacher key, document sharing, path traversal).
+teacher key, document sharing, path traversal, presence heartbeats).
 
 **Not yet verified on real hardware:** hotspot join, QR scanning, live
 page-sync over WebSocket, reconnect recovery, PDF rendering of real files and

@@ -64,18 +64,22 @@
 - Ending a session closes the room's sockets, unshares the file (a kept URL
   stops working), and clears the page/document/roster state, so the next
   session starts clean instead of inheriting a phantom document.
+- A student whose connection dies without a FIN (phone slept, slipped off the
+  hotspot) is dropped from the roster after 30 seconds of silence: student
+  clients heartbeat every 10 seconds, and both hosts sweep the room. The
+  teacher's roster only shows students who are actually there.
 
 ## Still TODO (per spec phases)
 
 - **Phase 2 (remainder):** teacher POST `/api/document` from the web build
   (the browser cannot read a picked file's bytes, so a teacher on the laptop
-  still shares out of the host's `--dir` folder); participant heartbeat.
-- **Phase 4:** QR shortcut actions polish, participant heartbeat/timeouts,
-  multi-session host, Android hotspot client-isolation detection + warning.
+  still shares out of the host's `--dir` folder).
+- **Phase 4:** QR shortcut actions polish, multi-session host, Android hotspot
+  client-isolation detection + warning.
 - **Phase 5:** optional server-side conversion for the legacy binary formats
   (`.ppt` / `.doc` / `.xls`) that no device can render; advanced XLS
   (charts, formulas, multiple print areas).
-- **Phase 6:** advanced offline cache, participant presence timeouts, and full
-  screen mirroring (explicitly out of scope for document-casting builds).
+- **Phase 6:** advanced offline cache and full screen mirroring (explicitly
+  out of scope for document-casting builds).
   The Android-hosted teacher server itself already exists — `ClasscastHost`
   runs the HTTP + WebSocket classroom inside the teacher's phone.

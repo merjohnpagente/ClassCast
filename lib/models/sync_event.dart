@@ -26,6 +26,12 @@ enum SyncEventType {
   /// The teacher pulled a student's screen back to the class page. Sent to one
   /// student, or to everyone when the teacher wants the whole class back.
   takeControl,
+
+  /// A student saying "still here" while nothing else is happening. Sent on a
+  /// timer, never broadcast: the host only uses it to keep the student's seat
+  /// on the roster. A phone that sleeps or slips off the hotspot never sends a
+  /// FIN, so without this its roster entry lived on forever.
+  heartbeat,
 }
 
 extension SyncEventTypeWire on SyncEventType {
@@ -55,6 +61,8 @@ extension SyncEventTypeWire on SyncEventType {
         return 'student_page_changed';
       case SyncEventType.takeControl:
         return 'take_control';
+      case SyncEventType.heartbeat:
+        return 'heartbeat';
     }
   }
 
@@ -84,6 +92,8 @@ extension SyncEventTypeWire on SyncEventType {
         return SyncEventType.studentPageChanged;
       case 'take_control':
         return SyncEventType.takeControl;
+      case 'heartbeat':
+        return SyncEventType.heartbeat;
       default:
         return null;
     }

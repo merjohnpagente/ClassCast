@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:classcast_offline/models/sync_event.dart';
+import 'package:classcast_offline/services/classcast_client.dart';
 import 'package:classcast_offline/services/document_download.dart';
 import 'package:classcast_offline/services/host/classcast_host.dart';
 import 'package:classcast_offline/services/sync_protocol.dart';
@@ -439,6 +440,145 @@ void main() {
     );
     expect(SyncProtocol.decode(relayed), isNotNull,
         reason: 'take control has to reach the student');
+  });
+
+  // A phone that sleeps or slips off the hotspot never sends a FIN, so its
+  // socket stays open while nobody is behind it and the onDone/onError paths
+  // never fire. Without a presence sweep, the teacher's roster kept that
+  // student for the rest of the lesson. These run with test-sized timeouts.
+  test('a silent student loses their seat; a heartbeating one keeps it',
+      () async {
+    host.presenceTimeout = const Duration(milliseconds: 500);
+    host.sweepInterval = const Duration(milliseconds: 100);
+    addTearDown(() {
+      host.presenceTimeout = const Duration(seconds: 30);
+      host.sweepInterval = const Duration(seconds: 10);
+    });
+
+    await send('POST', '/api/session', {
+      'id': 'CLASS-HB',
+      'teacherKey': 'HBKEY',
+    });
+
+    final teacher = IOWebSocketChannel.connect(Uri.parse(
+        'ws://127.0.0.1:$port/ws?session=CLASS-HB&role=teacher&key=HBKEY'));
+    final teacherInbox = StreamQueue<dynamic>(teacher.stream);
+    addTearDown(() async {
+      await teacherInbox.cancel();
+      await teacher.sink.close();
+    });
+    await teacherInbox.next; // the greeting
+
+    final student = IOWebSocketChannel.connect(Uri.parse(
+        'ws://127.0.0.1:$port/ws?session=CLASS-HB&name=Ana&device=Android'));
+    final studentInbox = StreamQueue<dynamic>(student.stream);
+    addTearDown(() async {
+      await studentInbox.cancel();
+      await student.sink.close();
+    });
+    await studentInbox.next; // the greeting
+
+    final joined = await teacherInbox.nextWhere(
+      (frame) =>
+          SyncProtocol.decode(frame)?.type == SyncEventType.participantJoined,
+      const Duration(seconds: 3),
+    );
+    final pid = SyncProtocol.decode(joined)!.participantId;
+
+    // Exactly what the student client puts on the wire, on its timer.
+    final beat = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      student.sink.add(SyncProtocol.encode(SyncEvent(
+        type: SyncEventType.heartbeat,
+        sessionId: 'CLASS-HB',
+        participantName: 'Ana',
+      )));
+    });
+    addTearDown(beat.cancel);
+
+    // Well past the 500 ms timeout, with the sweep running every 100 ms.
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
+    await expectLater(
+      teacherInbox.nextWhere(
+        (frame) =>
+            SyncProtocol.decode(frame)?.type == SyncEventType.participantLeft,
+        const Duration(milliseconds: 300),
+      ),
+      throwsA(isA<TimeoutException>()),
+      reason: 'a heartbeating student must keep their seat',
+    );
+
+    // Stop saying "still here" and the host has to notice — otherwise the
+    // check above passed because no sweep ever ran.
+    beat.cancel();
+    final left = await teacherInbox.nextWhere(
+      (frame) =>
+          SyncProtocol.decode(frame)?.type == SyncEventType.participantLeft,
+      const Duration(seconds: 3),
+    );
+    expect(SyncProtocol.decode(left)!.participantId, pid);
+  });
+
+  test('the student client keeps its own seat warm, and lets it go on leave',
+      () async {
+    host.presenceTimeout = const Duration(milliseconds: 500);
+    host.sweepInterval = const Duration(milliseconds: 100);
+    addTearDown(() {
+      host.presenceTimeout = const Duration(seconds: 30);
+      host.sweepInterval = const Duration(seconds: 10);
+    });
+
+    await send('POST', '/api/session', {
+      'id': 'CLASS-CLI',
+      'teacherKey': 'CLIKEY',
+    });
+
+    final teacher = IOWebSocketChannel.connect(Uri.parse(
+        'ws://127.0.0.1:$port/ws?session=CLASS-CLI&role=teacher&key=CLIKEY'));
+    final teacherInbox = StreamQueue<dynamic>(teacher.stream);
+    addTearDown(() async {
+      await teacherInbox.cancel();
+      await teacher.sink.close();
+    });
+    await teacherInbox.next; // the greeting
+
+    // The real client, heartbeating on a test-sized timer.
+    final client = ClasscastClient(
+      heartbeatInterval: const Duration(milliseconds: 100),
+    );
+    addTearDown(client.dispose);
+    client.subscribe(
+      host: '127.0.0.1',
+      port: port,
+      sessionId: 'CLASS-CLI',
+      name: 'Ana',
+      device: 'Android',
+    );
+
+    await teacherInbox.nextWhere(
+      (frame) =>
+          SyncProtocol.decode(frame)?.type == SyncEventType.participantJoined,
+      const Duration(seconds: 3),
+    );
+
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
+    await expectLater(
+      teacherInbox.nextWhere(
+        (frame) =>
+            SyncProtocol.decode(frame)?.type == SyncEventType.participantLeft,
+        const Duration(milliseconds: 300),
+      ),
+      throwsA(isA<TimeoutException>()),
+      reason: 'the client has to keep its own seat warm',
+    );
+
+    // Leaving must stop the heartbeat too, or the roster would keep a ghost.
+    await client.disconnect();
+    final left = await teacherInbox.nextWhere(
+      (frame) =>
+          SyncProtocol.decode(frame)?.type == SyncEventType.participantLeft,
+      const Duration(seconds: 3),
+    );
+    expect(SyncProtocol.decode(left), isNotNull);
   });
 }
 
