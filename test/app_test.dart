@@ -24,7 +24,7 @@ void main() {
       expect(SupportedFiles.kindOf('mov'), DocKind.video);
       expect(SupportedFiles.kindOf('webm'), DocKind.video);
       expect(SupportedFiles.kindOf('3gp'), DocKind.video);
-      expect(SupportedFiles.kindOf('mp4'), isIn(SupportedFiles.all),
+      expect(SupportedFiles.all, contains('mp4'),
           reason: 'and the picker has to offer it, or it cannot be cast at all');
       expect(SupportedFiles.initialStatus(DocKind.video), DocStatus.ready);
       expect(SupportedFiles.statusFor('mp4'), DocStatus.ready);
