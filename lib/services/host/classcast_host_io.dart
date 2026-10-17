@@ -63,6 +63,14 @@ class ClasscastHost {
   /// Students with a raised hand, so a fresh teacher connection still sees it.
   final Set<WebSocketChannel> _sockets = {};
 
+  /// The sockets subscribed to the roster — in practice the teacher's.
+  ///
+  /// Roster events go here and nowhere else. They used to go to every socket,
+  /// which made joining O(n²) in both directions: a class of thirty phones
+  /// pushed roughly nine hundred roster frames to twenty-nine phones that
+  /// never look at them, over the same hotspot the document is competing for.
+  final Set<WebSocketChannel> _teacherSockets = {};
+
   /// Why the last [start] failed, in a sentence the teacher can act on.
   String? _lastStartError;
   String? get lastStartError => _lastStartError;
@@ -167,6 +175,7 @@ class ClasscastHost {
       } catch (_) {/* already gone */}
     }
     _sockets.clear();
+    _teacherSockets.clear();
     _socketsById.clear();
     _participants.clear();
     final server = _server;
@@ -450,6 +459,7 @@ Future<void> _endEndpoint(HttpRequest request) async {
       } catch (_) {/* already gone */}
     }
     _sockets.clear();
+    _teacherSockets.clear();
     _socketsById.clear();
     return _json(request, 200, {'ok': true});
   }
@@ -521,6 +531,7 @@ Future<void> _endEndpoint(HttpRequest request) async {
     final socket = await WebSocketTransformer.upgrade(request);
     final channel = IOWebSocketChannel(socket);
     _sockets.add(channel);
+    if (isTeacher) _teacherSockets.add(channel);
     channel.sink.add(jsonEncode(_snapshotEvent('session_state')));
     // The teacher's own socket subscribes to the roster but is never listed as
     // a participant, so it has no id.
@@ -547,7 +558,7 @@ Future<void> _endEndpoint(HttpRequest request) async {
       };
       _socketsById[pid] = channel;
       _ensurePresenceSweep();
-      _broadcast({
+      _broadcastRoster({
         'type': 'participant_joined',
         'sessionId': sessionId,
         'participantId': pid,
@@ -593,21 +604,33 @@ Future<void> _endEndpoint(HttpRequest request) async {
         // Purely a liveness ping; the touch above is the whole effect.
         return;
       case 'join':
+        final device = message['message'] ?? '';
+        final existing = _participants[pid];
+        // The socket upgrade already registered this phone with the name from
+        // its URL, so the hello that follows is the same news. Announcing it
+        // again cost one broadcast per student *per socket* — the second half
+        // of the n² a joining class used to cost, for a roster that already
+        // said so. Only a real change is worth saying out loud.
+        final changed = existing == null ||
+            existing['name'] != name ||
+            existing['device'] != device;
         _participants[pid] = {
           'id': pid,
           'name': name,
-          'device': message['message'] ?? '',
+          'device': device,
           'lastSeen': DateTime.now(),
         };
         _socketsById[pid] = channel;
         _ensurePresenceSweep();
         channel.sink.add(jsonEncode(_snapshotEvent('session_state')));
-        _broadcast({
-          'type': 'participant_joined',
-          'sessionId': sessionId,
-          'participantId': pid,
-          'participantName': name,
-        });
+        if (changed) {
+          _broadcastRoster({
+            'type': 'participant_joined',
+            'sessionId': sessionId,
+            'participantId': pid,
+            'participantName': name,
+          });
+        }
         return;
       case 'hand_raised':
         if (pid.isEmpty) return;
@@ -649,6 +672,7 @@ Future<void> _endEndpoint(HttpRequest request) async {
 
   void _onClose(WebSocketChannel channel, String pid, String sessionId) {
     _sockets.remove(channel);
+    _teacherSockets.remove(channel);
     if (pid.isEmpty) return;
     _socketsById.remove(pid);
     // Forgetting the participant too, not just its socket. A student who
@@ -658,7 +682,7 @@ Future<void> _endEndpoint(HttpRequest request) async {
     if (_participants.remove(pid) == null) return;
     _stopSweepWhenEmpty();
 
-    _broadcast({
+    _broadcastRoster({
       'type': 'participant_left',
       'sessionId': sessionId,
       'participantId': pid,
@@ -707,7 +731,7 @@ Future<void> _endEndpoint(HttpRequest request) async {
       }
       // Exactly the frame a clean disconnect would have produced, so the
       // teacher's roster stays honest without any new client handling.
-      _broadcast({
+      _broadcastRoster({
         'type': 'participant_left',
         'sessionId': _session?['id'] ?? '',
         'participantId': pid,
@@ -950,6 +974,26 @@ Future<void> _endEndpoint(HttpRequest request) async {
         // not enough — the underlying socket stayed open, and one dead
         // connection per dead student adds up over a school day.
         _sockets.remove(socket);
+        _forgetSocket(socket);
+        try {
+          socket.sink.close();
+        } catch (_) {/* already gone */}
+      }
+    }
+  }
+
+  /// Sends an event only to the sockets that asked for the roster.
+  ///
+  /// Students are not on the roster and never see it: no client renders another
+  /// student's name. Giving every phone the whole join and leave chatter of the
+  /// room is bandwidth the document does not have.
+  void _broadcastRoster(Map<String, dynamic> event) {
+    final frame = jsonEncode(event);
+    for (final socket in _teacherSockets.toList()) {
+      try {
+        socket.sink.add(frame);
+      } catch (_) {
+        _teacherSockets.remove(socket);
         _forgetSocket(socket);
         try {
           socket.sink.close();

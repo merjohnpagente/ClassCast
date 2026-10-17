@@ -81,6 +81,14 @@ class ClasscastServer {
 
   final Set<WebSocketChannel> _sockets = {};
 
+  /// Sockets subscribed to the roster: in practice the teacher's.
+  ///
+  /// Roster events go here and nowhere else — no student renders another
+  /// student's name, so pushing the whole room's join and leave chatter to
+  /// every phone was bandwidth the document did not have, and it made joining
+  /// cost O(n²) over the same hotspot.
+  final Set<WebSocketChannel> _teacherSockets = {};
+
   /// Participant id → its socket, so "take control" can be aimed at one student
   /// instead of every one of them. Without it the per-student button on the
   /// Students screen could only ever pull the whole room back.
@@ -329,6 +337,7 @@ class ClasscastServer {
         } catch (_) {/* already gone */}
       }
       _sockets.clear();
+      _teacherSockets.clear();
       _socketsById.clear();
       return _json(200, {'ok': true});
     });
@@ -480,6 +489,7 @@ class ClasscastServer {
     // The teacher subscribes too (so it learns who joined), but must never
     // appear in its own student roster.
     if (isTeacher) {
+      _teacherSockets.add(channel);
       channel.sink.add(jsonEncode(_snapshotEvent('session_state')));
       // Replay the room. The teacher's socket reconnects whenever the network
       // changes, and without this its roster came back empty while every
@@ -494,8 +504,14 @@ class ClasscastServer {
       }
       channel.stream.listen(
         (_) {/* teacher control happens over the REST API, not frames */},
-        onDone: () => _sockets.remove(channel),
-        onError: (_) => _sockets.remove(channel),
+        onDone: () {
+          _sockets.remove(channel);
+          _teacherSockets.remove(channel);
+        },
+        onError: (_) {
+          _sockets.remove(channel);
+          _teacherSockets.remove(channel);
+        },
         cancelOnError: false,
       );
       return;
@@ -512,7 +528,7 @@ class ClasscastServer {
     _ensurePresenceSweep();
     // Reconnecting students get the current state immediately.
     channel.sink.add(jsonEncode(_snapshotEvent('session_state')));
-    _broadcast({
+    _broadcastRoster({
       'type': 'participant_joined',
       'sessionId': sessionId,
       'participantId': pid,
@@ -535,7 +551,7 @@ class ClasscastServer {
     _socketsById.remove(pid);
     if (_participants.remove(pid) == null) return;
     _stopSweepWhenEmpty();
-    _broadcast({
+    _broadcastRoster({
       'type': 'participant_left',
       'sessionId': sessionId,
       'participantId': pid,
@@ -585,7 +601,7 @@ class ClasscastServer {
       }
       // Exactly the frame a clean disconnect would have produced, so the
       // teacher's roster stays honest without any new client handling.
-      _broadcast({
+      _broadcastRoster({
         'type': 'participant_left',
         'sessionId': _session?['id'] ?? '',
         'participantId': pid,
@@ -627,21 +643,31 @@ class ClasscastServer {
         // Purely a liveness ping; the touch above is the whole effect.
         return;
       case 'join':
+        final device = msg['message'] ?? '';
+        final existing = _participants[pid];
+        // The upgrade already registered this phone with the name from its
+        // URL, so the hello that follows is the same news: announcing it twice
+        // doubled the roster traffic a joining class produces.
+        final changed = existing == null ||
+            existing['name'] != name ||
+            existing['device'] != device;
         _participants[pid] = {
           'id': pid,
           'name': name,
-          'device': msg['message'] ?? '',
+          'device': device,
           'lastSeen': DateTime.now(),
         };
         _socketsById[pid] = channel;
         _ensurePresenceSweep();
         channel.sink.add(jsonEncode(_snapshotEvent('session_state')));
-        _broadcast({
-          'type': 'participant_joined',
-          'sessionId': sessionId,
-          'participantId': pid,
-          'participantName': name,
-        });
+        if (changed) {
+          _broadcastRoster({
+            'type': 'participant_joined',
+            'sessionId': sessionId,
+            'participantId': pid,
+            'participantName': name,
+          });
+        }
         return;
       case 'hand_raised':
         _broadcastParticipant('hand_raised', sessionId, pid, name,
@@ -936,6 +962,22 @@ class ClasscastServer {
       try {
         s.sink.add(frame);
       } catch (_) {
+        _sockets.remove(s);
+      }
+    }
+  }
+
+  /// Sends an event only to the sockets that asked for the roster.
+  ///
+  /// Students are not on the roster and never see it, so this keeps the whole
+  /// room's join and leave chatter off every phone that does not want it.
+  void _broadcastRoster(Map<String, dynamic> event) {
+    final frame = jsonEncode(event);
+    for (final s in _teacherSockets.toList()) {
+      try {
+        s.sink.add(frame);
+      } catch (_) {
+        _teacherSockets.remove(s);
         _sockets.remove(s);
       }
     }
