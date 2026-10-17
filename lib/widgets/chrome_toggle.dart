@@ -111,8 +111,14 @@ class ChromeAppBarAction extends StatelessWidget {
 }
 
 /// The way back from hidden chrome, for anyone who does not think to tap the
-/// page. A quiet pill over the bottom edge, shown only while the chrome is
-/// away.
+/// page. A small dark circle in the bottom-left corner, shown only while the
+/// chrome is away.
+///
+/// It used to be a labelled pill along the bottom centre, where on a phone it
+/// sat right on top of the zoom bar anchored to the bottom-right — the pill
+/// covered the −/+/Fit buttons and, being the top layer of the stack, stole
+/// their taps. A corner circle cannot collide with anything: the zoom bar owns
+/// the bottom-right, this owns the bottom-left.
 class ChromeToggleHint extends StatelessWidget {
   final String label;
 
@@ -123,7 +129,7 @@ class ChromeToggleHint extends StatelessWidget {
     final chrome = ChromeToggleScope.maybeOf(context);
     if (chrome == null || !chrome.hidden) return const SizedBox.shrink();
     return Align(
-      alignment: Alignment.bottomCenter,
+      alignment: Alignment.bottomLeft,
       child: SafeArea(
         top: false,
         child: Padding(
@@ -133,27 +139,15 @@ class ChromeToggleHint extends StatelessWidget {
             label: label,
             child: Material(
               color: Colors.black.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(AppRadius.pill),
+              shape: const CircleBorder(),
               child: InkWell(
-                borderRadius: BorderRadius.circular(AppRadius.pill),
+                customBorder: const CircleBorder(),
                 onTap: chrome.show,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.s16, vertical: AppSpacing.s8),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.visibility_outlined,
-                          size: 18, color: Colors.white),
-                      const SizedBox(width: AppSpacing.s8),
-                      Text(label,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          )),
-                    ],
-                  ),
+                child: const SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Icon(Icons.visibility_outlined,
+                      size: 20, color: Colors.white),
                 ),
               ),
             ),

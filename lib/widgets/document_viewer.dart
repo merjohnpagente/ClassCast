@@ -7,6 +7,7 @@ import '../models/doc_types.dart';
 import '../models/shared_document.dart';
 import '../theme/app_colors.dart';
 import '../utils/local_file.dart';
+import 'chrome_toggle.dart';
 import 'document_zoom.dart';
 import 'office/office_document_view.dart';
 import 'office/office_document_scroll_view.dart';
@@ -156,6 +157,11 @@ class _DocumentViewerState extends State<DocumentViewer>
   Widget _pdf(BoxDecoration box) {
     // Students fetch from the teacher host; the teacher renders the file it
     // picked directly. Never fall back to a bundled sample asset.
+    //
+    // The viewer claims every tap on the page, so unlike the Office canvas and
+    // the photo viewer, a bare tap here never reached ChromeTapAnywhere and a
+    // PDF could not be cleared to the slide alone. Its own onTap is the only
+    // callback that fires on that surface, so the toggle is wired here too.
     if (remoteUrl != null && remoteUrl!.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.large),
@@ -171,6 +177,7 @@ class _DocumentViewerState extends State<DocumentViewer>
                   // 3x was not enough to read fine print on a projector; the
                   // Office canvas has always allowed 6x.
                   maxZoomLevel: kZoomMax,
+                  onTap: (_) => ChromeToggleScope.maybeOf(context)?.toggle(),
                 ),
               ),
               Positioned(
@@ -206,6 +213,7 @@ class _DocumentViewerState extends State<DocumentViewer>
                   controller: controller,
                   canShowScrollHead: false,
                   maxZoomLevel: kZoomMax,
+                  onTap: (_) => ChromeToggleScope.maybeOf(context)?.toggle(),
                 ),
               ),
               Positioned(
