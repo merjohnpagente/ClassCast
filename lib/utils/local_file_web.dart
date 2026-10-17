@@ -23,18 +23,15 @@ Future<String?> localFilePersistentDir() async => null;
 
 /// Always null: a browser cannot copy a local file anywhere. The viewer falls
 /// back to the URL served by the teacher host.
-Future<String?> localFileCopyIntoAppStorage(
-  String sourcePath,
-  String fileName,
-) async =>
-    null;
-/// A browser has no file handles, so this is always null.
-Object? localFileHandle(String path) => null;
-
-/// A browser has no filesystem to copy into: every path reports unavailable.
+///
+/// [copyCeilingBytes] is accepted so this and the io version have one shape —
+/// a signature that differs per platform is a mistake waiting to happen.
 Future<String?> localFileCopyIntoAppStorage(
   String sourcePath,
   String fileName, {
   int copyCeilingBytes = 200 * 1024 * 1024,
 }) async =>
     null;
+
+/// A browser has no file handles, so this is always null.
+Object? localFileHandle(String path) => null;
