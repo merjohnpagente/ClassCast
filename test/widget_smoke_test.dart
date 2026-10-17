@@ -39,11 +39,19 @@ void main() {
     // Anyone can hold a classroom: a student casting to the class is the same
     // app on the same network, so the join screen offers the way in rather than
     // making them restart at the role screen.
+    // A tall surface so the row at the bottom is built rather than scrolled
+    // out of a list that only builds what it shows.
+    tester.view.physicalSize = const Size(900, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     await tester.pumpWidget(
       MultiProvider(
         providers: appProviders(),
         child: MaterialApp(
-          home: JoinScreen(onJoined: () {}),
+          // A Scaffold, because the join form's fields need a Material
+          // ancestor — the screen is normally inside the student shell's.
+          home: Scaffold(body: JoinScreen(onJoined: () {})),
         ),
       ),
     );

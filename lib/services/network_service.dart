@@ -287,33 +287,4 @@ class NetworkService {
       return false;
     }
   }
-
-  /// The first of [hosts] the teacher actually answers on, or null.
-  ///
-  /// A teacher who is on the classroom Wi-Fi and serving a hotspot has both
-  /// addresses, and a student on one of those networks cannot reach the other.
-  /// Trying them in order is what makes "same Wi-Fi" and "hotspot" the same
-  /// experience instead of a coin flip on which address the phone happened to
-  /// report first.
-  static Future<String?> firstReachableAddress(
-    List<String> hosts, {
-    required int port,
-    Duration timeout = const Duration(seconds: 3),
-    Duration alternateTimeout = const Duration(milliseconds: 1500),
-  }) async {
-    for (var i = 0; i < hosts.length; i++) {
-      final host = hosts[i].trim();
-      if (host.isEmpty) continue;
-      final ok = await probeHost(
-        host: host,
-        port: port,
-        // The first address is the likely one and gets the full wait; the
-        // alternates are fallbacks, and a student staring at a spinner does
-        // not need to wait the whole timeout on each of them.
-        timeout: i == 0 ? timeout : alternateTimeout,
-      );
-      if (ok) return host;
-    }
-    return null;
-  }
 }

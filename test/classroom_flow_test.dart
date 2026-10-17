@@ -585,30 +585,41 @@ void main() {
 
   test('a student finds the classroom even when the first address is wrong',
       () async {
+    const teacherKey = 'FALLKEY';
     await send('POST', '/api/session',
-        {'id': 'CLASS-FALL', 'teacherKey': 'FALLKEY'});
+        {'id': 'CLASS-FALL', 'teacherKey': teacherKey});
+    final dir = Directory.systemTemp.createTempSync('fall');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/fall.pdf')..writeAsStringSync('%PDF fall');
+    host.registerDocument('fall.pdf', file.path);
+    await send('POST', '/api/document', {
+      'teacherKey': teacherKey,
+      'documentName': 'fall.pdf',
+    });
 
     // What the joining code carries: this phone's hotspot address first, then
     // the Wi-Fi one. A student connected to the second cannot reach the first,
     // and the other way round, so probing only the first is a coin flip on
     // which setup the teacher happened to be using.
-    final reached = await NetworkService.firstReachableAddress(
-      ['10.255.255.1', '127.0.0.1'],
-      port: port,
-      timeout: const Duration(milliseconds: 400),
-      alternateTimeout: const Duration(milliseconds: 400),
+    final sync = SyncProvider();
+    addTearDown(sync.dispose);
+    final joined = await sync.join(
+      rawInput: NetworkService.qrPayload(
+        host: '10.255.255.1',
+        port: port,
+        sessionId: 'CLASS-FALL',
+        altHosts: ['127.0.0.1'],
+      ),
+      studentName: 'Ana',
     );
-    expect(reached, '127.0.0.1',
-        reason: 'the address that answers is the one the student has to use');
 
-    // And when nothing answers the join has to fail rather than pick one and
-    // pretend, which is what tells the student to ask for a hotspot.
-    final none = await NetworkService.firstReachableAddress(
-      ['10.255.255.1'],
-      port: port,
-      timeout: const Duration(milliseconds: 400),
-    );
-    expect(none, isNull);
+    expect(joined, isTrue,
+        reason: 'one unreachable address must not fail the whole join');
+    expect(sync.host, '127.0.0.1',
+        reason: 'the student keeps the address that answered');
+
+    final bytes = await DocumentDownloader.fetch(sync.snapshot!.documentUrl!);
+    expect(utf8.decode(bytes!), '%PDF fall');
   });
 
   // The host turns its advertised address into the URL every student

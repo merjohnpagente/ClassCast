@@ -55,8 +55,11 @@ class SyncProvider extends ChangeNotifier {
     });
   }
 
-  /// Join flow: validate -> probe host -> snapshot -> subscribe.
-  /// Returns true only when the host really answers.
+  /// Join flow: validate -> find the address that has this session -> subscribe.
+  ///
+  /// Returns true only when one of the addresses in the joining code hands back
+  /// this session's snapshot, so the "Joined classroom" the caller shows is
+  /// never a lie about a session the app could not read.
   Future<bool> join({
     required String rawInput,
     required String studentName,
@@ -90,15 +93,36 @@ class SyncProvider extends ChangeNotifier {
     _link = LinkState.connecting;
     notifyListeners();
 
-    // One address is not proof the classroom is unreachable. The teacher's
-    // code carries every address they have — the hotspot one and the Wi-Fi
-    // one — because a student on either network cannot reach the other, and
-    // trying them in order is what makes both work the same way.
-    final reached = await NetworkService.firstReachableAddress(
-      [parsed.host, ...parsed.alts],
-      port: _port,
-    );
-    if (reached == null) {
+    // One address is not proof the classroom is reachable, and an answer is not
+    // proof it is *this* classroom. The teacher's phone can hold several
+    // addresses — the hotspot they serve, the Wi-Fi or hotspot they joined,
+    // and the code carries all of them — and on a shared network something
+    // else may well answer on one. So a candidate has to hand back this
+    // session's own snapshot before it is believed; a bare ping used to be
+    // enough, and a wrong neighbour's answer ended the join there.
+    ClassroomSession? snapshot;
+    final candidates = <String>[parsed.host, ...parsed.alts];
+    for (var i = 0; i < candidates.length; i++) {
+      final host = candidates[i].trim();
+      if (host.isEmpty) continue;
+      // The first address is the likely one and gets the full wait; the rest
+      // are fallbacks, and a student staring at a spinner does not need to sit
+      // through the whole timeout on each of them.
+      final wait =
+          i == 0 ? const Duration(seconds: 3) : const Duration(seconds: 2);
+      if (!await NetworkService.probeHost(
+          host: host, port: _port, timeout: wait)) {
+        continue;
+      }
+      final snap = await _client.fetchSnapshot(
+          host: host, port: _port, sessionId: _sessionId, timeout: wait);
+      if (snap != null) {
+        _host = host;
+        snapshot = snap;
+        break;
+      }
+    }
+    if (snapshot == null) {
       _link = LinkState.offline;
       // This phone is the only one that can actually see the block: its
       // packets to the teacher either arrive or they do not. Name the likely
@@ -110,10 +134,7 @@ class SyncProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    _host = reached;
 
-    final snapshot = await _client.fetchSnapshot(
-        host: _host, port: _port, sessionId: _sessionId);
     _client.subscribe(
         host: _host,
         port: _port,
@@ -130,26 +151,15 @@ class SyncProvider extends ChangeNotifier {
     // brought back without leaving and rejoining. Listening unconditionally
     // is what lets a recovered session populate itself.
     bind();
-    if (snapshot != null) {
-      _snapshot = _withReachableUrl(snapshot);
-      _syncPaused = snapshot.syncPaused;
-      _hasDocument = snapshot.documentId != null;
-      // Only a snapshot proves the host is answering. Saying "live" when the
-      // fetch failed showed a green chip over a session that never connected;
-      // the client sets live itself on the first socket frame from here.
-      _link = LinkState.live;
-    } else {
-      _link = LinkState.offline;
-      _error = 'The teacher answered, but the session could not be read. '
-          'The socket is open, so this may still catch up — otherwise scan the '
-          'QR again.';
-    }
+    _snapshot = _withReachableUrl(snapshot);
+    _syncPaused = snapshot.syncPaused;
+    _hasDocument = snapshot.documentId != null;
+    // Only a snapshot proves the host is answering. Saying "live" when the
+    // fetch failed showed a green chip over a session that never connected;
+    // the client sets live itself on the first socket frame from here.
+    _link = LinkState.live;
     notifyListeners();
-    // False on this path. The doc comment above says "returns true only when
-    // the host really answers", and the caller shows a "Joined classroom"
-    // confirmation on a true: the student was told they had joined a session
-    // the app had not actually read.
-    return snapshot != null;
+    return true;
   }
 
   /// Listen for teacher broadcasts and mirror them into [_snapshot].
