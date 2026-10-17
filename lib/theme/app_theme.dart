@@ -222,7 +222,3 @@ class AppTheme {
     );
   }
 }
-
-extension AppPaletteX on AppPalette {
-  bool get isDark => brightness == Brightness.dark;
-}

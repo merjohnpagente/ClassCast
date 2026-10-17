@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../widgets/ambient.dart';
 import '../widgets/motion.dart';
 import '../utils/responsive.dart';
 import '../widgets/ui_kit.dart';
 
 /// Role selection: the two ways into the app, as the design draws them — one
-/// filled, one soft, so the choice is obvious without reading it.
+/// filled, one soft, so the choice is obvious without reading it. The colours
+/// drift and the cards lean a little, because this is the screen a new user
+/// forms their first impression of the app on.
 class RoleSelectionScreen extends StatelessWidget {
   final VoidCallback onTeacher;
   final VoidCallback onStudent;
@@ -22,57 +25,73 @@ class RoleSelectionScreen extends StatelessWidget {
     final theme = Theme.of(context);
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: ContentWidth(
-          maxWidth: 520,
-          child: ListView(
-            padding: EdgeInsets.all(context.pagePadding),
-            children: [
-              const SizedBox(height: 56),
-              const FadeIn(
-                child: Center(
-                  child: AppBrandLockup(logoSize: 72, gap: 14),
-                ),
+      body: Stack(
+        children: [
+          const Positioned.fill(child: AmbientBackdrop()),
+          SafeArea(
+            child: ContentWidth(
+              maxWidth: 520,
+              child: ListView(
+                padding: EdgeInsets.all(context.pagePadding),
+                children: [
+                  const SizedBox(height: 56),
+                  FadeIn(
+                    child: Wobble3D(
+                      tilt: 0.02,
+                      phase: 0.55,
+                      child: const Center(
+                        child: AppBrandLockup(logoSize: 72, gap: 14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  Text(
+                    'Choose your role',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FadeIn(
+                    delay: Motion.stagger(1),
+                    child: Wobble3D(
+                      tilt: 0.03,
+                      child: _RoleCard(
+                        icon: Icons.school_outlined,
+                        label: 'Teacher',
+                        selected: true,
+                        onTap: onTeacher,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FadeIn(
+                    delay: Motion.stagger(2),
+                    child: Wobble3D(
+                      tilt: 0.03,
+                      phase: 0.33,
+                      child: _RoleCard(
+                        icon: Icons.person_outline,
+                        label: 'Student',
+                        onTap: onStudent,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  Text(
+                    'No internet needed. Connect to the teacher hotspot or local Wi-Fi.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
               ),
-              const SizedBox(height: 40),
-              Text(
-                'Choose your role',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: AppColors.muted,
-                ),
-              ),
-              const SizedBox(height: 16),
-              FadeIn(
-                delay: Motion.stagger(1),
-                child: _RoleCard(
-                  icon: Icons.school_outlined,
-                  label: 'Teacher',
-                  selected: true,
-                  onTap: onTeacher,
-                ),
-              ),
-              const SizedBox(height: 12),
-              FadeIn(
-                delay: Motion.stagger(2),
-                child: _RoleCard(
-                  icon: Icons.person_outline,
-                  label: 'Student',
-                  onTap: onStudent,
-                ),
-              ),
-              const SizedBox(height: 28),
-              Text(
-                'No internet needed. Connect to the teacher hotspot or local Wi-Fi.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.muted,
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

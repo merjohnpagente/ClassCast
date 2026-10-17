@@ -2,14 +2,22 @@ import 'package:flutter/material.dart';
 
 /// Small, shared motion vocabulary.
 ///
-/// Everything here is finite: a screen that never settles is a screen that
-/// keeps a phone's battery awake and makes widget tests hang, so there are no
-/// loops, no pulsing and no auto-playing anything.
+/// The screens themselves stay finite — a screen that never settles keeps a
+/// phone's battery awake and makes widget tests hang. The one exception is the
+/// ambient layer ([AmbientBackdrop] and friends in `ambient.dart`), which loops
+/// only on the screens where the app is *waiting for a person*: role selection,
+/// the join form and the waiting room. It is switched by [ambient], which the
+/// widget tests turn off, and it still respects the platform's "reduce motion"
+/// setting.
 class Motion {
   /// The app's standard durations. One place to change the feel.
   static const quick = Duration(milliseconds: 150);
   static const standard = Duration(milliseconds: 260);
   static const page = Duration(milliseconds: 320);
+
+  /// Whether the looping scenery is allowed to run. On in the real app; widget
+  /// tests set it to `false` so `pumpAndSettle` can ever finish.
+  static bool ambient = true;
 
   /// Stagger for list-like entrances: each item waits a little longer.
   static Duration stagger(int index) =>

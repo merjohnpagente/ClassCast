@@ -12,6 +12,7 @@ import '../../services/session_store.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/qr_scanner_support.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/ambient.dart';
 import '../../widgets/motion.dart';
 import '../../widgets/ui_kit.dart';
 import '../../utils/validators.dart';
@@ -111,8 +112,12 @@ class _JoinScreenState extends State<JoinScreen> {
 
     // The design's join screen: brand lockup, one field, one button, then the
     // scanner as the quiet alternative below it. Not a form with a camera
-    // bolted on top.
-    return ContentWidth(
+    // bolted on top. The colour drifts behind it — this is a waiting room of
+    // its own until the join goes through.
+    return Stack(
+      children: [
+        const Positioned.fill(child: AmbientBackdrop(globe: false)),
+        ContentWidth(
       maxWidth: 440,
       child: ListView(
         padding: EdgeInsets.only(bottom: 24),
@@ -256,6 +261,8 @@ class _JoinScreenState extends State<JoinScreen> {
           ),
         ],
       ),
+        ),
+      ],
     );
   }
 

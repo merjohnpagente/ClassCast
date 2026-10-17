@@ -2,6 +2,7 @@ import 'package:classcast_offline/app.dart';
 import 'package:classcast_offline/providers/app_state.dart';
 import 'package:classcast_offline/screens/student/join_screen.dart';
 import 'package:classcast_offline/services/local_store.dart';
+import 'package:classcast_offline/widgets/motion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +13,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// found") on CI before any APK is built.
 void main() {
   setUp(() {
+    // The ambient layer (role selection's drifting colours, the waiting
+    // room's rings) loops on purpose, and this file is the one that uses
+    // `pumpAndSettle` on screens that carry it. In the real app it stays on.
+    Motion.ambient = false;
     SharedPreferences.setMockInitialValues({});
     // SQLite is not available in the widget-test environment; the
     // SharedPreferences store exercises the same SessionStore API.

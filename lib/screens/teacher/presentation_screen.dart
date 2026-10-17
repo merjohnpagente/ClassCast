@@ -12,6 +12,7 @@ import '../../providers/library_provider.dart';
 import '../../providers/session_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/ambient.dart';
 import '../../widgets/chrome_toggle.dart';
 import '../../widgets/document_preview.dart';
 import '../../widgets/document_viewer.dart';
@@ -808,7 +809,12 @@ void _openFiles(BuildContext context) {
     if (students.isEmpty) {
       return Row(
         children: [
-          Icon(Icons.groups_outlined, size: 18, color: AppColors.muted),
+          // The teacher is the one waiting here, so the wait gets a pulse
+          // around the roster icon instead of a dead row.
+          PulseRings(
+            size: 38,
+            child: Icon(Icons.groups_outlined, size: 18, color: AppColors.muted),
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(

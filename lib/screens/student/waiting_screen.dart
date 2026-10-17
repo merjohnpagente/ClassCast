@@ -5,6 +5,7 @@ import '../../providers/sync_provider.dart';
 import '../../services/classcast_client.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/ambient.dart';
 import '../../widgets/ui_kit.dart';
 import '../../widgets/status_bits.dart';
 
@@ -48,10 +49,15 @@ class StudentWaitingScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              const SizedBox(
-                width: 32,
-                height: 32,
-                child: CircularProgressIndicator(strokeWidth: 3),
+              // Rings behind the spinner so the wait has a heartbeat: this is
+              // the screen a joined student looks at the longest.
+              const PulseRings(
+                size: 104,
+                child: SizedBox(
+                  width: 34,
+                  height: 34,
+                  child: CircularProgressIndicator(strokeWidth: 3),
+                ),
               ),
               const SizedBox(height: 20),
               Text(

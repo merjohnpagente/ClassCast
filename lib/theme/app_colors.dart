@@ -44,6 +44,8 @@ class AppPalette {
 
   final Brightness brightness;
 
+  bool get isDark => brightness == Brightness.dark;
+
   /// Brand blue. In the dark palette it is a *light* tone with dark text on
   /// top — the Material 3 way round — because royal blue as a fill under white
   /// text reads as a muddy smudge once the page behind it is almost black.
