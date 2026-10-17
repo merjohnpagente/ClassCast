@@ -242,6 +242,10 @@ void main() {
         'rss ${rssAtStart ~/ (1024 * 1024)}MB -> ${rssAtEnd ~/ (1024 * 1024)}MB '
         '(${growthMb.toStringAsFixed(1)}MB over $minutes minutes)');
   },
+      // The runner's own 30-second ceiling is a test-suite default, not a limit
+      // on what a soak can be: without this the room fills up and then the test
+      // is killed mid-lesson.
+      timeout: Timeout(Duration(minutes: minutes + 5)),
       skip: soak
           ? false
           : 'long soak — run with CLASSCAST_SOAK=1 (see the file header)');
