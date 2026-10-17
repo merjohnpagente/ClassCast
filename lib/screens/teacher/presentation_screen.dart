@@ -235,12 +235,7 @@ class _TeacherPresentationScreenState
                       ),
                     ],
                   ),
-            // A tap on the document is how the chrome comes back once it is
-            // gone.
-            body: _withPageKeys(
-              context,
-              ChromeTapAnywhere(child: body),
-            ),
+            body: _withPageKeys(context, body),
           );
         },
       ),

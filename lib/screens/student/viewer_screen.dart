@@ -167,28 +167,28 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
     }
 
     // One centred column, so the title, the page and the controls line up
-    // with each other instead of each spanning the whole screen. Tapping the
-    // page drops the title and the controls and leaves only the document.
+    // with each other instead of each spanning the whole screen. The app
+    // bar's toggle is the only way in or out of the hidden chrome; a tap on
+    // the page itself no longer touches it, so a page turn or a stray tap
+    // can never drop the title and the controls.
     final chrome = ChromeToggleScope.maybeOf(context);
     final hideChrome = chrome?.hidden ?? false;
 
     return Stack(
       children: [
         Positioned.fill(
-          child: ChromeTapAnywhere(
-            child: Center(
-              child: ContentWidth(
-                maxWidth: 1000,
-                // A page, not a column of text: on a laptop it should use the
-                // screen rather than sit in a 1000px strip of a 1920 one.
-                wide: true,
-                // With the shell's app bar away nothing insets the body, so
-                // the slide would run under the status and gesture bars.
-                child: hideChrome
-                    ? SafeArea(
-                        child: _pageColumn(context, active, sync, viewPage))
-                    : _pageColumn(context, active, sync, viewPage),
-              ),
+          child: Center(
+            child: ContentWidth(
+              maxWidth: 1000,
+              // A page, not a column of text: on a laptop it should use the
+              // screen rather than sit in a 1000px strip of a 1920 one.
+              wide: true,
+              // With the shell's app bar away nothing insets the body, so
+              // the slide would run under the status and gesture bars.
+              child: hideChrome
+                  ? SafeArea(
+                      child: _pageColumn(context, active, sync, viewPage))
+                  : _pageColumn(context, active, sync, viewPage),
             ),
           ),
         ),

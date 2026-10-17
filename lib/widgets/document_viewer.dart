@@ -7,7 +7,6 @@ import '../models/doc_types.dart';
 import '../models/shared_document.dart';
 import '../theme/app_colors.dart';
 import '../utils/local_file.dart';
-import 'chrome_toggle.dart';
 import 'document_zoom.dart';
 import 'office/office_document_view.dart';
 import 'office/office_document_scroll_view.dart';
@@ -158,10 +157,9 @@ class _DocumentViewerState extends State<DocumentViewer>
     // Students fetch from the teacher host; the teacher renders the file it
     // picked directly. Never fall back to a bundled sample asset.
     //
-    // The viewer claims every tap on the page, so unlike the Office canvas and
-    // the photo viewer, a bare tap here never reached ChromeTapAnywhere and a
-    // PDF could not be cleared to the slide alone. Its own onTap is the only
-    // callback that fires on that surface, so the toggle is wired here too.
+    // The viewer claims every tap on the page, and that is where it stays:
+    // the interface is toggled from the app bar only, so paging or zooming a
+    // PDF can never take the controls away.
     if (remoteUrl != null && remoteUrl!.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.large),
@@ -177,7 +175,6 @@ class _DocumentViewerState extends State<DocumentViewer>
                   // 3x was not enough to read fine print on a projector; the
                   // Office canvas has always allowed 6x.
                   maxZoomLevel: kZoomMax,
-                  onTap: (_) => ChromeToggleScope.maybeOf(context)?.toggle(),
                 ),
               ),
               Positioned(
@@ -213,7 +210,6 @@ class _DocumentViewerState extends State<DocumentViewer>
                   controller: controller,
                   canShowScrollHead: false,
                   maxZoomLevel: kZoomMax,
-                  onTap: (_) => ChromeToggleScope.maybeOf(context)?.toggle(),
                 ),
               ),
               Positioned(
@@ -263,11 +259,9 @@ class _DocumentViewerState extends State<DocumentViewer>
 
   /// Pinch or drag to zoom a photo, and double tap into the spot you tapped.
   ///
-  /// The double tap has to be owned by a detector that also knows about the
-  /// tap that clears the interface off the screen, or the two fight: the tap
-  /// fires on each half of a double tap and the chrome flickers while the
-  /// picture zooms. See ChromeTapAnywhere in chrome_toggle.dart, which claims
-  /// the second tap.
+  /// The double tap is the only gesture that means anything here: the
+  /// interface is toggled from the app bar, so nothing competes with the
+  /// picture's own gestures.
   Widget _zoomable(Widget child) {
     return LayoutBuilder(
       builder: (context, constraints) {
