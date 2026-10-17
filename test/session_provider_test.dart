@@ -31,6 +31,10 @@ void main() {
   setUp(() {
     setLocalStoreOverride(_MemoryStore());
     sessions = SessionProvider();
+    // The address watch is off by default here: these tests say what the
+    // session should hold, and a real interface on the machine running them is
+    // not part of the question. The two tests below turn it on deliberately.
+    sessions.networkWatchInterval = Duration.zero;
   });
 
   tearDown(() async {
@@ -206,6 +210,40 @@ void main() {
     for (final ip in alternates) {
       expect(NetworkService.isPrivateAddress(ip), isTrue);
     }
+  });
+
+  test('a session made before the network is up comes alive by itself',
+      () async {
+    // Teachers bring the room online in either order. Nothing was listening for
+    // the second one, so a session made before the hotspot was switched on kept
+    // an address-less QR code and a "students cannot reach this device" verdict
+    // for the rest of the lesson.
+    sessions.networkWatchInterval = const Duration(milliseconds: 20);
+    sessions.addressReader = () async => ['10.11.12.13', '127.0.0.1'];
+    await sessions.createSession(name: 'Physics', hostIp: '127.0.0.1');
+    expect(sessions.active!.hostIp, '127.0.0.1');
+
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+
+    expect(sessions.active!.hostIp, '10.11.12.13',
+        reason: 'the hotspot address has to reach the session on its own');
+    expect(ClasscastHost.instance.advertisedIp, '10.11.12.13',
+        reason: 'and the host that serves the document has to follow');
+    expect(sessions.alternateAddresses, ['127.0.0.1'],
+        reason: 'the address the code drops stays available as a fallback');
+  });
+
+  test('the watch stops when the session ends', () async {
+    sessions.networkWatchInterval = const Duration(milliseconds: 20);
+    sessions.addressReader = () async => ['10.11.12.13'];
+    await sessions.createSession(name: 'Physics', hostIp: '127.0.0.1');
+
+    await sessions.endSession();
+
+    // Nothing left to watch: a timer firing into an ended session would keep
+    // re-announcing a classroom that is over.
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    expect(sessions.active, isNull);
   });
 }
 

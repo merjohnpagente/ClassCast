@@ -38,7 +38,13 @@ Future<List<({String nic, String ip})>> localInterfaceAddresses() async {
   } catch (_) {
     // Enumeration is best-effort: permissions or an unusual platform.
   }
-  found.sort((a, b) => a.rank.compareTo(b.rank));
+  found.sort((a, b) {
+    // The address is a tiebreaker on purpose: the list is re-read while a
+    // session is live, and an unstable order for two interfaces of the same
+    // kind would have the app flip the advertised address back and forth.
+    final rank = a.rank.compareTo(b.rank);
+    return rank != 0 ? rank : a.ip.compareTo(b.ip);
+  });
   return [
     for (final entry in found) (nic: entry.nic, ip: entry.ip),
   ];

@@ -37,6 +37,7 @@ class SessionProvider extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _closeHostEvents();
+    _stopNetworkWatch();
     _reachabilityHintTimer?.cancel();
     super.dispose();
   }
@@ -165,8 +166,52 @@ class SessionProvider extends ChangeNotifier {
   }
 
   Future<void> _rememberAltAddresses() async {
-    final candidates = await NetworkService().localAddressCandidates();
+    _altAddresses = await addressReader();
+  }
+
+  /// How often a live session re-reads this phone's address.
+  ///
+  /// Mutable so a test does not have to wait for the real thing. Zero turns the
+  /// watch off.
+  Duration networkWatchInterval = const Duration(seconds: 6);
+
+  /// Reads the addresses this phone has. Overridable so a test can decide what
+  /// the network looks like without a device behind it.
+  Future<List<String>> Function() addressReader =
+      () => NetworkService().localAddressCandidates();
+
+  Timer? _networkWatch;
+
+  /// Watches the address for as long as the session is live.
+  ///
+  /// Teachers bring the room online in either order — hotspot first, then the
+  /// session, or the session first, then the hotspot — and nothing in the app
+  /// was listening for the second one. The QR kept showing no address, the
+  /// classroom kept saying students cannot reach this device, and the teacher
+  /// had no indication that switching the hotspot on was the whole fix. It is
+  /// also what makes moving from Wi-Fi to a hotspot, or the other way round,
+  /// work without restarting the lesson.
+  void _startNetworkWatch() {
+    _networkWatch?.cancel();
+    _networkWatch = null;
+    if (networkWatchInterval <= Duration.zero) return;
+    _networkWatch =
+        Timer.periodic(networkWatchInterval, (_) => unawaited(_recheckAddress()));
+  }
+
+  void _stopNetworkWatch() {
+    _networkWatch?.cancel();
+    _networkWatch = null;
+  }
+
+  Future<void> _recheckAddress() async {
+    if (_disposed || _active == null) return;
+    final candidates = await addressReader();
+    if (_disposed || _active == null) return;
     _altAddresses = candidates;
+    if (candidates.isEmpty) return;
+    // A no-op when nothing moved, which is the normal case.
+    setNetwork(hostIp: candidates.first, port: _active!.port);
   }
 
   ClassroomSession? _active;
@@ -337,6 +382,7 @@ class SessionProvider extends ChangeNotifier {
       notifyListeners();
     }
     _openHostEvents(session);
+    _startNetworkWatch();
     return session;
   }
 
@@ -395,6 +441,7 @@ class SessionProvider extends ChangeNotifier {
   Future<void> _endSessionNow() async {
     final ending = _active!;
     _closeHostEvents();
+    _stopNetworkWatch();
     // Let the "session ended" frame actually leave before the server goes
     // away. Firing it unawaited and stopping the host underneath it made a
     // normal, successful End paint a red "host offline" chip.
@@ -597,6 +644,7 @@ class SessionProvider extends ChangeNotifier {
     await _startHost(session);
     unawaited(_host.startSession(session));
     _openHostEvents(session);
+    _startNetworkWatch();
     if (document != null) {
       unawaited(shareDocument(document, totalPages: document.pageCount));
     }

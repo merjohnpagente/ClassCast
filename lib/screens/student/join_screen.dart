@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
+import '../../providers/app_state.dart';
 import '../../providers/sync_provider.dart';
 import '../../services/classcast_client.dart';
 import '../../services/session_store.dart';
@@ -239,9 +240,34 @@ class _JoinScreenState extends State<JoinScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          // Hosting is not the teacher's alone. A student who has to present to
+          // the class is on the same network, running the same app, and needs
+          // the same QR code — so the way into a session is offered here too
+          // rather than sending them back to the role screen to start over.
+          FadeIn(
+            child: AppListRow(
+              icon: Icons.cast_connected_outlined,
+              title: 'Host a session',
+              subtitle: 'Cast this phone to the class instead of joining one',
+              trailing: const AppChevron(),
+              onTap: _startHosting,
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  /// Leaves this classroom, if there is one, and starts hosting instead.
+  ///
+  /// A student already watching a class cannot host a second one from the
+  /// same socket, so the join is closed first rather than left half-open behind
+  /// the role switch.
+  Future<void> _startHosting() async {
+    await context.read<SyncProvider>().leave();
+    if (!mounted) return;
+    enterHostingMode(context);
   }
 }
 

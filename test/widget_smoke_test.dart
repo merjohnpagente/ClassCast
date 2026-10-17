@@ -1,4 +1,6 @@
 import 'package:classcast_offline/app.dart';
+import 'package:classcast_offline/providers/app_state.dart';
+import 'package:classcast_offline/screens/student/join_screen.dart';
 import 'package:classcast_offline/services/local_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -30,6 +32,31 @@ void main() {
     expect(find.text('Choose your role'), findsOneWidget);
     expect(find.text('Teacher'), findsOneWidget);
     expect(find.text('Student'), findsOneWidget);
+  });
+
+  testWidgets('a student can start hosting from the join screen', (tester) async {
+    // Anyone can hold a classroom: a student casting to the class is the same
+    // app on the same network, so the join screen offers the way in rather than
+    // making them restart at the role screen.
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: appProviders(),
+        child: MaterialApp(
+          home: JoinScreen(onJoined: () {}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Host a session'), findsOneWidget);
+
+    await tester.tap(find.text('Host a session'));
+    await tester.pumpAndSettle();
+
+    final app =
+        Provider.of<AppState>(tester.element(find.byType(JoinScreen)));
+    expect(app.role, AppRole.teacher,
+        reason: 'hosting is a starting point, not a role permission');
   });
 
   testWidgets('tap Teacher opens teacher dashboard', (tester) async {
