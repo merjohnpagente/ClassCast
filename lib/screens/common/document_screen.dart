@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
+import '../../models/doc_types.dart';
 import '../../models/shared_document.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/document_viewer.dart';
+import '../../widgets/video_sync.dart';
 
 /// A document on its own, with nothing being shared and nobody watching.
 ///
@@ -77,6 +79,13 @@ class _DocumentScreenState extends State<DocumentScreen> {
                 onPageChanged: (p) {
                   if (p != _page) setState(() => _page = p);
                 },
+                // A recording checked before it is shown to thirty people plays
+                // like a recording, from this device's own copy. Without a
+                // playback state the viewer said the file was gone — which is
+                // a thing it says when a file has actually gone.
+                video: widget.doc.kind == DocKind.video
+                    ? const VideoSync(isTeacher: true)
+                    : null,
               ),
             ),
           ),
