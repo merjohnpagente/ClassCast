@@ -173,9 +173,16 @@ void main() {
         host: '192.168.43.1',
         port: 8080,
         sessionId: 'CLASS-101',
-        altHosts: ['example.com', '169.254.1.1', '192.168.0.9'],
+        altHosts: [
+          'example.com',
+          '169.254.1.1',
+          '0.0.0.0',
+          '192.168.0.9',
+        ],
       ));
-      expect(withJunk!.alts, ['192.168.0.9']);
+      expect(withJunk!.alts, ['192.168.0.9'],
+          reason: 'a host name, a link-local placeholder and "no network" are '
+              'not addresses a classroom is on');
     });
   });
 

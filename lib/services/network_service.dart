@@ -202,11 +202,33 @@ class NetworkService {
     for (final part in raw.split(',')) {
       final trimmed = part.trim();
       if (trimmed.isEmpty || trimmed == host) continue;
-      if (!isPrivateAddress(trimmed)) continue;
+      if (!_isUsableAlt(trimmed)) continue;
       if (out.contains(trimmed)) continue;
       out.add(trimmed);
     }
     return out;
+  }
+
+  /// Whether an extra address is worth probing at all.
+  ///
+  /// Drops what is obviously not an address on a classroom network — a host
+  /// name, a public address, the link-local placeholder a phone reports when
+  /// it has no network. Loopback is deliberately allowed: it costs one probe,
+  /// and the parser's job is to hand on what the code says rather than to
+  /// second-guess it. (A real code never carries one: the teacher's own
+  /// address list filters them out before they reach the QR.)
+  static bool _isUsableAlt(String value) {
+    final parts = value.split('.');
+    if (parts.length != 4) return false;
+    final octets = <int>[];
+    for (final part in parts) {
+      final octet = int.tryParse(part);
+      if (octet == null || octet < 0 || octet > 255) return false;
+      octets.add(octet);
+    }
+    if (octets.every((o) => o == 0)) return false;
+    if (octets[0] == 169 && octets[1] == 254) return false;
+    return true;
   }
 
   /// One tap check for the teacher: is the address in the QR code actually

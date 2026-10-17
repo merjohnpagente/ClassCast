@@ -62,8 +62,10 @@ void main() {
     await tester.tap(find.text('Host a session'));
     await tester.pumpAndSettle();
 
-    final app =
-        Provider.of<AppState>(tester.element(find.byType(JoinScreen)));
+    final app = Provider.of<AppState>(
+      tester.element(find.byType(JoinScreen)),
+      listen: false,
+    );
     expect(app.role, AppRole.teacher,
         reason: 'hosting is a starting point, not a role permission');
   });
