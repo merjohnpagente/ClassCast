@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:classcast_offline/models/sync_event.dart';
+import 'package:classcast_offline/providers/sync_provider.dart';
 import 'package:classcast_offline/services/classcast_client.dart';
 import 'package:classcast_offline/services/document_download.dart';
 import 'package:classcast_offline/services/host/classcast_host.dart';
+import 'package:classcast_offline/services/network_service.dart';
 import 'package:classcast_offline/services/sync_protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_socket_channel/io.dart';
@@ -579,6 +581,150 @@ void main() {
       const Duration(seconds: 3),
     );
     expect(SyncProtocol.decode(left), isNotNull);
+  });
+
+  test('a student finds the classroom even when the first address is wrong',
+      () async {
+    await send('POST', '/api/session',
+        {'id': 'CLASS-FALL', 'teacherKey': 'FALLKEY'});
+
+    // What the joining code carries: this phone's hotspot address first, then
+    // the Wi-Fi one. A student connected to the second cannot reach the first,
+    // and the other way round, so probing only the first is a coin flip on
+    // which setup the teacher happened to be using.
+    final reached = await NetworkService.firstReachableAddress(
+      ['10.255.255.1', '127.0.0.1'],
+      port: port,
+      timeout: const Duration(milliseconds: 400),
+      alternateTimeout: const Duration(milliseconds: 400),
+    );
+    expect(reached, '127.0.0.1',
+        reason: 'the address that answers is the one the student has to use');
+
+    // And when nothing answers the join has to fail rather than pick one and
+    // pretend, which is what tells the student to ask for a hotspot.
+    final none = await NetworkService.firstReachableAddress(
+      ['10.255.255.1'],
+      port: port,
+      timeout: const Duration(milliseconds: 400),
+    );
+    expect(none, isNull);
+  });
+
+  // The host turns its advertised address into the URL every student
+  // downloads from. A teacher who switches from the classroom Wi-Fi to a
+  // hotspot gets a new address, and updating only the session left every
+  // joined student holding a URL on an address that no longer existed: they
+  // were on the teacher's roster and their download failed with no way to tell
+  // why.
+  test('a joined student is told when the classroom moves to a new address',
+      () async {
+    const teacherKey = 'ADDRKEY';
+    await send('POST', '/api/session',
+        {'id': 'CLASS-ADDR', 'teacherKey': teacherKey});
+    final dir = Directory.systemTemp.createTempSync('addr');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/moved.pdf')
+        ..writeAsStringSync('%PDF-1.4 moved');
+    host.registerDocument('moved.pdf', file.path);
+    await send('POST', '/api/document', {
+      'teacherKey': teacherKey,
+      'documentName': 'moved.pdf',
+    });
+
+    final student = IOWebSocketChannel.connect(Uri.parse(
+        'ws://127.0.0.1:$port/ws?session=CLASS-ADDR&name=Ana&device=Android'));
+    final studentInbox = StreamQueue<dynamic>(student.stream);
+    addTearDown(() async {
+      await studentInbox.cancel();
+      await student.sink.close();
+    });
+    await studentInbox.next; // the greeting
+
+    final before = await json(await send('GET', '/api/session?id=CLASS-ADDR'));
+    expect((before['session'] as Map)['documentUrl'], contains('127.0.0.1'));
+
+    // The hotspot comes on.
+    host.setAdvertisedIp('192.168.43.1');
+
+    final moved = await studentInbox.nextWhere(
+      (frame) => (SyncProtocol.decode(frame)?.documentUrl ?? '')
+          .contains('192.168.43.1'),
+      const Duration(seconds: 3),
+    );
+    expect(SyncProtocol.decode(moved), isNotNull,
+        reason: 'the student has to be handed the address that now serves them');
+
+    final after = await json(await send('GET', '/api/session?id=CLASS-ADDR'));
+    expect((after['session'] as Map)['hostIp'], '192.168.43.1');
+  });
+
+  test('re-announcing a session also restates the address, for a laptop host',
+      () async {
+    // The same fix on the REST route: the teacher app posts the address it is
+    // advertising, so a host that learned its own at boot stops publishing a
+    // stale one after the classroom moves networks.
+    final reannounced = await json(await send('POST', '/api/session', {
+      'id': 'CLASS-ADDR2',
+      'teacherKey': 'ADDR2KEY',
+      'advertisedIp': '192.168.5.2',
+    }));
+    expect((reannounced['session'] as Map)['hostIp'], '192.168.5.2');
+
+    // Anything that is not an address is refused rather than published in a
+    // URL a student has to fetch.
+    final junk = await json(await send('POST', '/api/session', {
+      'id': 'CLASS-ADDR2',
+      'teacherKey': 'ADDR2KEY',
+      'advertisedIp': 'evil.example.com/../x',
+    }));
+    expect((junk['session'] as Map)['hostIp'], '192.168.5.2');
+
+    // And without the key the address is not theirs to change.
+    final noKey = await send('POST', '/api/session', {
+      'id': 'CLASS-ADDR2',
+      'advertisedIp': '10.0.0.9',
+    });
+    expect(noKey.statusCode, 403);
+  });
+
+  test('a student downloads from the address that answered, not the one '
+      'advertised', () async {
+    // The teacher is on the school Wi-Fi and serving a hotspot: the host
+    // advertises its hotspot address, and this student is on the Wi-Fi one.
+    // The URL in the snapshot named the address the host advertised, which
+    // this phone may not be able to open at all.
+    host.setAdvertisedIp('192.168.43.1');
+    const teacherKey = 'URLKEY';
+    await send('POST', '/api/session',
+        {'id': 'CLASS-URL', 'teacherKey': teacherKey});
+    final dir = Directory.systemTemp.createTempSync('url');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/mixed.pdf')..writeAsStringSync('%PDF mixed');
+    host.registerDocument('mixed.pdf', file.path);
+    await send('POST', '/api/document', {
+      'teacherKey': teacherKey,
+      'documentName': 'mixed.pdf',
+    });
+
+    final sync = SyncProvider();
+    addTearDown(sync.dispose);
+    final joined = await sync.join(
+      rawInput: 'classcast://join?host=127.0.0.1&port=$port&session=CLASS-URL',
+      studentName: 'Ana',
+    );
+
+    expect(joined, isTrue, reason: 'the student joined the classroom');
+    final url = sync.snapshot!.documentUrl!;
+    expect(url, startsWith('http://127.0.0.1:$port/'),
+        reason: 'the file has to come from the address that answered, not '
+            'from one this phone cannot reach');
+    expect(url, contains('mixed.pdf'));
+
+    // And it is not just a well-formed string: the bytes really move.
+    final bytes = await DocumentDownloader.fetch(url);
+    expect(bytes, isNotNull);
+    expect(utf8.decode(bytes!), '%PDF mixed');
   });
 }
 

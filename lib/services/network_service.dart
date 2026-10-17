@@ -12,31 +12,72 @@ import '../utils/local_ip.dart';
 class NetworkService {
   final NetworkInfo _info = NetworkInfo();
 
-  /// Actual device IP on the local network (e.g. `192.168.43.1`).
+  /// Every address this device could be reached on, most likely first.
   ///
-  /// Tries the Wi-Fi plugin first, then walks the interfaces. The fallback is
-  /// not a nicety: when the phone is *serving* the network — a hotspot, which
-  /// is how a teacher brings a room online — the plugin has no Wi-Fi
-  /// association to report and answers null, so the QR code had no address in
-  /// it and no student could ever join.
+  /// The hotspot and the classroom Wi-Fi used to produce different results
+  /// because only one address was ever chosen, and the choice came from
+  /// whichever answered first rather than from which network the students were
+  /// on. A phone that is on the router *and* serving a hotspot has two
+  /// addresses on two subnets that cannot see each other, so which one is
+  /// correct depends entirely on the student — it is not a property of this
+  /// phone that any amount of guessing can settle.
+  ///
+  /// So the tethering address leads (that is the network a hotspot client is
+  /// on), the Wi-Fi station address comes next (that is the router), and the
+  /// plugin's answer is the last resort rather than the first choice: on a
+  /// phone serving a hotspot it reports the station address, which is exactly
+  /// the one a hotspot client cannot use.
+  Future<List<String>> localAddressCandidates() async {
+    final found = await localInterfaceAddresses();
+    String? plugin;
+    try {
+      plugin = await _info.getWifiIP();
+    } catch (_) {
+      // No association reported — the hotspot case. The interfaces have it.
+    }
+    return rankAddresses(found, pluginIp: plugin);
+  }
+
+  /// Orders raw interface findings into the list of addresses to offer.
+  ///
+  /// Split out from [localAddressCandidates] because the ordering is the part
+  /// worth pinning down: enumerating interfaces is whatever the device happens
+  /// to have, so a test cannot rely on it — but the ranking can be tested.
+  static List<String> rankAddresses(
+    List<({String nic, String ip})> found, {
+    String? pluginIp,
+  }) {
+    final ranked = <({int rank, String ip})>[];
+    for (final entry in found) {
+      if (!isPrivateAddress(entry.ip)) continue;
+      final name = entry.nic.toLowerCase();
+      if (name.startsWith('tun')) continue;
+      ranked.add((rank: _rankFor(name), ip: entry.ip));
+    }
+    if (isPrivateAddress(pluginIp)) {
+      // Last: the plugin only knows the station interface.
+      ranked.add((rank: 3, ip: pluginIp!));
+    }
+    ranked.sort((a, b) => a.rank.compareTo(b.rank));
+    final seen = <String>{};
+    return [for (final entry in ranked) if (seen.add(entry.ip)) entry.ip];
+  }
+
+  static int _rankFor(String nic) {
+    if (nic.startsWith('ap')) return 0;
+    if (nic.startsWith('wlan')) return 1;
+    return 2;
+  }
+
+  /// This device's own address on the local network (e.g. `192.168.43.1`).
+  ///
+  /// Just the best candidate: the first of [localAddressCandidates], which
+  /// prefers the hotspot's own interface over the Wi-Fi address the plugin
+  /// reports. Reporting that plugin address first is what made the hotspot and
+  /// the classroom Wi-Fi behave differently from each other on the same phone.
   Future<String> localIp() async {
-    try {
-      final ip = await _info.getWifiIP();
-      // A hotspot or router hands out a private address. Anything else (a
-      // carrier NAT address, a link-local one, or an emulator's 10.0.2.15)
-      // cannot be typed into a QR code by a student, so it is rejected here
-      // rather than advertised and failing for everyone.
-      if (isPrivateAddress(ip)) return ip!;
-    } catch (_) {
-      // Fall through to the interface walk below.
-    }
-    try {
-      final viaInterface = await localInterfaceIp();
-      if (isPrivateAddress(viaInterface)) return viaInterface!;
-    } catch (_) {
-      // Nothing more to try.
-    }
-    return '';
+    final candidates = await localAddressCandidates();
+    return candidates.isEmpty ? '' : candidates.first;
   }
 
   /// True for addresses a student on the same network could actually reach:
@@ -77,17 +118,34 @@ class NetworkService {
 
   /// Payload encoded into the classroom QR code.
   /// Format: `classcast://join?host=<ip>&port=<port>&session=<id>`
+  ///
+  /// [altHosts] are the teacher's other addresses — the hotspot one and the
+  /// Wi-Fi one, whichever is not [host]. They travel with the code so a student
+  /// on either network finds the classroom without the teacher having to
+  /// re-print a different QR after switching networks mid-lesson. The
+  /// student's phone tries them in order and keeps the one that answers.
   static String qrPayload({
     required String host,
     required int port,
     required String sessionId,
-  }) =>
-      'classcast://join?host=$host&port=$port&session=$sessionId';
+    List<String> altHosts = const [],
+  }) {
+    final alts = <String>[
+      for (final alt in altHosts)
+        if (alt.trim().isNotEmpty && alt.trim() != host.trim()) alt.trim(),
+    ];
+    final buffer = StringBuffer(
+        'classcast://join?host=$host&port=$port&session=$sessionId');
+    if (alts.isNotEmpty) buffer.write('&alt=${alts.join(',')}');
+    return buffer.toString();
+  }
 
   /// Parse a scanned QR payload. Accepts the `classcast://` scheme,
   /// a plain `http://host:port/s/ID`, or a bare session ID.
-  static ({String host, int port, String sessionId})? parseJoinInput(
-      String raw) {
+  ///
+  /// [alts] are the teacher's other addresses, when the code carried them.
+  static ({String host, int port, String sessionId, List<String> alts})?
+      parseJoinInput(String raw) {
     final t = raw.trim();
     if (t.isEmpty) return null;
     try {
@@ -98,7 +156,12 @@ class NetworkService {
             int.tryParse(uri.queryParameters['port'] ?? '') ?? 8080;
         final session = uri.queryParameters['session'] ?? '';
         if (host.isEmpty || session.isEmpty) return null;
-        return (host: host, port: port, sessionId: session);
+        return (
+          host: host,
+          port: port,
+          sessionId: session,
+          alts: _altsFrom(uri, host),
+        );
       }
       if (t.startsWith('http://') || t.startsWith('https://')) {
         final uri = Uri.parse(t);
@@ -109,7 +172,8 @@ class NetworkService {
         return (
           host: uri.host,
           port: uri.hasPort ? uri.port : 8080,
-          sessionId: session
+          sessionId: session,
+          alts: _altsFrom(uri, uri.host),
         );
       }
       // Bare host / session forms.
@@ -121,13 +185,28 @@ class NetworkService {
           host: hostMatch.group(1)!,
           port: int.tryParse(hostMatch.group(2) ?? '') ?? 8080,
           sessionId: hostMatch.group(3) ?? '',
+          alts: const <String>[],
         );
       }
       // Bare session ID — host still needed from hotspot step.
-      return (host: '', port: 8080, sessionId: t);
+      return (host: '', port: 8080, sessionId: t, alts: const <String>[]);
     } catch (_) {
       return null;
     }
+  }
+
+  /// The extra addresses a joining code carries, if any.
+  static List<String> _altsFrom(Uri uri, String host) {
+    final raw = uri.queryParameters['alt'] ?? uri.queryParameters['hosts'] ?? '';
+    final out = <String>[];
+    for (final part in raw.split(',')) {
+      final trimmed = part.trim();
+      if (trimmed.isEmpty || trimmed == host) continue;
+      if (!isPrivateAddress(trimmed)) continue;
+      if (out.contains(trimmed)) continue;
+      out.add(trimmed);
+    }
+    return out;
   }
 
   /// One tap check for the teacher: is the address in the QR code actually
@@ -207,5 +286,34 @@ class NetworkService {
     } catch (_) {
       return false;
     }
+  }
+
+  /// The first of [hosts] the teacher actually answers on, or null.
+  ///
+  /// A teacher who is on the classroom Wi-Fi and serving a hotspot has both
+  /// addresses, and a student on one of those networks cannot reach the other.
+  /// Trying them in order is what makes "same Wi-Fi" and "hotspot" the same
+  /// experience instead of a coin flip on which address the phone happened to
+  /// report first.
+  static Future<String?> firstReachableAddress(
+    List<String> hosts, {
+    required int port,
+    Duration timeout = const Duration(seconds: 3),
+    Duration alternateTimeout = const Duration(milliseconds: 1500),
+  }) async {
+    for (var i = 0; i < hosts.length; i++) {
+      final host = hosts[i].trim();
+      if (host.isEmpty) continue;
+      final ok = await probeHost(
+        host: host,
+        port: port,
+        // The first address is the likely one and gets the full wait; the
+        // alternates are fallbacks, and a student staring at a spinner does
+        // not need to wait the whole timeout on each of them.
+        timeout: i == 0 ? timeout : alternateTimeout,
+      );
+      if (ok) return host;
+    }
+    return null;
   }
 }

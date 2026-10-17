@@ -53,6 +53,10 @@ class TeacherHostClient {
           'allowAnonymous': s.allowAnonymous,
           'allowDownload': s.allowDownload,
           'allowStudentNav': s.allowStudentNav,
+          // The address this phone is advertising. A host that learned its own
+          // once, at boot, kept publishing that address in every document URL
+          // after the classroom moved networks.
+          if (s.hostIp.isNotEmpty) 'advertisedIp': s.hostIp,
         },
       ));
 

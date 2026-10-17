@@ -397,7 +397,13 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   void _showQrSheet(BuildContext context, ClassroomSession active) {
     final address = active.joinAddress;
     final payload = NetworkService.qrPayload(
-        host: active.hostIp, port: active.port, sessionId: active.id);
+      host: active.hostIp,
+      port: active.port,
+      sessionId: active.id,
+      // This phone's other addresses, so the same code works for students on
+      // the hotspot and for students on the classroom Wi-Fi.
+      altHosts: context.read<SessionProvider>().alternateAddresses,
+    );
     showModalBottomSheet(
       context: context,
       showDragHandle: true,

@@ -129,7 +129,11 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                     payload: NetworkService.qrPayload(
                         host: active.hostIp,
                         port: active.port,
-                        sessionId: active.id),
+                        sessionId: active.id,
+                        // Both networks in one code: the hotspot address and
+                        // the Wi-Fi address, whichever the session is not
+                        // already using.
+                        altHosts: sessions.alternateAddresses),
                     address: active.joinAddress.isEmpty
                         ? 'Turn on your hotspot to get an address'
                         : active.joinAddress,

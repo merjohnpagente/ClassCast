@@ -141,6 +141,7 @@ void main() {
       expect(p!.host, '192.168.43.1');
       expect(p.port, 8080);
       expect(p.sessionId, 'CLASS-101');
+      expect(p.alts, isEmpty);
     });
 
     test('http join address', () {
@@ -149,6 +150,32 @@ void main() {
       expect(p, isNotNull);
       expect(p!.host, '192.168.43.1');
       expect(p.sessionId, 'CLASS-101');
+    });
+
+    test('the QR carries the teacher other addresses', () {
+      // One code for both networks: the phone scans once and keeps whichever
+      // address answers, so a hotspot and a classroom Wi-Fi stop being two
+      // different experiences.
+      final payload = NetworkService.qrPayload(
+        host: '192.168.43.1',
+        port: 8080,
+        sessionId: 'CLASS-101',
+        altHosts: ['192.168.1.24', '192.168.43.1', ''],
+      );
+      final p = NetworkService.parseJoinInput(payload);
+      expect(p, isNotNull);
+      expect(p!.host, '192.168.43.1');
+      expect(p.alts, ['192.168.1.24'],
+          reason: 'the duplicate and the blank must be dropped');
+
+      // An address a student could never reach is not worth a probe.
+      final withJunk = NetworkService.parseJoinInput(NetworkService.qrPayload(
+        host: '192.168.43.1',
+        port: 8080,
+        sessionId: 'CLASS-101',
+        altHosts: ['example.com', '169.254.1.1', '192.168.0.9'],
+      ));
+      expect(withJunk!.alts, ['192.168.0.9']);
     });
   });
 
@@ -190,6 +217,46 @@ void main() {
       expect(NetworkService.isPrivateAddress('10.0.2.15'), isTrue,
           reason: 'private range, but the emulator alias; kept as-is so the '
               'caller can report the address it actually got');
+    });
+  });
+
+  group('Which address the QR advertises', () {
+    test('the hotspot interface comes before the Wi-Fi one', () {
+      // The teacher is on the school router and serving a hotspot: `ap0` and
+      // `wlan0` are on two subnets that cannot see each other. Taking the
+      // Wi-Fi plugin's answer first is what made the hotspot and the classroom
+      // Wi-Fi behave differently on the very same phone.
+      final ranked = NetworkService.rankAddresses(
+        [
+          (nic: 'wlan0', ip: '192.168.1.24'),
+          (nic: 'ap0', ip: '192.168.43.1'),
+        ],
+        pluginIp: '192.168.1.24',
+      );
+      expect(ranked.first, '192.168.43.1',
+          reason: 'a hotspot client can only reach the tether address');
+      expect(ranked, ['192.168.43.1', '192.168.1.24'],
+          reason: 'the station address is still offered, and only once');
+    });
+
+    test('the plugin answer is the last resort, not the first', () {
+      final ranked = NetworkService.rankAddresses(
+        const [],
+        pluginIp: '192.168.1.24',
+      );
+      expect(ranked, ['192.168.1.24']);
+    });
+
+    test('addresses students could never reach are dropped', () {
+      final ranked = NetworkService.rankAddresses(
+        [
+          (nic: 'tun0', ip: '10.8.0.2'), // a VPN
+          (nic: 'wlan0', ip: '169.254.3.3'), // link-local
+          (nic: 'eth0', ip: '192.168.9.9'),
+        ],
+        pluginIp: '169.254.9.9',
+      );
+      expect(ranked, ['192.168.9.9']);
     });
   });
 

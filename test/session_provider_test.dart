@@ -3,6 +3,7 @@ import 'package:classcast_offline/models/sync_event.dart';
 import 'package:classcast_offline/providers/session_provider.dart';
 import 'package:classcast_offline/services/host/classcast_host.dart';
 import 'package:classcast_offline/services/local_store.dart';
+import 'package:classcast_offline/services/network_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// In-memory store, so these tests exercise the real provider without SQLite.
@@ -176,6 +177,35 @@ void main() {
     await sessions.createSession(name: 'Chemistry', hostIp: '127.0.0.1');
 
     expect(sessions.reachabilityHintDue, isFalse);
+  });
+
+  test('changing the address tells the host, not just the session', () async {
+    await sessions.createSession(name: 'Physics', hostIp: '127.0.0.1');
+    expect(ClasscastHost.instance.advertisedIp, '127.0.0.1');
+
+    // The Wi-Fi goes away and the hotspot comes on. The session is what the QR
+    // is built from, but the host is what turns an address into the URL every
+    // student downloads from — updating only the session left each joined
+    // student holding a link to an address that no longer existed.
+    sessions.setNetwork(hostIp: '192.168.43.1', port: sessions.active!.port);
+    // setNetwork fires the host update in the background.
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    expect(ClasscastHost.instance.advertisedIp, '192.168.43.1');
+    expect(ClasscastHost.instance.joinUrl,
+        contains('http://192.168.43.1:'));
+  });
+
+  test('the alternate addresses never repeat the session own one', () async {
+    await sessions.createSession(name: 'Physics', hostIp: '192.168.43.1');
+    final alternates = sessions.alternateAddresses;
+
+    expect(alternates, isNot(contains('192.168.43.1')),
+        reason: 'a duplicate would only make a student wait on a probe they '
+            'have already done');
+    for (final ip in alternates) {
+      expect(NetworkService.isPrivateAddress(ip), isTrue);
+    }
   });
 }
 

@@ -114,6 +114,15 @@ class ClasscastServer {
       if (_session != null && key != _teacherKey) {
         return _json(403, {'ok': false, 'error': 'Permission denied'});
       }
+      // The teacher app states the address students are being pointed at.
+      // The laptop used to publish the one it resolved at boot, so a class that
+      // moved to another network kept handing out a document URL on an address
+      // that no longer existed. After the key check on purpose: this address
+      // ends up in every student's download URL.
+      final advertised = body['advertisedIp'] as String?;
+      if (advertised != null && _looksLikeAddress(advertised)) {
+        setAdvertisedIp(advertised);
+      }
       if (_session == null && (key == null || key.isEmpty)) {
         // An empty key would make `_checkTeacher` pass for everyone.
         _teacherKey = _code();
@@ -663,6 +672,30 @@ class ClasscastServer {
     if (_session == null) return false;
     if (_teacherKey.isEmpty) return false;
     return body['teacherKey'] == _teacherKey;
+  }
+
+  /// Points the classroom at a new address and re-announces it.
+  ///
+  /// Students hold the document URL as a plain string, so nothing short of a
+  /// fresh event would ever replace it for the ones already connected.
+  void setAdvertisedIp(String ip) {
+    final next = ip.trim();
+    if (next.isEmpty || next == advertisedIp) return;
+    advertisedIp = next;
+    if (_session == null) return;
+    _broadcast(_snapshotEvent('document_changed'));
+  }
+
+  /// True for something that can only be an IPv4 address. This value goes into
+  /// the URL every student fetches, so it is checked rather than trusted.
+  static bool _looksLikeAddress(String value) {
+    final parts = value.trim().split('.');
+    if (parts.length != 4) return false;
+    for (final part in parts) {
+      final octet = int.tryParse(part);
+      if (octet == null || octet < 0 || octet > 255) return false;
+    }
+    return true;
   }
 
   /// Rejects empty names, absolute paths, and any `..` segment.

@@ -144,6 +144,31 @@ class SessionProvider extends ChangeNotifier {
   /// Address students can reach, empty until the host is up.
   String get hostAddress => ClasscastHost.instance.joinUrl;
 
+  /// This phone's other addresses, carried in the QR next to [active]'s.
+  ///
+  /// A teacher on the classroom Wi-Fi *and* serving a hotspot has two
+  /// addresses on two subnets, and a student on one of them cannot reach the
+  /// other. Rather than making the teacher pick a network before a class
+  /// starts, the joining code offers both and the student's phone keeps the
+  /// one that answers — which is what makes the two setups behave the same.
+  List<String> _altAddresses = [];
+
+  /// Never includes the session's own [ClassroomSession.hostIp]: the QR's
+  /// `host` is that one, and a duplicate in `alt` would only make a student
+  /// wait on a probe they have already done.
+  List<String> get alternateAddresses {
+    final host = _active?.hostIp ?? '';
+    return [
+      for (final ip in _altAddresses)
+        if (ip.isNotEmpty && ip != host) ip,
+    ];
+  }
+
+  Future<void> _rememberAltAddresses() async {
+    final candidates = await NetworkService().localAddressCandidates();
+    _altAddresses = candidates;
+  }
+
   ClassroomSession? _active;
   ClassroomSession? get active => _active;
 
@@ -247,6 +272,9 @@ class SessionProvider extends ChangeNotifier {
     bool allowStudentNav = false,
   }) async {
     final id = _newSessionId();
+    // Every address this phone has, so the joining code can offer the hotspot
+    // one and the Wi-Fi one together instead of whichever was reported first.
+    await _rememberAltAddresses();
     var session = ClassroomSession(
       id: id,
       name: name.trim(),
@@ -404,6 +432,12 @@ class SessionProvider extends ChangeNotifier {
     _active = active.copyWith(hostIp: hostIp, port: port);
     notifyListeners();
     if (!changed) return;
+    // The host serves the document from the address it was given, not the one
+    // the session happens to hold: it turns `_advertisedIp` into the URL every
+    // student downloads from. Updating only the session is what let students
+    // join a hotspot-addressed classroom and then fail every download on the
+    // Wi-Fi address they had left behind.
+    unawaited(_startHost(_active!));
     // A different address means a different network. Re-announce the session
     // there, or the QR and the roster keep pointing at an address that no
     // longer exists — which is what happened after switching from Wi-Fi to a
@@ -447,9 +481,13 @@ class SessionProvider extends ChangeNotifier {
   Future<bool> refreshNetwork() async {
     final active = _active;
     if (active == null) return false;
-    final ip = await NetworkService().localIp();
-    if (ip.isEmpty) return false;
-    setNetwork(hostIp: ip, port: active.port);
+    // Re-read both halves of the address list: turning the hotspot on can
+    // change which interface is first, and adds an address the previous
+    // reading did not have.
+    final candidates = await NetworkService().localAddressCandidates();
+    if (candidates.isEmpty) return false;
+    _altAddresses = candidates;
+    setNetwork(hostIp: candidates.first, port: active.port);
     return true;
   }
 
@@ -534,6 +572,9 @@ class SessionProvider extends ChangeNotifier {
   }) async {
     if (old.id.isEmpty) return null;
     if (_active != null) await endSession();
+    // Same as a fresh session: the joining code carries this phone's other
+    // addresses too.
+    await _rememberAltAddresses();
     final session = old.copyWith(
       hostIp: hostIp,
       port: port,

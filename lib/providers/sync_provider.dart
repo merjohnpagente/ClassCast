@@ -90,8 +90,15 @@ class SyncProvider extends ChangeNotifier {
     _link = LinkState.connecting;
     notifyListeners();
 
-    final ok = await NetworkService.probeHost(host: _host, port: _port);
-    if (!ok) {
+    // One address is not proof the classroom is unreachable. The teacher's
+    // code carries every address they have — the hotspot one and the Wi-Fi
+    // one — because a student on either network cannot reach the other, and
+    // trying them in order is what makes both work the same way.
+    final reached = await NetworkService.firstReachableAddress(
+      [parsed.host, ...parsed.alts],
+      port: _port,
+    );
+    if (reached == null) {
       _link = LinkState.offline;
       // This phone is the only one that can actually see the block: its
       // packets to the teacher either arrive or they do not. Name the likely
@@ -103,6 +110,7 @@ class SyncProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+    _host = reached;
 
     final snapshot = await _client.fetchSnapshot(
         host: _host, port: _port, sessionId: _sessionId);
@@ -123,7 +131,7 @@ class SyncProvider extends ChangeNotifier {
     // is what lets a recovered session populate itself.
     bind();
     if (snapshot != null) {
-      _snapshot = snapshot;
+      _snapshot = _withReachableUrl(snapshot);
       _syncPaused = snapshot.syncPaused;
       _hasDocument = snapshot.documentId != null;
       // Only a snapshot proves the host is answering. Saying "live" when the
@@ -191,6 +199,9 @@ class SyncProvider extends ChangeNotifier {
             );
           }
           if (event.documentId != null) _hasDocument = true;
+          // Point the file at the address this phone actually reached the
+          // classroom on, before anything reads it.
+          _snapshot = _withReachableUrl(_snapshot!);
           _syncPaused = _snapshot!.syncPaused;
           // Following the class again is normal teaching, so the hold is over.
           if (event.page != null) _takenOver = false;
@@ -244,6 +255,36 @@ class SyncProvider extends ChangeNotifier {
   bool _takenOver = false;
   bool get takenOver => _takenOver;
 
+  /// The snapshot with its document URL aimed at an address this phone can
+  /// actually use. Returns the same instance when there is nothing to change.
+  ClassroomSession _withReachableUrl(ClassroomSession session) {
+    final url = _reachableUrl(session.documentUrl ?? '');
+    if (url == session.documentUrl) return session;
+    return session.copyWith(documentUrl: () => url);
+  }
+
+  /// The host builds the document URL from the address *it* is advertising,
+  /// which is not always the address this phone reached the classroom on: a
+  /// teacher on the classroom Wi-Fi and serving a hotspot has both, and the
+  /// student who joined on one of them may not be able to open the other.
+  ///
+  /// Whatever answered a moment ago can serve the file, so the host part of
+  /// the URL becomes that address. The path and the token stay the host's —
+  /// they are what makes the download allowed at all.
+  String _reachableUrl(String url) {
+    if (url.isEmpty || _host.isEmpty) return url;
+    final parsed = Uri.tryParse(url);
+    if (parsed == null) return url;
+    // Root-relative (`/files/...`), which is what a host with no advertised
+    // address hands out. It has no scheme to replace, so it is completed here.
+    if (!parsed.hasScheme) {
+      final query = parsed.hasQuery ? '?${parsed.query}' : '';
+      return 'http://$_host:$_port${parsed.path}$query';
+    }
+    if (parsed.host == _host && parsed.port == _port) return url;
+    return parsed.replace(host: _host, port: _port).toString();
+  }
+
   /// Whether this student may turn pages right now.
   ///
   /// Turned off while taken over: that is what "take control" means, and
@@ -287,7 +328,7 @@ class SyncProvider extends ChangeNotifier {
   /// sentence for the student.
   Future<DocumentDownloadResult> downloadDocument() async {
     final doc = _snapshot;
-    final url = doc?.documentUrl ?? '';
+    final url = _reachableUrl(doc?.documentUrl ?? '');
     final name = doc?.documentName ?? '';
     if (url.isEmpty || name.isEmpty) {
       return const DocumentDownloadResult(

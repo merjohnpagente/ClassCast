@@ -2,4 +2,6 @@
 /// address a student should use depends on the host machine anyway.
 ///
 /// This file is only compiled when `dart:io` is absent (see `local_ip.dart`).
+Future<List<({String nic, String ip})>> localInterfaceAddresses() async => [];
+
 Future<String?> localInterfaceIp() async => null;

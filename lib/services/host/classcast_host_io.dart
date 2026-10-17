@@ -91,6 +91,26 @@ class ClasscastHost {
   String get joinUrl =>
       _advertisedIp.isEmpty ? '' : 'http://$_advertisedIp:$_port';
 
+  /// Points the classroom at a new address and tells everyone already in it.
+  ///
+  /// Switching from Wi-Fi to a hotspot changes this phone's address, and the
+  /// host is what turns that address into the URL students fetch the document
+  /// from. Updating only the session (which is what the QR code is built from)
+  /// left the host handing out the *old* address: students joined on the new
+  /// one, were listed on the teacher's roster, and then every download 404'd
+  /// on an address that no longer existed.
+  ///
+  /// So a changed address is re-announced as a document event. Students
+  /// already connected hold a `documentUrl` string, and nothing else in the
+  /// protocol would ever replace it.
+  void setAdvertisedIp(String ip) {
+    final next = ip.trim();
+    if (next.isEmpty || next == _advertisedIp) return;
+    _advertisedIp = next;
+    if (_session == null) return;
+    _broadcast(_snapshotEvent('document_changed'));
+  }
+
   /// Starts the host. Returns false when the port is taken or unavailable — the
   /// caller keeps showing the honest "students cannot reach you" state.
   ///
@@ -101,7 +121,7 @@ class ClasscastHost {
     required int port,
     String advertisedIp = '',
   }) async {
-    if (advertisedIp.isNotEmpty) _advertisedIp = advertisedIp;
+    if (advertisedIp.isNotEmpty) setAdvertisedIp(advertisedIp);
     if (running) return true;
     try {
       _server = await HttpServer.bind(
@@ -237,6 +257,16 @@ class ClasscastHost {
     final key = body['teacherKey'] as String?;
     if (_session != null && key != _teacherKey) {
       return _json(request, 403, {'ok': false, 'error': 'Permission denied'});
+    }
+    // The teacher app states the address it is advertising. It is the same
+    // thing `start()` was told, arriving over the wire, which keeps a session
+    // re-announced after a network change from publishing the old address.
+    // After the key check on purpose: this is the address every student's
+    // download URL is built from, and it must not be settable by anyone who
+    // can reach the port.
+    final advertised = body['advertisedIp'] as String?;
+    if (advertised != null && _looksLikeAddress(advertised)) {
+      setAdvertisedIp(advertised);
     }
     if (_session == null && (key == null || key.isEmpty)) {
       _teacherKey = _code();
@@ -709,6 +739,21 @@ class ClasscastHost {
     if (_session == null) return false;
     if (_teacherKey.isEmpty) return false;
     return body['teacherKey'] == _teacherKey;
+  }
+
+  /// True for something that can only be an IPv4 address.
+  ///
+  /// The advertised address goes straight into the URL every student fetches,
+  /// so it is checked here rather than trusted: a host name, a port, or a
+  /// crafted string from anyone on the network must not end up in it.
+  static bool _looksLikeAddress(String value) {
+    final parts = value.trim().split('.');
+    if (parts.length != 4) return false;
+    for (final part in parts) {
+      final octet = int.tryParse(part);
+      if (octet == null || octet < 0 || octet > 255) return false;
+    }
+    return true;
   }
 
   /// True only for the exact file the teacher is currently sharing.
