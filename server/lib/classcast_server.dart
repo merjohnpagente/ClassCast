@@ -66,6 +66,13 @@ class ClasscastServer {
   int _page = 1;
   int _totalPages = 0;
   bool _syncPaused = false;
+
+  /// Playback of a shared video, in milliseconds. The teacher drives it and
+  /// every phone lands on the same position.
+  int _videoPositionMs = 0;
+  bool _videoPlaying = false;
+  int _videoDurationMs = 0;
+
   final Map<String, Map<String, dynamic>> _participants = {};
 
   /// Checks [_participants] for silent students. Started when the first
@@ -184,6 +191,7 @@ class ClasscastServer {
         _documentToken = '';
         _totalPages = 0;
         _page = 1;
+        _resetVideo();
         _broadcast(_snapshotEvent('document_changed'));
         return _json(200, {'ok': true, 'session': _snapshot()});
       }
@@ -209,6 +217,7 @@ class ClasscastServer {
       // total. This is a heuristic; an unknown count degrades to 0.
       _totalPages = declared > 0 ? declared : _derivedPageCount(name);
       _page = 1;
+      _resetVideo();
       _broadcast(_snapshotEvent('document_changed'));
       return _json(200, {'ok': true, 'session': _snapshot()});
     });
@@ -222,6 +231,30 @@ class ClasscastServer {
       // new wire type.
       _syncPaused = body['paused'] as bool? ?? !_syncPaused;
       _broadcast(_snapshotEvent('session_state'));
+      return _json(200, {'ok': true, 'session': _snapshot()});
+    });
+
+    // Where the teacher left the shared video. A different clock from the page:
+    // "page 3" and "3 seconds in" are both ints on the wire and must not be
+    // confused.
+    router.post('/api/video', (Request req) async {
+      final body = await _readJson(req);
+      if (!_checkTeacher(body)) {
+        return _json(403, {'ok': false, 'error': 'Permission denied'});
+      }
+      final duration = (body['durationMs'] as num?)?.toInt();
+      if (duration != null && duration > 0) _videoDurationMs = duration;
+      final position = (body['positionMs'] as num?)?.toInt();
+      if (position != null) {
+        _videoPositionMs = position < 0
+            ? 0
+            : (_videoDurationMs > 0
+                ? position.clamp(0, _videoDurationMs).toInt()
+                : position);
+      }
+      final playing = body['playing'] as bool?;
+      if (playing != null) _videoPlaying = playing;
+      _broadcast(_snapshotEvent('video_changed'));
       return _json(200, {'ok': true, 'session': _snapshot()});
     });
 
@@ -283,6 +316,7 @@ class ClasscastServer {
       _documentId = '';
       _totalPages = 0;
       _page = 1;
+      _resetVideo();
       _syncPaused = false;
       _participants.clear();
       _presenceTimer?.cancel();
@@ -305,7 +339,10 @@ class ClasscastServer {
     // the core feature, so it is always allowed; `allowDownload` only gates
     // the *rest* of the shared folder. (Note: anything a student can render,
     // they can also save — this is a classroom courtesy switch, not DRM.)
-    Future<Response> serveFile(String requestedName, String? presented) async {
+    /// [rangeHeader] is the raw `Range:` value, so a video player can seek
+    /// instead of being handed the whole recording.
+    Future<Response> serveFile(String requestedName, String? presented,
+        [String? rangeHeader]) async {
       // The session must be running and the request must carry the token the
       // snapshot handed out, so typing the filename on the classroom Wi-Fi is
       // not enough to read what the teacher is showing.
@@ -330,20 +367,36 @@ class ClasscastServer {
         if (!isCurrent && _session?['allowDownload'] != true) {
           return Response.forbidden('Downloads are disabled by the teacher');
         }
-        return Response.ok(
-          file.openRead(),
-          headers: {
-            'content-type':
-                lookupMimeType(file.path) ?? 'application/octet-stream',
-            'content-disposition': isCurrent ? 'inline' : 'attachment',
-            'content-length': length.toString(),
-            // The shared document changes as the teacher moves on.
-            'cache-control': 'no-store',
-            // Students running the web build live on a different origin;
-            // without this the browser refuses to hand them the bytes.
-            'access-control-allow-origin': '*',
-          },
-        );
+        // A video player asks for the part of the file it wants next; a range
+        // request answers 206 with exactly those bytes, which is what makes
+        // seeking work instead of every phone pulling the whole recording
+        // before it can start.
+        final range = _parseRange(rangeHeader, length);
+        final headers = <String, String>{
+          'content-type':
+              lookupMimeType(file.path) ?? 'application/octet-stream',
+          'content-disposition': isCurrent ? 'inline' : 'attachment',
+          'content-length': length.toString(),
+          // The shared document changes as the teacher moves on.
+          'cache-control': 'no-store',
+          // Students running the web build live on a different origin;
+          // without this the browser refuses to hand them the bytes.
+          'access-control-allow-origin': '*',
+          'accept-ranges': 'bytes',
+        };
+        if (range != null) {
+          final size = range.end - range.start + 1;
+          return Response(
+            206,
+            body: file.openRead(range.start, range.end + 1),
+            headers: {
+              ...headers,
+              'content-length': size.toString(),
+              'content-range': 'bytes ${range.start}-${range.end}/$length',
+            },
+          );
+        }
+        return Response.ok(file.openRead(), headers: headers);
       } catch (_) {
         return Response.notFound('not found');
       }
@@ -378,7 +431,7 @@ class ClasscastServer {
           const prefix = 'files/';
           if (req.url.path.startsWith(prefix)) {
             return serveFile(req.url.path.substring(prefix.length),
-                req.url.queryParameters['t']);
+                req.url.queryParameters['t'], req.headers['range']);
           }
           return Response.notFound('not found');
         });
@@ -644,6 +697,9 @@ class ClasscastServer {
         'page': _page,
         'totalPages': _totalPages,
         'syncPaused': _syncPaused,
+        'videoPositionMs': _videoPositionMs,
+        'videoPlaying': _videoPlaying,
+        'videoDurationMs': _videoDurationMs,
       };
 
   Map<String, dynamic> _snapshotEvent(String type) => {
@@ -655,6 +711,9 @@ class ClasscastServer {
         'page': _page,
         'totalPages': _totalPages,
         'syncPaused': _syncPaused,
+        'videoPositionMs': _videoPositionMs,
+        'videoPlaying': _videoPlaying,
+        'videoDurationMs': _videoDurationMs,
       };
 
   /// Absolute URL of the shared document, or null when none is shared.
@@ -672,6 +731,46 @@ class ClasscastServer {
     if (_session == null) return false;
     if (_teacherKey.isEmpty) return false;
     return body['teacherKey'] == _teacherKey;
+  }
+
+  /// A different document, or no document, means no playback to follow.
+  void _resetVideo() {
+    _videoPositionMs = 0;
+    _videoPlaying = false;
+    _videoDurationMs = 0;
+  }
+
+  /// One byte range from a `Range: bytes=a-b` header, or null when the whole
+  /// file should be sent.
+  ///
+  /// Only a single range is honoured, which is all a player asks for
+  /// (`bytes=0-` to start, then `bytes=N-` to move on). A multi-range or suffix
+  /// range is ignored rather than half-implemented: the client then gets the
+  /// whole file, which plays, instead of a 206 it cannot assemble.
+  static ({int start, int end})? _parseRange(String? header, int length) {
+    if (header == null || length <= 0) return null;
+    if (!header.startsWith('bytes=')) return null;
+    final spec = header.substring('bytes='.length).trim();
+    if (spec.contains(',')) return null;
+    final parts = spec.split('-');
+    if (parts.length != 2) return null;
+    final first = int.tryParse(parts[0].trim());
+    final last = int.tryParse(parts[1].trim());
+    int start;
+    int end;
+    if (parts[0].trim().isEmpty) {
+      // `bytes=-500`: the last 500 bytes.
+      if (last == null || last <= 0) return null;
+      start = length - last;
+      end = length - 1;
+    } else {
+      if (first == null || first < 0 || first >= length) return null;
+      start = first;
+      // `bytes=500-` means "from here to the end".
+      end = last == null ? length - 1 : last.clamp(start, length - 1);
+    }
+    if (start > end || start < 0) return null;
+    return (start: start, end: end);
   }
 
   /// Points the classroom at a new address and re-announces it.

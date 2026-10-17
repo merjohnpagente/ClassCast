@@ -20,6 +20,16 @@ class ClassroomSession {
 
   /// Teacher has paused page-following; students stay frozen on their page.
   final bool syncPaused;
+
+  /// Playback of a shared video, in the teacher's hands.
+  ///
+  /// A video is the one shared document where being out of step is visible,
+  /// so the class follows one position: the teacher plays, pauses and seeks,
+  /// and every phone lands on the same millisecond. Zero means "no video
+  /// playing", which is what every non-video session carries.
+  final int videoPositionMs;
+  final bool videoPlaying;
+  final int videoDurationMs;
   final String teacherKey;
 
   const ClassroomSession({
@@ -39,6 +49,9 @@ class ClassroomSession {
     this.page = 1,
     this.totalPages = 0,
     this.syncPaused = false,
+    this.videoPositionMs = 0,
+    this.videoPlaying = false,
+    this.videoDurationMs = 0,
     this.teacherKey = '',
   });
 
@@ -62,6 +75,9 @@ class ClassroomSession {
     int? page,
     int? totalPages,
     bool? syncPaused,
+    int? videoPositionMs,
+    bool? videoPlaying,
+    int? videoDurationMs,
     String? teacherKey,
   }) {
     return ClassroomSession(
@@ -82,6 +98,9 @@ class ClassroomSession {
       page: page ?? this.page,
       totalPages: totalPages ?? this.totalPages,
       syncPaused: syncPaused ?? this.syncPaused,
+      videoPositionMs: videoPositionMs ?? this.videoPositionMs,
+      videoPlaying: videoPlaying ?? this.videoPlaying,
+      videoDurationMs: videoDurationMs ?? this.videoDurationMs,
       teacherKey: teacherKey ?? this.teacherKey,
     );
   }
@@ -103,6 +122,9 @@ class ClassroomSession {
         'page': page,
         'totalPages': totalPages,
         'syncPaused': syncPaused,
+        'videoPositionMs': videoPositionMs,
+        'videoPlaying': videoPlaying,
+        'videoDurationMs': videoDurationMs,
         // A restored session with no key is a session the teacher cannot
         // control: every host call comes back 403.
         'teacherKey': teacherKey,
@@ -128,6 +150,9 @@ class ClassroomSession {
       page: (json['page'] as num?)?.toInt() ?? 1,
       totalPages: (json['totalPages'] as num?)?.toInt() ?? 0,
       syncPaused: json['syncPaused'] as bool? ?? false,
+      videoPositionMs: (json['videoPositionMs'] as num?)?.toInt() ?? 0,
+      videoPlaying: json['videoPlaying'] as bool? ?? false,
+      videoDurationMs: (json['videoDurationMs'] as num?)?.toInt() ?? 0,
       teacherKey: json['teacherKey'] as String? ?? '',
     );
   }

@@ -18,6 +18,18 @@ void main() {
       expect(SupportedFiles.kindOf('zip'), DocKind.unknown);
     });
 
+    test('video is a supported kind, ready to cast', () {
+      expect(SupportedFiles.kindOf('mp4'), DocKind.video);
+      expect(SupportedFiles.kindOf('MP4'), DocKind.video);
+      expect(SupportedFiles.kindOf('mov'), DocKind.video);
+      expect(SupportedFiles.kindOf('webm'), DocKind.video);
+      expect(SupportedFiles.kindOf('3gp'), DocKind.video);
+      expect(SupportedFiles.kindOf('mp4'), isIn(SupportedFiles.all),
+          reason: 'and the picker has to offer it, or it cannot be cast at all');
+      expect(SupportedFiles.initialStatus(DocKind.video), DocStatus.ready);
+      expect(SupportedFiles.statusFor('mp4'), DocStatus.ready);
+    });
+
     test('modern office files are ready, pdf is ready', () {
       expect(SupportedFiles.initialStatus(DocKind.pdf), DocStatus.ready);
       // The app opens pptx / docx / xlsx itself, so there is nothing to
@@ -89,6 +101,25 @@ void main() {
       expect(json.containsKey('syncPaused'), isFalse);
       expect(SyncEvent.fromJson(Map<String, dynamic>.from(json)).documentUrl,
           isNull);
+    });
+
+    test('video playback round-trips', () {
+      // The class follows one position, so these three have to survive the
+      // trip intact — a dropped `playing` leaves every phone sitting still.
+      const e = SyncEvent(
+        type: SyncEventType.videoChanged,
+        sessionId: 'CLASS-101',
+        videoPositionMs: 42000,
+        videoPlaying: true,
+        videoDurationMs: 600000,
+      );
+      final json = e.toJson();
+      expect(json['type'], 'video_changed');
+      final back = SyncEvent.fromJson(Map<String, dynamic>.from(json));
+      expect(back.type, SyncEventType.videoChanged);
+      expect(back.videoPositionMs, 42000);
+      expect(back.videoPlaying, isTrue);
+      expect(back.videoDurationMs, 600000);
     });
   });
 

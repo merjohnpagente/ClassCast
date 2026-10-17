@@ -327,6 +327,67 @@ void main() {
       expect((res['session'] as Map)['totalPages'], 2);
     });
 
+    test('video playback moves the class, and needs the key', () async {
+      final [id, key] = await startSession();
+      // Without the key a phone on the classroom network could rewind the
+      // teacher's lesson for everyone.
+      expect(
+        (await call('POST', '/api/video',
+                jsonEncode({'positionMs': 5000, 'playing': true})))
+            .statusCode,
+        403,
+      );
+
+      final res = await body(await call('POST', '/api/video', jsonEncode({
+        'teacherKey': key,
+        'positionMs': 4200,
+        'playing': true,
+        'durationMs': 600000,
+      })));
+      final s = res['session'] as Map;
+      expect(s['videoPositionMs'], 4200);
+      expect(s['videoPlaying'], isTrue);
+      expect(s['videoDurationMs'], 600000);
+
+      // Past the end is clamped, not published: a phone would sit at the end
+      // forever trying to reach a moment that does not exist.
+      final clamped = await body(await call('POST', '/api/video',
+          jsonEncode({'teacherKey': key, 'positionMs': 99999999})));
+      expect((clamped['session'] as Map)['videoPositionMs'], 600000);
+
+      // Sharing something else starts the class at zero again.
+      writeFile('next.pdf', '%PDF-1.4');
+      final shared = await body(await call('POST', '/api/document',
+          jsonEncode({'teacherKey': key, 'documentName': 'next.pdf'})));
+      expect((shared['session'] as Map)['videoPositionMs'], 0);
+      expect((shared['session'] as Map)['videoPlaying'], isFalse);
+    });
+
+    test('a video answers a range request with just those bytes', () async {
+      // Without ranges a player has to read the whole recording before it can
+      // start, and cannot seek at all.
+      final [id, key] = await startSession();
+      writeFile('clip.mp4', '0123456789abcdefghij');
+      final path = await shareAndUrl(key, 'clip.mp4');
+
+      final res = await server.handler(Request(
+        'GET',
+        Uri.parse('http://localhost:8080$path'),
+        headers: const {'range': 'bytes=5-9'},
+      ));
+      expect(res.statusCode, 206);
+      expect(res.headers['content-range'], 'bytes 5-9/20');
+      expect(res.headers['content-length'], '5');
+      expect(res.headers['accept-ranges'], 'bytes');
+      expect(await res.readAsString(), '56789');
+
+      // The whole file still works for a client that does not ask.
+      final whole = await server.handler(
+          Request('GET', Uri.parse('http://localhost:8080$path')));
+      expect(whole.statusCode, 200);
+      expect(await whole.readAsString(), '0123456789abcdefghij');
+    });
+
     test('the current document is viewable even when downloads are off',
         () async {
       final [id, key] = await startSession(allowDownload: false);

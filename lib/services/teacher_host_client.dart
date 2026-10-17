@@ -84,6 +84,24 @@ class TeacherHostClient {
   Future<bool> setPaused(ClassroomSession s, bool paused) =>
       _serial(() => _post(s, SyncProtocol.pauseApi, {'paused': paused}));
 
+  /// Move the shared video: where the class should be, and whether it is
+  /// running.
+  ///
+  /// Only what changed is sent, so a play and a seek are two small calls
+  /// instead of a whole playback state each time. The position is what makes
+  /// the class watch the same moment of the same video.
+  Future<bool> setVideo(
+    ClassroomSession s, {
+    int? positionMs,
+    bool? playing,
+    int? durationMs,
+  }) =>
+      _serial(() => _post(s, SyncProtocol.videoApi, {
+            if (positionMs != null) 'positionMs': positionMs,
+            if (playing != null) 'playing': playing,
+            if (durationMs != null && durationMs > 0) 'durationMs': durationMs,
+          }));
+
   /// Pull [participantId] back to the class page, or everyone when it is null.
   Future<bool> takeControl(ClassroomSession s, {String? participantId}) =>
       _serial(() => _post(s, SyncProtocol.takeControlApi, {

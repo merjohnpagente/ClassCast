@@ -206,6 +206,11 @@ class SyncProvider extends ChangeNotifier {
               page: event.page ?? base.page,
               totalPages: event.totalPages ?? base.totalPages,
               syncPaused: event.syncPaused ?? base.syncPaused,
+              // A new document has no playback to follow, whatever the last
+              // one was doing.
+              videoPositionMs: event.videoPositionMs ?? 0,
+              videoPlaying: event.videoPlaying ?? false,
+              videoDurationMs: event.videoDurationMs ?? 0,
             );
           }
           if (event.documentId != null) _hasDocument = true;
@@ -235,6 +240,19 @@ class SyncProvider extends ChangeNotifier {
         case SyncEventType.studentPageChanged:
           // The teacher mirrors these on their own screen; the student UI
           // only needs its own hand state, tracked locally.
+          break;
+        case SyncEventType.videoChanged:
+          // The teacher moved the video. Nothing to do here beyond letting the
+          // snapshot carry it: the player watches these three values and puts
+          // itself in the right place.
+          final base = _snapshot;
+          if (base == null) return;
+          _snapshot = base.copyWith(
+            videoPositionMs: event.videoPositionMs ?? base.videoPositionMs,
+            videoPlaying: event.videoPlaying ?? base.videoPlaying,
+            videoDurationMs: event.videoDurationMs ?? base.videoDurationMs,
+          );
+          notifyListeners();
           break;
         case SyncEventType.takeControl:
           // The teacher wants this screen back on the class page. Land on the
@@ -305,6 +323,16 @@ class SyncProvider extends ChangeNotifier {
   /// Whether this student currently has a hand up.
   bool _handRaised = false;
   bool get handRaised => _handRaised;
+
+  /// Playback of a shared video, in milliseconds from its start, and whether
+  /// the teacher has it running.
+  ///
+  /// Mirrors of the teacher's own position, so a class of thirty phones is
+  /// watching the same moment of the same recording rather than thirty copies
+  /// of it that drifted apart.
+  int get videoPositionMs => _snapshot?.videoPositionMs ?? 0;
+  bool get videoPlaying => _snapshot?.videoPlaying ?? false;
+  int get videoDurationMs => _snapshot?.videoDurationMs ?? 0;
 
   /// Raise or lower this student's hand. The teacher sees it immediately.
   bool setHandRaised(bool raised) {

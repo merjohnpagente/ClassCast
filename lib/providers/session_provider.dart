@@ -701,6 +701,54 @@ class SessionProvider extends ChangeNotifier {
     unawaited(_host.setPaused(_active!, paused));
   }
 
+  /// The teacher played, paused or seeked the shared video.
+  ///
+  /// Applied locally first so the teacher's own player never waits on a round
+  /// trip, and an echo from the host is then ignored rather than applied twice
+  /// — the same guard page changes need, because a position that has not moved
+  /// would otherwise fight the player for the seek bar.
+  void setVideo({int? positionMs, bool? playing, int? durationMs}) {
+    final active = _active;
+    if (active == null) return;
+    final duration = durationMs ?? active.videoDurationMs;
+    var position = positionMs ?? active.videoPositionMs;
+    if (position < 0) position = 0;
+    if (duration > 0 && position > duration) position = duration;
+    if (position == active.videoPositionMs &&
+        (playing == null || playing == active.videoPlaying) &&
+        duration == active.videoDurationMs) {
+      return;
+    }
+    _active = active.copyWith(
+      videoPositionMs: position,
+      videoPlaying: playing ?? active.videoPlaying,
+      videoDurationMs: duration,
+    );
+    notifyListeners();
+    unawaited(_host.setVideo(_active!,
+        positionMs: position, playing: playing, durationMs: duration));
+  }
+
+  /// Applies an inbound video frame without bouncing it back to the host.
+  void _applyVideo(SyncEvent event) {
+    final active = _active;
+    if (active == null) return;
+    final position = event.videoPositionMs ?? active.videoPositionMs;
+    final playing = event.videoPlaying ?? active.videoPlaying;
+    final duration = event.videoDurationMs ?? active.videoDurationMs;
+    if (position == active.videoPositionMs &&
+        playing == active.videoPlaying &&
+        duration == active.videoDurationMs) {
+      return;
+    }
+    _active = active.copyWith(
+      videoPositionMs: position,
+      videoPlaying: playing,
+      videoDurationMs: duration,
+    );
+    notifyListeners();
+  }
+
   /// Pull a wandering student back onto the class page. Omitting the id pulls
   /// the whole class back, which is what a teacher means by "take control".
   void takeControl({String? participantId}) {
@@ -722,8 +770,16 @@ class SessionProvider extends ChangeNotifier {
           documentName: () => event.documentName,
           page: event.page ?? 1,
           totalPages: event.totalPages ?? _active!.totalPages,
+          // A new document starts the class at zero, whatever the last one was
+          // doing, and the frame carries the reset.
+          videoPositionMs: event.videoPositionMs ?? 0,
+          videoPlaying: event.videoPlaying ?? false,
+          videoDurationMs: event.videoDurationMs ?? 0,
         );
         notifyListeners();
+        break;
+      case SyncEventType.videoChanged:
+        _applyVideo(event);
         break;
       case SyncEventType.sessionEnded:
         endSession();
@@ -779,8 +835,13 @@ class SessionProvider extends ChangeNotifier {
           notifyListeners();
         }
         break;
-      case SyncEventType.join:
+      case SyncEventType.videoChanged:
       case SyncEventType.sessionState:
+        // Both carry the whole snapshot, so a teacher whose socket just came
+        // back picks up where the video is rather than restarting it.
+        _applyVideo(event);
+        break;
+      case SyncEventType.join:
       case SyncEventType.connectionStatus:
       case SyncEventType.takeControl:
       case SyncEventType.heartbeat:

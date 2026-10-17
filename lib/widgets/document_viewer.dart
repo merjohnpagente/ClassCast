@@ -11,6 +11,8 @@ import 'document_zoom.dart';
 import 'office/office_document_view.dart';
 import 'office/office_document_scroll_view.dart';
 import 'state_cards.dart';
+import 'video_cast_player.dart';
+import 'video_sync.dart';
 
 /// Renders the real shared document.
 ///
@@ -47,6 +49,13 @@ class DocumentViewer extends StatefulWidget {
   /// When true, show the conversion panel instead of a preview.
   final bool showConversionPanel;
 
+  /// Playback of a shared video, when that is what is shared.
+  ///
+  /// One object rather than a dozen parameters, and optional so every other
+  /// call site stays exactly as it was: only a video needs to know who is
+  /// driving, where the class is, and whether this phone has been muted.
+  final VideoSync? video;
+
   const DocumentViewer({
     super.key,
     required this.doc,
@@ -57,6 +66,7 @@ class DocumentViewer extends StatefulWidget {
     this.viewMode = OfficeViewMode.pages,
     this.onPageChanged,
     this.showConversionPanel = false,
+    this.video,
   });
 
   @override
@@ -116,6 +126,8 @@ class _DocumentViewerState extends State<DocumentViewer>
         );
       case DocKind.text:
         return _text(box);
+      case DocKind.video:
+        return _video(box);
       case DocKind.powerpoint:
       case DocKind.word:
       case DocKind.excel:
@@ -131,6 +143,37 @@ class _DocumentViewerState extends State<DocumentViewer>
         s == DocStatus.converting ||
         s == DocStatus.conversionFailed ||
         s == DocStatus.unsupported;
+  }
+
+  /// A shared video: the teacher's own file, or the bytes the host is serving,
+  /// with the teacher driving playback.
+  Widget _video(BoxDecoration box) {
+    final sync = widget.video;
+    if (sync == null) {
+      return _MissingFile(box: box, name: doc.name);
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.large),
+      child: Container(
+        decoration: box,
+        child: VideoCastPlayer(
+          localPath: remoteUrl == null || remoteUrl!.isEmpty
+              ? doc.localPath
+              : null,
+          remoteUrl: remoteUrl,
+          isTeacher: sync.isTeacher,
+          positionMs: sync.positionMs,
+          playing: sync.playing,
+          durationMs: sync.durationMs,
+          frozen: sync.frozen,
+          muted: sync.muted,
+          onPlayPause: sync.onPlayPause,
+          onSeek: sync.onSeek,
+          onDuration: sync.onDuration,
+          onMutedChanged: sync.onMutedChanged,
+        ),
+      ),
+    );
   }
 
   /// PowerPoint, Word and Excel are parsed and drawn in-app.

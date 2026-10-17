@@ -1,5 +1,5 @@
 /// Supported document types in ClassCast Offline.
-enum DocKind { pdf, powerpoint, word, excel, image, text, unknown }
+enum DocKind { pdf, powerpoint, word, excel, image, text, video, unknown }
 
 /// Lifecycle of a document selected for sharing.
 enum DocStatus {
@@ -28,6 +28,11 @@ class SupportedFiles {
   static const image = ['jpg', 'jpeg', 'png'];
   static const text = ['txt'];
 
+  /// Video, for a recorded lesson rather than a deck. Played with the teacher
+  /// driving: the class follows one playback position, and a video is the one
+  /// shared document where being half a second out is actually visible.
+  static const video = ['mp4', 'm4v', 'mov', 'webm', '3gp'];
+
   /// Office formats that are zip containers, opened by the app itself.
   static const modernOffice = ['pptx', 'docx', 'xlsx'];
 
@@ -43,6 +48,7 @@ class SupportedFiles {
     ...excel,
     ...image,
     ...text,
+    ...video,
   ];
 
   static String normalize(String extension) =>
@@ -56,6 +62,7 @@ class SupportedFiles {
     if (excel.contains(ext)) return DocKind.excel;
     if (image.contains(ext)) return DocKind.image;
     if (text.contains(ext)) return DocKind.text;
+    if (video.contains(ext)) return DocKind.video;
     return DocKind.unknown;
   }
 
@@ -67,6 +74,7 @@ class SupportedFiles {
       case DocKind.powerpoint:
       case DocKind.word:
       case DocKind.excel:
+      case DocKind.video:
         // Modern Office files are opened by the app itself, so they are ready
         // to present as soon as they are picked.
         return DocStatus.ready;

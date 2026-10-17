@@ -41,6 +41,7 @@ class AppColors {
   static const excel = Color(0xFF1F9D55);
   static const image = Color(0xFF8B7CFF);
   static const text = Color(0xFF7C879D);
+  static const video = Color(0xFFB4417A);
 }
 
 class AppRadius {

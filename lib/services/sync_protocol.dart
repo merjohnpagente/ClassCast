@@ -27,6 +27,7 @@ class SyncProtocol {
   static const documentApi = '/api/document';
   static const pageApi = '/api/page';
   static const pauseApi = '/api/pause';
+  static const videoApi = '/api/video';
   static const endApi = '/api/end';
   static const takeControlApi = '/api/take-control';
 

@@ -114,6 +114,7 @@ class _FilesScreenState extends State<FilesScreen> {
       ('Sheets', DocKind.excel),
       ('Images', DocKind.image),
       ('Text', DocKind.text),
+      ('Video', DocKind.video),
     ];
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,

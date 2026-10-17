@@ -102,3 +102,9 @@ Future<String?> localFileCopyIntoAppStorage(
     return null;
   }
 }
+/// The platform's file handle for [path].
+///
+/// Exists so a widget can hand a real file to a plugin without importing
+/// `dart:io` itself — the browser build has no such import, and importing it
+/// anywhere in the tree is a compile error there, not just a null.
+Object? localFileHandle(String path) => File(path);

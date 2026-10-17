@@ -407,6 +407,109 @@ void main() {
   // "Take control" button both came back 404 — and a 404 is what flips the
   // app's status chip to a red "Not sharing", so the failure looked like the
   // whole classroom had gone rather than like one missing button.
+  test('a teacher casting a video moves the whole class', () async {
+    const teacherKey = 'VIDKEY';
+    await send('POST', '/api/session',
+        {'id': 'CLASS-VID', 'teacherKey': teacherKey});
+    final dir = Directory.systemTemp.createTempSync('vid');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/lesson.mp4')
+      ..writeAsStringSync('fake-mp4-bytes-for-the-test');
+    host.registerDocument('lesson.mp4', file.path);
+    await send('POST', '/api/document', {
+      'teacherKey': teacherKey,
+      'documentName': 'lesson.mp4',
+    });
+
+    final student = IOWebSocketChannel.connect(Uri.parse(
+        'ws://127.0.0.1:$port/ws?session=CLASS-VID&name=Ana&device=Android'));
+    final studentInbox = StreamQueue<dynamic>(student.stream);
+    addTearDown(() async {
+      await studentInbox.cancel();
+      await student.sink.close();
+    });
+    await studentInbox.next; // the greeting
+
+    // Without the teacher key, playback is not the student's to change.
+    final refused = await send('POST', '/api/video',
+        {'positionMs': 5000, 'playing': true});
+    expect(refused.statusCode, 403);
+
+    // What the teacher's player sends when it starts.
+    final started = await json(await send('POST', '/api/video', {
+      'teacherKey': teacherKey,
+      'positionMs': 4200,
+      'playing': true,
+      'durationMs': 600000,
+    }));
+    expect((started['session'] as Map)['videoPlaying'], isTrue);
+    expect((started['session'] as Map)['videoPositionMs'], 4200);
+
+    // The student is told, not left guessing.
+    final relayed = await studentInbox.nextWhere(
+      (frame) =>
+          SyncProtocol.decode(frame)?.type == SyncEventType.videoChanged,
+      const Duration(seconds: 3),
+    );
+    final event = SyncProtocol.decode(relayed)!;
+    expect(event.videoPositionMs, 4200,
+        reason: 'the class has to land on the same moment');
+    expect(event.videoPlaying, isTrue);
+
+    // A seek is its own frame, so a teacher moving around a recording is not
+    // fighting the previous position.
+    await send('POST', '/api/video',
+        {'teacherKey': teacherKey, 'positionMs': 90000, 'playing': false});
+    final seeked = SyncProtocol.decode(await studentInbox.nextWhere(
+      (frame) =>
+          SyncProtocol.decode(frame)?.type == SyncEventType.videoChanged,
+      const Duration(seconds: 3),
+    ))!;
+    expect(seeked.videoPositionMs, 90000);
+    expect(seeked.videoPlaying, isFalse);
+
+    // A position past the end is clamped rather than published: a phone would
+    // sit at the end forever trying to reach a moment that does not exist.
+    final clamped = await json(await send('POST', '/api/video', {
+      'teacherKey': teacherKey,
+      'positionMs': 99999999,
+    }));
+    expect((clamped['session'] as Map)['videoPositionMs'], 600000);
+  });
+
+  // A player cannot play from a file it has to read end to end, and seeking is
+  // impossible without ranges. This is the difference between a video that
+  // works and one that buffers to the end of the recording before starting.
+  test('the shared video answers a range request with just those bytes',
+      () async {
+    const teacherKey = 'RANGEKEY';
+    await send('POST', '/api/session',
+        {'id': 'CLASS-RANGE', 'teacherKey': teacherKey});
+    final dir = Directory.systemTemp.createTempSync('range');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final bytes = '0123456789abcdefghij';
+    final file = File('${dir.path}/clip.mp4')..writeAsStringSync(bytes);
+    host.registerDocument('clip.mp4', file.path);
+    final ok = await json(await send('POST', '/api/document',
+        {'teacherKey': teacherKey, 'documentName': 'clip.mp4'}));
+    final target = Uri.parse((ok['session'] as Map)['documentUrl'] as String);
+
+    final client = HttpClient();
+    final request = await client.openUrl(
+        'GET', Uri.parse('http://127.0.0.1:$port${target.path}?${target.query}'));
+    request.headers.set(HttpHeaders.rangeHeader, 'bytes=5-9');
+    final response = await request.close();
+    addTearDown(client.close);
+
+    expect(response.statusCode, 206);
+    expect(response.headers.value(HttpHeaders.contentRangeHeader),
+        'bytes 5-9/${bytes.length}');
+    expect(await response.transform(utf8.decoder).join(), '56789');
+    expect(response.headers.value(HttpHeaders.contentTypeHeader),
+        startsWith('video/mp4'));
+    expect(response.headers.value(HttpHeaders.acceptRangesHeader), 'bytes');
+  });
+
   test('take control pulls a student back, and needs the key', () async {
     const teacherKey = 'CTRLKEY';
     await send('POST', '/api/session', {

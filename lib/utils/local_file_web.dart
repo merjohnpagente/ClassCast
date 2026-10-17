@@ -28,3 +28,5 @@ Future<String?> localFileCopyIntoAppStorage(
   String fileName,
 ) async =>
     null;
+/// A browser has no file handles, so this is always null.
+Object? localFileHandle(String path) => null;

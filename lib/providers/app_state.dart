@@ -51,4 +51,18 @@ class AppState extends ChangeNotifier {
     _serverPort = port;
     notifyListeners();
   }
+
+  /// Whether this phone plays a shared video without sound.
+  ///
+  /// Per device and never broadcast: one row of phones going quiet must not
+  /// silence the rest of the class, and a student who muted once expects to
+  /// still be muted for the next lesson.
+  bool _videoMuted = false;
+  bool get videoMuted => _videoMuted;
+
+  void setVideoMuted(bool muted) {
+    if (_videoMuted == muted) return;
+    _videoMuted = muted;
+    notifyListeners();
+  }
 }

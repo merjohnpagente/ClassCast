@@ -93,6 +93,12 @@ class FileTypeIcon extends StatelessWidget {
           AppColors.text,
           AppColors.surfaceSoft
         );
+      case DocKind.video:
+        return (
+          Icons.play_circle_outline,
+          AppColors.video,
+          const Color(0xFFFCEAF3)
+        );
       case DocKind.unknown:
         return (
           Icons.insert_drive_file,

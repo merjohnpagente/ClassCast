@@ -23,6 +23,10 @@ enum SyncEventType {
   /// the class page away from them.
   studentPageChanged,
 
+  /// The teacher moved the shared video: played, paused or seeked. The class
+  /// follows this position, so it is the one event a video really needs.
+  videoChanged,
+
   /// The teacher pulled a student's screen back to the class page. Sent to one
   /// student, or to everyone when the teacher wants the whole class back.
   takeControl,
@@ -59,6 +63,8 @@ extension SyncEventTypeWire on SyncEventType {
         return 'hand_lowered';
       case SyncEventType.studentPageChanged:
         return 'student_page_changed';
+      case SyncEventType.videoChanged:
+        return 'video_changed';
       case SyncEventType.takeControl:
         return 'take_control';
       case SyncEventType.heartbeat:
@@ -90,6 +96,8 @@ extension SyncEventTypeWire on SyncEventType {
         return SyncEventType.handLowered;
       case 'student_page_changed':
         return SyncEventType.studentPageChanged;
+      case 'video_changed':
+        return SyncEventType.videoChanged;
       case 'take_control':
         return SyncEventType.takeControl;
       case 'heartbeat':
@@ -113,6 +121,12 @@ class SyncEvent {
   final String? documentUrl;
 
   final int? page;
+
+  /// Playback of a shared video: where the class should be, and whether it is
+  /// moving. Zero means no video is being cast.
+  final int? videoPositionMs;
+  final bool? videoPlaying;
+  final int? videoDurationMs;
   final int? totalPages;
   final bool? syncPaused;
   final String? participantId;
@@ -127,6 +141,9 @@ class SyncEvent {
     this.documentName,
     this.documentUrl,
     this.page,
+    this.videoPositionMs,
+    this.videoPlaying,
+    this.videoDurationMs,
     this.totalPages,
     this.syncPaused,
     this.participantId,
@@ -142,6 +159,9 @@ class SyncEvent {
         if (documentName != null) 'documentName': documentName,
         if (documentUrl != null) 'documentUrl': documentUrl,
         if (page != null) 'page': page,
+        if (videoPositionMs != null) 'videoPositionMs': videoPositionMs,
+        if (videoPlaying != null) 'videoPlaying': videoPlaying,
+        if (videoDurationMs != null) 'videoDurationMs': videoDurationMs,
         if (totalPages != null) 'totalPages': totalPages,
         if (syncPaused != null) 'syncPaused': syncPaused,
         if (participantId != null) 'participantId': participantId,
@@ -161,6 +181,9 @@ class SyncEvent {
       documentName: json['documentName'] as String?,
       documentUrl: json['documentUrl'] as String?,
       page: (json['page'] as num?)?.toInt(),
+      videoPositionMs: (json['videoPositionMs'] as num?)?.toInt(),
+      videoPlaying: json['videoPlaying'] as bool?,
+      videoDurationMs: (json['videoDurationMs'] as num?)?.toInt(),
       totalPages: (json['totalPages'] as num?)?.toInt(),
       syncPaused: json['syncPaused'] as bool?,
       participantId: json['participantId'] as String?,

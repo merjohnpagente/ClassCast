@@ -7,6 +7,7 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import '../../models/classroom_session.dart';
 import '../../models/doc_types.dart';
+import '../../providers/app_state.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/session_provider.dart';
 import '../../theme/app_colors.dart';
@@ -19,6 +20,7 @@ import '../../widgets/office/office_document_scroll_view.dart';
 import '../../widgets/state_cards.dart';
 import '../../widgets/status_bits.dart';
 import '../../widgets/ui_kit.dart';
+import '../../widgets/video_sync.dart';
 import '../common/files_screen.dart';
 import 'create_session_screen.dart';
 import 'student_preview_screen.dart';
@@ -255,6 +257,9 @@ class _TeacherPresentationScreenState
     void turn(int delta) {
       final active = sessions.active;
       if (active == null) return;
+      // While a video is casting, an arrow key would post a page nobody can
+      // see. The keyboard belongs to the player's own controls.
+      if (_sharingVideo) return;
       final next = active.page + delta;
       if (next < 1) return;
       if (active.totalPages > 0 && next > active.totalPages) return;
@@ -308,6 +313,7 @@ class _TeacherPresentationScreenState
     // teacher could actually see the page they were on.
     if (doc.kind == DocKind.pdf) _syncPdfPage(page);
     final sessions = context.read<SessionProvider>();
+    final isVideo = doc.kind == DocKind.video;
     final viewer = DocumentViewer(
       doc: doc,
       controller: _pdf,
@@ -321,14 +327,43 @@ class _TeacherPresentationScreenState
         // student on the same screen as the teacher.
         if (sessions.active?.page != page) sessions.setPage(page);
       },
+      video: isVideo ? _videoSync(context, sessions) : null,
     );
     // A PDF draws itself; an Office page is painted by us, so the turn has to
-    // be animated or it reads as a dropped frame.
-    if (doc.kind == DocKind.pdf) return viewer;
+    // be animated or it reads as a dropped frame. A video is never switched:
+    // the player owns its position, and rebuilding it would restart the
+    // recording.
+    if (doc.kind == DocKind.pdf || isVideo) return viewer;
     return PageSwitcher(
       identity:
           _viewMode == OfficeViewMode.scroll ? 'scroll' : 'page-$page',
       child: viewer,
+    );
+  }
+
+  /// Playback controls that move the whole class.
+  ///
+  /// The teacher plays the file it picked; every press is published, so thirty
+  /// phones land on the same moment of the same recording. The teacher's own
+  /// mute is local — the room's sound is the teacher's business, and a
+  /// teacher's phone going quiet must not be mistaken for the class being
+  /// told to be quiet.
+  VideoSync _videoSync(BuildContext context, SessionProvider sessions) {
+    final active = sessions.active;
+    return VideoSync(
+      isTeacher: true,
+      positionMs: active?.videoPositionMs ?? 0,
+      playing: active?.videoPlaying ?? false,
+      durationMs: active?.videoDurationMs ?? 0,
+      onPlayPause: () {
+        if (active == null) return;
+        sessions.setVideo(playing: !(active.videoPlaying));
+      },
+      onSeek: (ms) => sessions.setVideo(positionMs: ms),
+      onDuration: (ms) => sessions.setVideo(durationMs: ms),
+      onMutedChanged: (muted) =>
+          context.read<AppState>().setVideoMuted(muted),
+      muted: context.watch<AppState>().videoMuted,
     );
   }
 
@@ -341,6 +376,15 @@ class _TeacherPresentationScreenState
         doc.kind == DocKind.word ||
         doc.kind == DocKind.excel;
   }
+
+  /// True while the shared document is a video.
+  ///
+  /// Everything about pages stops applying: the page row, the document header
+  /// and the arrow keys all move something that a recording does not have. The
+  /// player's own bar takes over, and the controls that would do nothing are
+  /// taken away rather than left there looking broken.
+  bool get _sharingVideo =>
+      context.read<LibraryProvider>().selected?.kind == DocKind.video;
 
   void _publishPageCount(BuildContext context, int count) {
     final sessions = context.read<SessionProvider>();
@@ -382,7 +426,9 @@ class _TeacherPresentationScreenState
             child: _previewPanel(context),
           ),
         ),
-        _pageRow(context, sessions, active),
+        // A video has a position, not pages: the arrows would move nothing, and
+        // the player carries its own play and seek.
+        if (!_sharingVideo) _pageRow(context, sessions, active),
         _sessionBar(context, sessions, active),
       ],
     );
@@ -563,7 +609,7 @@ class _TeacherPresentationScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _docHeader(context, active),
+                if (!_sharingVideo) _docHeader(context, active),
                 const SizedBox(height: 8),
                 Expanded(child: _previewPanel(context)),
               ],
@@ -670,6 +716,9 @@ void _openFiles(BuildContext context) {
 
   Widget _controlPanel(BuildContext context, SessionProvider sessions,
       ClassroomSession active) {
+    // While a video is casting these two would move a page nobody is looking
+    // at, so they are not offered at all.
+    if (_sharingVideo) return const SizedBox.shrink();
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),

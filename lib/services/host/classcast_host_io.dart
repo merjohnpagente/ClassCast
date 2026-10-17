@@ -37,6 +37,15 @@ class ClasscastHost {
   int _page = 1;
   int _totalPages = 0;
   bool _syncPaused = false;
+
+  /// Playback of a shared video, in milliseconds. The teacher's phone drives it
+  /// and every connected phone lands on the same position, which is the whole
+  /// reason a video is not just another document here: half a second apart on
+  /// thirty screens is a room that has fallen apart.
+  int _videoPositionMs = 0;
+  bool _videoPlaying = false;
+  int _videoDurationMs = 0;
+
   final Map<String, Map<String, dynamic>> _participants = {};
 
   /// How long a student may stay silent before the roster drops them.
@@ -198,6 +207,13 @@ class ClasscastHost {
     _fileToken = '';
   }
 
+  /// A different document, or no document, means no playback to follow.
+  void _resetVideo() {
+    _videoPositionMs = 0;
+    _videoPlaying = false;
+    _videoDurationMs = 0;
+  }
+
   Future<void> _handle(HttpRequest request) async {
     final path = request.uri.path;
     try {
@@ -215,6 +231,9 @@ class ClasscastHost {
       }
       if (path == '/api/pause') {
         return await _pauseEndpoint(request);
+      }
+      if (path == '/api/video') {
+        return await _videoEndpoint(request);
       }
       if (path == '/api/end') {
         return await _endEndpoint(request);
@@ -327,6 +346,7 @@ class ClasscastHost {
       clearDocument();
       _documentId = '';
       _totalPages = 0;
+      _resetVideo();
       _page = 1;
       _broadcast(_snapshotEvent('document_changed'));
       return _json(request, 200, {'ok': true, 'session': _snapshot()});
@@ -349,6 +369,8 @@ class ClasscastHost {
     final declared = (body['totalPages'] as num?)?.toInt() ?? 0;
     _totalPages = declared > 0 ? declared : 0;
     _page = 1;
+    // A new document starts the class at zero, whatever the last one was doing.
+    _resetVideo();
     _broadcast(_snapshotEvent('document_changed'));
     return _json(request, 200, {'ok': true, 'session': _snapshot()});
   }
@@ -366,7 +388,37 @@ class ClasscastHost {
     return _json(request, 200, {'ok': true, 'session': _snapshot()});
   }
 
-  Future<void> _endEndpoint(HttpRequest request) async {
+  /// Where the teacher left the shared video: a position, and whether it is
+  /// running.
+  ///
+  /// Separate from the page because it is a different clock: "page 3" and
+  /// "3 seconds in" are both ints on the wire and must not be confused. A
+  /// non-video document leaves these at zero and the student players ignore
+  /// them.
+  Future<void> _videoEndpoint(HttpRequest request) async {
+    if (request.method != 'POST') {
+      return _json(request, 405, {'ok': false, 'error': 'POST only'});
+    }
+    final body = await _readJson(request);
+    if (!_checkTeacher(body)) {
+      return _json(request, 403, {'ok': false, 'error': 'Permission denied'});
+    }
+    final duration = (body['durationMs'] as num?)?.toInt();
+    if (duration != null && duration > 0) _videoDurationMs = duration;
+    final position = (body['positionMs'] as num?)?.toInt();
+    if (position != null) {
+      _videoPositionMs =
+          position < 0 ? 0 : (_videoDurationMs > 0
+              ? position.clamp(0, _videoDurationMs).toInt()
+              : position);
+    }
+    final playing = body['playing'] as bool?;
+    if (playing != null) _videoPlaying = playing;
+    _broadcast(_snapshotEvent('video_changed'));
+    return _json(request, 200, {'ok': true, 'session': _snapshot()});
+  }
+
+Future<void> _endEndpoint(HttpRequest request) async {
     if (request.method != 'POST') {
       return _json(request, 405, {'ok': false, 'error': 'POST only'});
     }
@@ -389,6 +441,7 @@ class ClasscastHost {
     _totalPages = 0;
     _syncPaused = false;
     _participants.clear();
+    _resetVideo();
     _presenceTimer?.cancel();
     _presenceTimer = null;
     for (final socket in _sockets.toList()) {
@@ -688,21 +741,76 @@ class ClasscastHost {
     if (!_isServable(name)) return await _text(request, 404, 'not found');
     final file = File(_documentPath);
     final length = await file.length();
+    // A video player asks for the part of the file it wants next: a range
+    // request answers 206 with exactly those bytes, which is what makes
+    // seeking work and stops every phone pulling the whole recording before it
+    // can start playing.
+    final range = _parseRange(request.headers.value(HttpHeaders.rangeHeader),
+        length);
     request.response.headers
       ..set(HttpHeaders.contentTypeHeader, _mimeFor(name))
-      ..set(HttpHeaders.contentLengthHeader, '$length')
-      // The shared document changes as the teacher moves on.
+      // The shared document changes as the teacher moves on, and a video's
+      // bytes must never be mixed up with another one's.
       ..set(HttpHeaders.cacheControlHeader, 'no-store')
+      ..set(HttpHeaders.acceptRangesHeader, 'bytes')
       // A student's browser may live on a different origin; the bytes are
       // still local-network only, so the browser is allowed to read them.
       ..set('access-control-allow-origin', '*')
       // Always inline: viewing the current document is the whole point.
       ..set('content-disposition', 'inline');
+    if (range != null) {
+      final size = range.end - range.start + 1;
+      request.response.statusCode = HttpStatus.partialContent;
+      request.response.headers
+        ..set(HttpHeaders.contentLengthHeader, '$size')
+        ..set(HttpHeaders.contentRangeHeader,
+            'bytes ${range.start}-${range.end}/$length');
+      if (request.method == 'HEAD') {
+        return request.response.close();
+      }
+      await request.response.addStream(file.openRead(range.start, range.end + 1));
+      return request.response.close();
+    }
+    request.response.headers.set(HttpHeaders.contentLengthHeader, '$length');
     if (request.method == 'HEAD') {
       return request.response.close();
     }
     await request.response.addStream(file.openRead());
     await request.response.close();
+  }
+
+  /// One byte range from a `Range: bytes=a-b` header, or null when the whole
+  /// file should be sent.
+  ///
+  /// Only a single range is honoured, which is all any player asks for
+  /// (`bytes=0-` to start, then `bytes=N-` to move on). A multi-range or
+  /// suffix range is deliberately ignored rather than half-implemented: the
+  /// client then gets the whole file, which plays, instead of a 206 it cannot
+  /// assemble.
+  static ({int start, int end})? _parseRange(String? header, int length) {
+    if (header == null || length <= 0) return null;
+    if (!header.startsWith('bytes=')) return null;
+    final spec = header.substring('bytes='.length).trim();
+    if (spec.contains(',')) return null;
+    final parts = spec.split('-');
+    if (parts.length != 2) return null;
+    final first = int.tryParse(parts[0].trim());
+    final last = int.tryParse(parts[1].trim());
+    int start;
+    int end;
+    if (parts[0].trim().isEmpty) {
+      // `bytes=-500`: the last 500 bytes.
+      if (last == null || last <= 0) return null;
+      start = length - last;
+      end = length - 1;
+    } else {
+      if (first == null || first < 0 || first >= length) return null;
+      start = first;
+      // `bytes=500-` means "from here to the end".
+      end = last == null ? length - 1 : last.clamp(start, length - 1);
+    }
+    if (start > end || start < 0) return null;
+    return (start: start, end: end);
   }
 
   /// Tiny landing page, so a student who scans the QR with the phone *browser*
@@ -771,6 +879,12 @@ class ClasscastHost {
   static String _mimeFor(String name) {
     final lower = name.toLowerCase();
     if (lower.endsWith('.pdf')) return 'application/pdf';
+    if (lower.endsWith('.mp4') || lower.endsWith('.m4v')) {
+      return 'video/mp4';
+    }
+    if (lower.endsWith('.mov')) return 'video/quicktime';
+    if (lower.endsWith('.webm')) return 'video/webm';
+    if (lower.endsWith('.3gp')) return 'video/3gpp';
     if (lower.endsWith('.pptx')) {
       return 'application/vnd.openxmlformats-officedocument.'
           'presentationml.presentation';
@@ -799,6 +913,9 @@ class ClasscastHost {
         'page': _page,
         'totalPages': _totalPages,
         'syncPaused': _syncPaused,
+        'videoPositionMs': _videoPositionMs,
+        'videoPlaying': _videoPlaying,
+        'videoDurationMs': _videoDurationMs,
       };
 
   Map<String, dynamic> _snapshotEvent(String type) => {
@@ -810,6 +927,9 @@ class ClasscastHost {
         'page': _page,
         'totalPages': _totalPages,
         'syncPaused': _syncPaused,
+        'videoPositionMs': _videoPositionMs,
+        'videoPlaying': _videoPlaying,
+        'videoDurationMs': _videoDurationMs,
       };
 
   String? _documentUrl() {

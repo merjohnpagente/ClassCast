@@ -5,6 +5,7 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import '../../models/classroom_session.dart';
 import '../../models/doc_types.dart';
 import '../../models/shared_document.dart';
+import '../../providers/app_state.dart';
 import '../../providers/sync_provider.dart';
 import '../../services/classcast_client.dart';
 import '../../theme/app_colors.dart';
@@ -15,6 +16,7 @@ import '../../widgets/document_viewer.dart';
 import '../../widgets/motion.dart';
 import '../../widgets/state_cards.dart';
 import '../../widgets/status_bits.dart';
+import '../../widgets/video_sync.dart';
 
 /// Distraction-free student viewer. Follows the teacher page automatically.
 /// Students never control the teacher presentation.
@@ -146,7 +148,8 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
         body: SafeArea(
           child: Stack(
             children: [
-              Positioned.fill(child: _previewPanel(context, viewPage)),
+              Positioned.fill(
+                  child: _previewPanel(context, viewPage, _videoSync(sync))),
               Positioned(
                 top: 8,
                 right: 8,
@@ -210,7 +213,7 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
           _header(context, active, sync, viewPage),
           const SizedBox(height: 8),
         ],
-        Expanded(child: _previewPanel(context, viewPage)),
+        Expanded(child: _previewPanel(context, viewPage, _videoSync(sync))),
         if (!hideChrome) ...[
           const SizedBox(height: 8),
           _footer(context, active, viewPage),
@@ -225,10 +228,30 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
   /// all of it. The page passed as `mode` is the one being *drawn*: without it
   /// a student's own page turn changed nothing, because the cache still
   /// answered with the subtree built for the old page.
-  Widget _previewPanel(BuildContext context, int viewPage) {
+  Widget _previewPanel(BuildContext context, int viewPage, VideoSync? video) {
     return SyncDocumentPreview(
       mode: viewPage,
-      builder: (context, snapshot) => _preview(snapshot, viewPage),
+      builder: (context, snapshot) => _preview(snapshot, viewPage, video),
+    );
+  }
+
+  /// Playback state for a shared video, from the teacher.
+  ///
+  /// Sound is on and the mute button is right there: a recorded lesson the
+  /// student cannot hear is not a lesson. The mute itself is this device's own
+  /// business, so it lives in [AppState] and is never sent to anyone.
+  VideoSync? _videoSync(SyncProvider sync) {
+    final muted = context.watch<AppState>().videoMuted;
+    return VideoSync(
+      isTeacher: false,
+      positionMs: sync.videoPositionMs,
+      playing: sync.videoPlaying,
+      durationMs: sync.videoDurationMs,
+      // The teacher's freeze stops a video as surely as it stops a page.
+      frozen: sync.syncPaused,
+      muted: muted,
+      onMutedChanged: (value) =>
+          context.read<AppState>().setVideoMuted(value),
     );
   }
 
@@ -249,9 +272,7 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
                     color: AppColors.ink,
                   )),
               Text(
-                active.totalPages > 0
-                    ? 'Page $viewPage / ${active.totalPages}'
-                    : 'Page $viewPage',
+                _subtitleFor(active, viewPage),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: AppColors.muted,
                 ),
@@ -273,7 +294,25 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
     );
   }
 
-  Widget _preview(ClassroomSession active, int viewPage) {
+  /// The line under the file's name.
+  ///
+  /// A video has no pages: it has a position, and the player's own bar shows
+  /// that. Saying "Page 1 / 1" over a recording would be a lie about what the
+  /// controls do.
+  String _subtitleFor(ClassroomSession active, int viewPage) {
+    if (_documentFor(active)?.kind == DocKind.video) {
+      final duration = active.videoDurationMs;
+      final minutes = Duration(milliseconds: duration).inMinutes;
+      final seconds = Duration(milliseconds: duration).inSeconds % 60;
+      if (duration <= 0) return 'Video';
+      return 'Video · $minutes:${seconds.toString().padLeft(2, '0')}';
+    }
+    return active.totalPages > 0
+        ? 'Page $viewPage / ${active.totalPages}'
+        : 'Page $viewPage';
+  }
+
+  Widget _preview(ClassroomSession active, int viewPage, VideoSync? video) {
     final doc = _documentFor(active);
     if (doc == null) {
       return const EmptyState(
@@ -290,9 +329,15 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
       controller: _pdf,
       remoteUrl: doc.remoteUrl,
       page: viewPage,
+      video: video,
     );
-    if (doc.kind == DocKind.pdf) return viewer;
-    return PageSwitcher(identity: 'page-$viewPage', child: viewer);
+    // A video is never wrapped: the page identity changes whenever the teacher
+    // moves, and rebuilding the player each time would restart the recording
+    // from the top.
+    if (doc.kind != DocKind.video) {
+      return PageSwitcher(identity: 'page-$viewPage', child: viewer);
+    }
+    return viewer;
   }
 
   /// Reports a self-driven page turn to the teacher.
