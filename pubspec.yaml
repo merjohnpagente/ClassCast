@@ -1,7 +1,7 @@
 name: classcast_offline
 description: ClassCast Offline — offline classroom document sharing and presentation casting (Flutter + Flutter Web).
 publish_to: 'none'
-version: 1.2.6+11
+version: 1.2.7+12
 
 environment:
   sdk: '>=3.7.0 <4.0.0'
@@ -28,6 +28,7 @@ dependencies:
   xml: ^7.0.1
   syncfusion_flutter_pdfviewer: ^33.2.13
   video_player: ^2.9.2
+  package_info_plus: ^8.1.0
   shelf: ^1.4.2
   shelf_router: ^1.1.4
   shelf_static: ^1.1.3

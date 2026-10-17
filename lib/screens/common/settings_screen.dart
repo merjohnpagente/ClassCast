@@ -9,6 +9,7 @@ import '../../providers/app_state.dart';
 import '../../providers/session_provider.dart';
 import '../../services/network_service.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/app_version.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/ui_kit.dart';
 import 'network_help_screen.dart';
@@ -65,6 +66,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _load();
+    // The version is read off the build once, then the row asks for it again.
+    unawaited(AppVersion.load().then((_) {
+      if (mounted) setState(() {});
+    }));
   }
 
   Future<void> _load() async {
@@ -254,6 +259,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.info_outline,
                 title: 'ClassCast Offline',
                 subtitle: 'Share. Present. Learn. Works without internet.',
+              ),
+              // The build that is installed, read from the build rather than
+              // typed in here. It is the first thing anyone asks for when
+              // something is not working, and a hardcoded number is right only
+              // until the next release.
+              AppListRow(
+                icon: Icons.numbers_outlined,
+                title: 'Version',
+                subtitle: AppVersion.isLoaded
+                    ? 'v${AppVersion.label}'
+                    : 'Reading…',
+                trailing: AppVersion.isLoaded
+                    ? IconButton(
+                        tooltip: 'Copy version',
+                        icon: const Icon(Icons.copy, size: 18),
+                        onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          await Clipboard.setData(
+                              ClipboardData(text: 'v${AppVersion.label}'));
+                          messenger.showSnackBar(const SnackBar(
+                              content: Text('Version copied')));
+                        },
+                      )
+                    : null,
               ),
               const AppListRow(
                 icon: Icons.person_outline,

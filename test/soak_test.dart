@@ -262,7 +262,19 @@ class _SoakPhone {
   StreamSubscription<dynamic>? _sub;
   Timer? _heartbeat;
 
+  /// The last few frames only.
+  ///
+  /// This list is the *test's* bookkeeping, so an unbounded one grows on its
+  /// own and gets read as the server leaking. Keeping the tail is enough for
+  /// every check here and leaves the memory growth to be the host's doing.
   final events = <SyncEvent>[];
+
+  static const _keep = 64;
+
+  void _record(SyncEvent event) {
+    events.add(event);
+    if (events.length > _keep) events.removeRange(0, events.length - _keep);
+  }
 
   bool sawPage(int page) => events
       .any((e) => e.type == SyncEventType.pageChanged && e.page == page);
@@ -278,7 +290,7 @@ class _SoakPhone {
     _channel = channel;
     _sub = channel.stream.listen((frame) {
       final event = SyncProtocol.decode(frame);
-      if (event != null) events.add(event);
+      if (event != null) _record(event);
     });
     channel.sink.add(SyncProtocol.encode(SyncEvent(
       type: SyncEventType.join,

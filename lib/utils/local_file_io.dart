@@ -70,15 +70,26 @@ Future<String?> localFilePersistentDir() async {
 /// at any time — including halfway through a lesson, which would leave every
 /// student with a 404. Returns null when there is nowhere to copy to, so the
 /// caller can keep the original path rather than store nothing.
+///
+/// Files above [copyCeilingBytes] are deliberately *not* copied, and the
+/// caller keeps the picked path instead. A recorded lesson is easily a
+/// gigabyte, and copying one silently — with no progress, on the path the
+/// picker is waiting on — is how "adding this video" turns into a screen that
+/// looks broken. A file that is used straight away and merely stops working
+/// after a restart is a much smaller problem than one you cannot add at all.
 Future<String?> localFileCopyIntoAppStorage(
   String sourcePath,
-  String fileName,
-) async {
+  String fileName, {
+  int copyCeilingBytes = 200 * 1024 * 1024,
+}) async {
   final root = await localFilePersistentDir();
   if (root == null || sourcePath.isEmpty) return null;
   try {
     final source = File(sourcePath);
     if (!await source.exists()) return null;
+
+    final length = await source.length();
+    if (length > copyCeilingBytes) return null;
 
     // Filename collisions are the normal case, not the exception: a teacher
     // picks "Quiz 1.pptx" in three consecutive lessons.

@@ -111,21 +111,29 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     final sessions = context.watch<SessionProvider>();
     final active = sessions.active;
 
-    return Scaffold(
+return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Create Session')),
       body: ContentWidth(
         maxWidth: 520,
-        // The null test has to live in the conditional itself: stashing it in
-        // a bool does not promote `active`, and every field below is then read
+        // The null test has to live in the conditional itself: stashing it in a
+        // bool does not promote `active`, and every field below is then read
         // off a nullable.
         child: (_sessionId != null && active != null)
-            ? ListView(
-                padding: const EdgeInsets.only(bottom: 32),
-                children: [
-                  _liveHeader(context, sessions, active),
-                  const SizedBox(height: 4),
-                  QrCard(
+            ? LayoutBuilder(
+                builder: (context, constraints) {
+                  // One column on a phone, two where there is room for them:
+                  // the code is what a room looks at and the buttons are what
+                  // a teacher reaches for, and side by side they both stop
+                  // pushing the rest of the page below the fold.
+                  final twoColumns = constraints.maxWidth >= 460;
+                  final padding = EdgeInsets.fromLTRB(
+                    context.pagePadding,
+                    0,
+                    context.pagePadding,
+                    32,
+                  );
+                  final qr = QrCard(
                     payload: NetworkService.qrPayload(
                         host: active.hostIp,
                         port: active.port,
@@ -138,33 +146,62 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                         ? 'Turn on your hotspot to get an address'
                         : active.joinAddress,
                     sessionId: active.id,
-                    // Large enough for students to scan from their desks.
-                    size: 200,
-                  ),
-                  const SizedBox(height: 20),
-                  FilledButton.icon(
-                    onPressed: () => Navigator.of(context)
-                        .pushReplacement(MaterialPageRoute(
-                            builder: (_) =>
-                                const TeacherPresentationScreen())),
-                    icon: const Icon(Icons.present_to_all, size: 20),
-                    label: const Text('Show to class'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 52),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: () => _confirmEnd(context, sessions),
-                    icon: const Icon(Icons.stop, size: 20),
-                    label: const Text('End Session'),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 52),
-                      foregroundColor: AppColors.error,
-                      side: const BorderSide(color: AppColors.error),
-                    ),
-                  ),
-                ],
+                    // Fills the width it is given, within limits: a code too
+                    // small to scan from a desk, or wider than the phone, are
+                    // both this page's problem and neither is a fixed number.
+                    size: (constraints.maxWidth - 64).clamp(150.0, 280.0),
+                  );
+                  final actions = Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: () => Navigator.of(context)
+                            .pushReplacement(MaterialPageRoute(
+                                builder: (_) =>
+                                    const TeacherPresentationScreen())),
+                        icon: const Icon(Icons.present_to_all, size: 20),
+                        label: const Text('Show to class'),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 52),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: () => _confirmEnd(context, sessions),
+                        icon: const Icon(Icons.stop, size: 20),
+                        label: const Text('End Session'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 52),
+                          foregroundColor: AppColors.error,
+                          side: const BorderSide(color: AppColors.error),
+                        ),
+                      ),
+                    ],
+                  );
+
+                  return ListView(
+                    padding: padding,
+                    children: [
+                      _liveHeader(context, sessions, active),
+                      const SizedBox(height: 4),
+                      if (twoColumns)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(child: qr),
+                            const SizedBox(width: 16),
+                            Expanded(child: actions),
+                          ],
+                        )
+                      else ...[
+                        qr,
+                        const SizedBox(height: 20),
+                        actions,
+                      ],
+                    ],
+                  );
+                },
               )
             : _formView(context),
       ),
@@ -176,10 +213,12 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
   /// classroom actually runs on.
   Widget _formView(BuildContext context) {
     final theme = Theme.of(context);
-    return ListView(
-      padding: const EdgeInsets.only(top: 8, bottom: 32),
-      children: [
-        FadeIn(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Wide enough for the fields and the access options side by side, so a
+        // tablet does not show a phone's layout stretched across it.
+        final twoColumns = constraints.maxWidth >= 560;
+        final fields = FadeIn(
           child: Form(
             key: _form,
             child: Column(
@@ -219,19 +258,46 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
               ],
             ),
           ),
-        ),
-        FadeIn(
+        );
+        final access = FadeIn(
           delay: Motion.stagger(1),
           child: _accessRow(theme),
-        ),
-        const SizedBox(height: 24),
-        Text(
-          'No internet needed — students join over your hotspot or the same '
-          'Wi-Fi.',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodySmall?.copyWith(color: AppColors.muted),
-        ),
-      ],
+        );
+
+        return ListView(
+          padding: EdgeInsets.fromLTRB(
+            context.pagePadding,
+            8,
+            context.pagePadding,
+            32,
+          ),
+          children: [
+            if (twoColumns)
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: fields),
+                    const SizedBox(width: 24),
+                    Expanded(child: access),
+                  ],
+                ),
+              )
+            else ...[
+              fields,
+              access,
+              const SizedBox(height: 24),
+              Text(
+                'No internet needed — students join over your hotspot or the '
+                'same Wi-Fi.',
+                textAlign: TextAlign.center,
+                style:
+                    theme.textTheme.bodySmall?.copyWith(color: AppColors.muted),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 
