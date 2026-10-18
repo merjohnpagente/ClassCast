@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ClassCast - the class follows the teacher, not the Wi-Fi</title>
+  <title>ClassCast — the class follows the teacher, not the Wi-Fi</title>
   <meta name="description" content="ClassCast turns the teacher's phone into the classroom server. One page, every screen, over a hotspot. No accounts, no cloud, no signal." />
   <meta name="theme-color" content="#FFFFFF" />
 
@@ -13,8 +13,8 @@
   <meta property="og:type" content="website" />
   <meta property="og:title" content="ClassCast — offline classroom casting" />
   <meta property="og:description" content="Share a document or a video to the whole class from one phone. No accounts, no cloud." />
-  <meta property="og:url" content="https://merjohnpagente.github.io/ClassCast/" />
-  <meta property="og:image" content="https://merjohnpagente.github.io/ClassCast/vendor/img/icon_1024.png" />
+  <meta property="og:url" content="https://classcast.vercel.app/" />
+  <meta property="og:image" content="https://classcast.vercel.app/vendor/img/icon_1024.png" />
   <meta name="twitter:card" content="summary" />
 
   <!-- Tailwind CSS, Bootstrap Icons and the type are vendored beside this file:
@@ -54,27 +54,115 @@
   <style>
     ::selection { background: #3568F5; color: #fff; }
 
-    /* One hairline rule, used everywhere, so the page reads as one sheet. */
-    .rule { border-color: #E4E9F2; }
-
     details > summary { list-style: none; cursor: pointer; }
     details > summary::-webkit-details-marker { display: none; }
     .chev { transition: transform .25s ease; }
     details[open] .chev { transform: rotate(180deg); }
 
-    /* Links get an underline that grows from the left. */
     .sweep { background-image: linear-gradient(currentColor, currentColor);
              background-size: 0 1px; background-repeat: no-repeat; background-position: 0 100%;
              transition: background-size .3s cubic-bezier(.2,.7,.2,1); }
     .sweep:hover { background-size: 100% 1px; }
+
+    /* ===================================================================
+       The 3D stage.
+
+       This is the web translation of the app's Wobble3D
+       (lib/widgets/ambient.dart:68): one continuous sine/cosine tilt on an
+       outer element, so the motion never stops and never fights the pointer,
+       with the pointer's tilt applied to an inner element that inherits it.
+       Two stacked transforms compose; one would have to choose.
+       =================================================================== */
+    .stage { perspective: 1100px; perspective-origin: 50% 45%; }
+    .tilt { transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+            transform-style: preserve-3d; will-change: transform; }
+    .layer { transform-style: preserve-3d; }
+
+    @keyframes wobble {
+      0%   { transform: rotateX(-2.6deg) rotateY(-3.4deg); }
+      50%  { transform: rotateX(2.6deg)  rotateY(3.4deg); }
+      100% { transform: rotateX(-2.6deg) rotateY(-3.4deg); }
+    }
+    @keyframes drift {
+      0%, 100% { transform: translate3d(0, 0, 0); }
+      50%      { transform: translate3d(0, -10px, 0); }
+    }
+    .wobble { animation: wobble 9s ease-in-out infinite; }
+    .drift  { animation: drift 7s ease-in-out infinite; }
+    .drift-b { animation: drift 8.5s ease-in-out infinite reverse; }
+
+    /* Depth: a real translateZ, so the parallax is geometric and not faked
+       with shadows. */
+    .z-back { transform: translateZ(-70px); }
+    .z-mid  { transform: translateZ(0px); }
+    .z-front{ transform: translateZ(55px); }
+    .z-top  { transform: translateZ(95px); }
+
+    /* The cast pulse — the app's "Live" dot, given a room to travel through. */
+    .pulse span { position: absolute; inset: 0; border-radius: 9999px;
+                  border: 1.5px solid rgba(53,104,245,.45);
+                  animation: ripple 3.6s cubic-bezier(.2,.6,.3,1) infinite; }
+    .pulse span:nth-child(2) { animation-delay: 1.2s; }
+    .pulse span:nth-child(3) { animation-delay: 2.4s; }
+    @keyframes ripple {
+      0%   { transform: scale(.55); opacity: .85; }
+      70%  { opacity: .12; }
+      100% { transform: scale(1.7); opacity: 0; }
+    }
+    .beat { animation: beat 2.4s ease-in-out infinite; }
+    @keyframes beat { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+    /* The student's screen, flipping on the same clock as the teacher's. */
+    .page { position: absolute; inset: 0; opacity: 0;
+            animation: turn 9s ease-in-out infinite; }
+    .page:nth-child(2) { animation-delay: 3s; }
+    .page:nth-child(3) { animation-delay: 6s; }
+    @keyframes turn {
+      0%     { opacity: 0; transform: translateY(8px) scale(.99); }
+      5%     { opacity: 1; transform: none; }
+      28%    { opacity: 1; transform: none; }
+      33%    { opacity: 0; transform: translateY(-8px) scale(.99); }
+      100%   { opacity: 0; transform: translateY(-8px) scale(.99); }
+    }
+    .counter { animation: count 3s ease-in-out infinite; }
+    @keyframes count { 0% { width: 8%; } 40%,100% { width: 100%; } }
+
+    /* Scroll reveal. Off until JS adds .js, so a failed script leaves the
+       page fully readable rather than invisible. */
+    .js .rise { opacity: 0; transform: translateY(26px); }
+    .js .rise.in { opacity: 1; transform: none;
+                   transition: opacity .8s cubic-bezier(.2,.7,.2,1),
+                               transform .8s cubic-bezier(.2,.7,.2,1);
+                   transition-delay: var(--rd, 0s); }
+
+    /* A spotlight that follows the pointer across a card. */
+    .lit { position: relative; }
+    .lit::before { content: ''; position: absolute; inset: 0; border-radius: inherit;
+                   background: radial-gradient(340px circle at var(--mx, 50%) var(--my, 50%),
+                               rgba(53,104,245,.07), transparent 62%);
+                   opacity: 0; transition: opacity .35s ease; pointer-events: none; }
+    .lit:hover::before { opacity: 1; }
+
+    .strip-track { animation: slide 34s linear infinite; }
+    @keyframes slide { to { transform: translateX(-50%); } }
+
+    /* Only move when the reader has not asked us not to. */
+    @media (prefers-reduced-motion: reduce) {
+      .wobble, .drift, .drift-b, .pulse span, .beat, .page, .counter,
+      .strip-track { animation: none !important; }
+      .js .rise { opacity: 1 !important; transform: none !important; }
+      .page:nth-child(1) { opacity: 1; }
+      * { transition-duration: .01ms !important; }
+    }
   </style>
+  <script>document.documentElement.className += ' js';</script>
 </head>
 
 <body class="bg-white font-sans text-ink antialiased">
 
 <!-- ============================== HEADER ============================== -->
-<header class="sticky top-0 z-50 border-b border-line bg-white/90 backdrop-blur">
-  <nav class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-5 py-3 sm:px-8">
+<header class="sticky top-0 z-50 border-b border-line bg-white/85 backdrop-blur">
+  <nav class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3 sm:px-8">
     <a href="#top" class="flex items-center gap-2.5">
       <img src="vendor/img/icon_1024.png" alt="ClassCast" width="36" height="36" class="h-9 w-9 rounded-lg border border-line" />
       <span class="text-[17px] font-extrabold tracking-tight">ClassCast</span>
@@ -82,133 +170,295 @@
 
     <div class="hidden items-center gap-7 text-sm font-semibold text-ink2 md:flex">
       <a href="#app" class="sweep hover:text-brand">The app</a>
+      <a href="#stage" class="sweep hover:text-brand">See it run</a>
       <a href="#start" class="sweep hover:text-brand">Get it</a>
       <a href="#faq" class="sweep hover:text-brand">FAQ</a>
       <a href="https://github.com/merjohnpagente/ClassCast" target="_blank" rel="noopener" class="sweep hover:text-brand">GitHub</a>
     </div>
 
     <a href="https://github.com/merjohnpagente/ClassCast/releases/download/v1.2.9/Class-cast.apk"
-       class="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-bold text-white transition hover:bg-branddeep">
-      <i class="bi bi-download"></i> Download
+       class="group inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-bold text-white transition hover:bg-branddeep">
+      <i class="bi bi-download transition-transform group-hover:translate-y-px"></i> Download
     </a>
   </nav>
 </header>
 
 <!-- ============================== HERO ============================== -->
-<section id="top" class="px-5 pb-16 pt-16 sm:px-8 sm:pb-20 sm:pt-24">
-  <div class="mx-auto max-w-5xl">
-    <p class="text-xs font-bold uppercase tracking-[.2em] text-brand">Offline classroom casting</p>
+<section id="top" class="overflow-hidden px-5 pb-10 pt-14 sm:px-8 sm:pt-20">
+  <div class="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1.05fr_.95fr] lg:gap-8">
 
-    <h1 class="mt-5 max-w-3xl text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl">
-      The class follows the teacher,<br class="hidden sm:block" /> not the Wi-Fi.
-    </h1>
+    <!-- the sentence -->
+    <div>
+      <p class="rise text-xs font-bold uppercase tracking-[.2em] text-brand">Offline classroom casting</p>
 
-    <p class="mt-6 max-w-xl text-base leading-relaxed text-ink2 sm:text-lg">
-      ClassCast turns the teacher's phone into the classroom server. Open a PDF, a
-      PowerPoint, a worksheet or a video, and every student screen follows your
-      page over a hotspot, with no internet in the building at all.
-    </p>
+      <h1 class="rise mt-5 max-w-2xl text-4xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl" style="--rd:.08s">
+        The class follows the teacher,<br class="hidden sm:block" /> not the Wi-Fi.
+      </h1>
 
-    <div class="mt-9 flex flex-wrap items-center gap-3">
-      <a href="https://github.com/merjohnpagente/ClassCast/releases/download/v1.2.9/Class-cast.apk"
-         class="inline-flex items-center gap-2.5 rounded-lg bg-brand px-5 py-3.5 text-sm font-bold text-white transition hover:bg-branddeep">
-        <i class="bi bi-android2 text-lg"></i> Android APK · 89 MB
-      </a>
-      <a href="https://github.com/merjohnpagente/ClassCast/releases/download/v1.2.9/Class-cast-laptop.apk"
-         class="inline-flex items-center gap-2.5 rounded-lg border border-line bg-white px-5 py-3.5 text-sm font-bold text-ink transition hover:border-brand/50">
-        <i class="bi bi-windows text-lg"></i> Windows · 45 MB
-      </a>
-      <a href="https://github.com/merjohnpagente/ClassCast/releases/download/v1.2.9/ClassCast.app.zip"
-         class="inline-flex items-center gap-2.5 rounded-lg border border-line bg-white px-5 py-3.5 text-sm font-bold text-ink transition hover:border-brand/50">
-        <i class="bi bi-apple text-lg"></i> iOS
-      </a>
+      <p class="rise mt-6 max-w-xl text-base leading-relaxed text-ink2 sm:text-lg" style="--rd:.16s">
+        ClassCast turns the teacher's phone into the classroom server. Open a PDF, a
+        PowerPoint, a worksheet or a video, and every student screen follows your
+        page — over a hotspot, with no internet in the building at all.
+      </p>
+
+      <div class="rise mt-9 flex flex-wrap items-center gap-3" style="--rd:.24s">
+        <a href="https://github.com/merjohnpagente/ClassCast/releases/download/v1.2.9/Class-cast.apk"
+           class="group inline-flex items-center gap-2.5 rounded-lg bg-brand px-5 py-3.5 text-sm font-bold text-white transition hover:bg-branddeep">
+          <i class="bi bi-android2 text-lg transition-transform group-hover:-translate-y-0.5"></i> Android APK · 89 MB
+        </a>
+        <a href="https://github.com/merjohnpagente/ClassCast/releases/download/v1.2.9/Class-cast-laptop.apk"
+           class="group inline-flex items-center gap-2.5 rounded-lg border border-line bg-white px-5 py-3.5 text-sm font-bold text-ink transition hover:border-brand/50">
+          <i class="bi bi-windows text-lg transition-transform group-hover:-translate-y-0.5"></i> Windows · 45 MB
+        </a>
+        <a href="https://github.com/merjohnpagente/ClassCast/releases/download/v1.2.9/ClassCast.app.zip"
+           class="group inline-flex items-center gap-2.5 rounded-lg border border-line bg-white px-5 py-3.5 text-sm font-bold text-ink transition hover:border-brand/50">
+          <i class="bi bi-apple text-lg transition-transform group-hover:-translate-y-0.5"></i> iOS
+        </a>
+      </div>
+
+      <p class="rise mt-7 text-sm text-mut" style="--rd:.32s">
+        Free, no account, nothing leaves the room ·
+        <span class="font-semibold text-ink2">v1.2.9</span> ·
+        <a href="https://github.com/merjohnpagente/ClassCast" target="_blank" rel="noopener" class="sweep font-semibold text-brand">source on GitHub</a>
+      </p>
     </div>
 
-    <p class="mt-7 text-sm text-mut">
-      Free, no account, nothing leaves the room ·
-      <span class="font-semibold text-ink2">v1.2.9</span> ·
-      <a href="https://github.com/merjohnpagente/ClassCast" target="_blank" rel="noopener" class="sweep font-semibold text-brand">source on GitHub</a>
-    </p>
+    <!-- the 3D stage: teacher behind, class in front, real depth between -->
+    <div class="stage rise" style="--rd:.2s" data-stage>
+      <div class="wobble relative mx-auto h-[380px] w-full max-w-[30rem] sm:h-[440px]">
+
+        <div class="tilt absolute inset-0" data-tilt>
+
+          <!-- teacher's laptop, sitting back in the room -->
+          <div class="layer z-back drift-b absolute left-0 top-6 hidden w-[74%] sm:block">
+            <div class="rounded-xl border border-line bg-white p-1.5">
+              <div class="rounded-lg bg-paper p-3">
+                <div class="mb-2 flex items-center justify-between">
+                  <span class="h-2 w-2 rounded-full bg-[#F87171]"></span>
+                  <span class="h-2 w-2 rounded-full bg-[#FBBF24]"></span>
+                  <span class="h-2 w-2 rounded-full bg-[#34D399]"></span>
+                </div>
+                <div class="mb-2 flex items-center justify-between rounded-md border border-line bg-white px-2 py-1.5">
+                  <span class="text-[9px] font-bold">Photosynthesis.pptx</span>
+                  <span class="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-extrabold text-emerald-600">
+                    <span class="beat h-1 w-1 rounded-full bg-emerald-500"></span>LIVE
+                  </span>
+                </div>
+                <div class="rounded-md border border-line bg-white p-2.5">
+                  <div class="mb-2 h-1.5 w-1/2 rounded-full bg-brand/70"></div>
+                  <div class="space-y-1.5">
+                    <div class="h-1 w-full rounded-full bg-line"></div>
+                    <div class="h-1 w-5/6 rounded-full bg-line"></div>
+                  </div>
+                  <div class="mt-2.5 flex items-end gap-1">
+                    <div class="h-4 w-2 rounded bg-brand/70"></div>
+                    <div class="h-7 w-2 rounded bg-lav/70"></div>
+                    <div class="h-10 w-2 rounded bg-brand/40"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- the cast pulse, breathing between the two -->
+          <div class="pulse absolute left-1/2 top-1/2 z-mid h-56 w-56 -translate-x-1/2 -translate-y-1/2 sm:h-64 sm:w-64">
+            <span></span><span></span><span></span>
+          </div>
+
+          <!-- a student's phone, in front, on the teacher's page -->
+          <div class="layer z-front drift absolute bottom-0 right-0 w-[46%] max-w-[184px]">
+            <div class="rounded-[1.6rem] border border-night/20 bg-night p-1">
+              <div class="overflow-hidden rounded-[1.25rem] bg-night">
+                <div class="mx-auto mb-1 mt-1.5 h-1 w-16 rounded-full bg-black/70"></div>
+                <div class="flex items-center justify-between px-3 pb-1 pt-1.5 text-[8px] font-semibold text-white/40">
+                  <span>9:41</span><i class="bi bi-wifi"></i>
+                </div>
+                <div class="flex items-center justify-between px-3 pb-2 pt-1">
+                  <p class="text-[10px] font-bold text-white">Photosynthesis</p>
+                  <span class="inline-flex items-center gap-1 rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[7.5px] font-extrabold text-emerald-400">
+                    <span class="beat h-1 w-1 rounded-full bg-emerald-400"></span>LIVE
+                  </span>
+                </div>
+
+                <div class="relative mx-3 h-[104px] overflow-hidden rounded-lg border border-white/10 bg-white/[.04] p-2.5">
+                  <div class="page">
+                    <div class="mb-2 h-1.5 w-2/3 rounded-full bg-[#8FA9FF]/80"></div>
+                    <div class="space-y-1.5"><div class="h-1 w-full rounded-full bg-white/15"></div><div class="h-1 w-4/5 rounded-full bg-white/15"></div></div>
+                    <div class="mt-2.5 flex h-8 items-end gap-1.5">
+                      <div class="h-3.5 w-2 rounded bg-brand/70"></div><div class="h-6 w-2 rounded bg-lav/70"></div><div class="h-8 w-2 rounded bg-[#8FA9FF]/70"></div>
+                    </div>
+                  </div>
+                  <div class="page">
+                    <div class="mb-2 h-1.5 w-1/2 rounded-full bg-[#A79BFF]/80"></div>
+                    <div class="space-y-1.5"><div class="h-1 w-full rounded-full bg-white/15"></div><div class="h-1 w-3/5 rounded-full bg-white/15"></div></div>
+                    <div class="mt-2.5 h-9 rounded-md border border-white/10 bg-white/[.05] p-1.5">
+                      <div class="counter h-1 rounded-full bg-gradient-to-r from-brand to-lav"></div>
+                    </div>
+                  </div>
+                  <div class="page">
+                    <div class="mb-2 h-1.5 w-3/5 rounded-full bg-emerald-300/70"></div>
+                    <div class="space-y-1.5"><div class="h-1 w-full rounded-full bg-white/15"></div></div>
+                    <div class="mt-2.5 grid grid-cols-2 gap-1.5">
+                      <div class="h-8 rounded bg-brand/25"></div><div class="h-8 rounded bg-lav/25"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mx-3 mt-2.5 flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[.05] px-2 py-1 text-[8px] font-semibold text-white/60">
+                  <i class="bi bi-broadcast text-[#8FA9FF]"></i> Following the teacher
+                </div>
+
+                <div class="mt-2 flex items-center justify-between border-t border-white/10 px-3 py-2">
+                  <span class="grid h-6 w-6 place-items-center rounded-full bg-white/10 text-[#8FA9FF]"><i class="bi bi-chevron-left text-[10px]"></i></span>
+                  <span class="text-[10px] font-bold text-white">3 / 12</span>
+                  <span class="grid h-6 w-6 place-items-center rounded-full bg-white/10 text-[#8FA9FF]"><i class="bi bi-chevron-right text-[10px]"></i></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- floating facts, closest to the reader -->
+          <div class="layer z-top drift absolute bottom-24 left-0 hidden rounded-xl border border-line bg-white/95 px-3.5 py-2.5 backdrop-blur sm:block" style="animation-delay:-2.5s">
+            <div class="flex items-center gap-2.5">
+              <span class="grid h-7 w-7 place-items-center rounded-lg bg-soft text-brand"><i class="bi bi-people"></i></span>
+              <span class="leading-tight">
+                <span class="block text-[12px] font-extrabold">28 students</span>
+                <span class="block text-[9.5px] font-semibold text-mut">joined in seconds</span>
+              </span>
+            </div>
+          </div>
+
+          <div class="layer z-top drift absolute -bottom-2 right-2 hidden rounded-xl border border-line bg-white/95 px-3.5 py-2.5 backdrop-blur sm:block" style="animation-delay:-4s">
+            <div class="flex items-center gap-2.5">
+              <span class="grid h-7 w-7 place-items-center rounded-lg bg-lavsoft text-vidc"><i class="bi bi-play-fill"></i></span>
+              <span class="leading-tight">
+                <span class="block text-[12px] font-extrabold">Video · one clock</span>
+                <span class="mt-1 block h-1 w-20 overflow-hidden rounded-full bg-line">
+                  <span class="counter block h-full rounded-full bg-gradient-to-r from-brand to-lav"></span>
+                </span>
+              </span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== FILE STRIP ============================== -->
+<section class="border-y border-line py-4">
+  <p class="mb-3 text-center text-[10px] font-bold uppercase tracking-[.24em] text-mut">Opens the real file, in the app</p>
+  <div class="overflow-hidden">
+    <div class="strip-track flex w-max items-center gap-2.5 px-3">
+      <span class="flex items-center gap-1.5 rounded-full border border-line bg-paper px-3.5 py-1.5 text-[11px] font-bold"><i class="bi bi-filetype-pdf" style="color:#D64545"></i>PDF</span>
+      <span class="flex items-center gap-1.5 rounded-full border border-line bg-paper px-3.5 py-1.5 text-[11px] font-bold"><i class="bi bi-filetype-ppt" style="color:#E67E22"></i>PowerPoint</span>
+      <span class="flex items-center gap-1.5 rounded-full border border-line bg-paper px-3.5 py-1.5 text-[11px] font-bold"><i class="bi bi-filetype-docx" style="color:#3568F5"></i>Word</span>
+      <span class="flex items-center gap-1.5 rounded-full border border-line bg-paper px-3.5 py-1.5 text-[11px] font-bold"><i class="bi bi-filetype-xlsx" style="color:#1F9D55"></i>Excel</span>
+      <span class="flex items-center gap-1.5 rounded-full border border-line bg-paper px-3.5 py-1.5 text-[11px] font-bold"><i class="bi bi-file-earmark-image" style="color:#8B7CFF"></i>Images</span>
+      <span class="flex items-center gap-1.5 rounded-full border border-line bg-paper px-3.5 py-1.5 text-[11px] font-bold"><i class="bi bi-file-earmark-play" style="color:#B4417A"></i>Video</span>
+      <span class="flex items-center gap-1.5 rounded-full border border-line bg-paper px-3.5 py-1.5 text-[11px] font-bold"><i class="bi bi-file-earmark-text" style="color:#7C879D"></i>Text</span>
+    </div>
   </div>
 </section>
 
 <!-- ============================== THE APP ============================== -->
-<section id="app" class="border-t border-line px-5 py-20 sm:px-8 sm:py-24">
-  <div class="mx-auto max-w-5xl">
-    <h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">What the app does</h2>
-    <p class="mt-3 max-w-xl text-sm leading-relaxed text-mut">
-      Everything below ships in the build you download. Nothing is a roadmap.
+<section id="app" class="px-5 py-20 sm:px-8 sm:py-24">
+  <div class="mx-auto max-w-6xl">
+    <h2 class="rise text-2xl font-extrabold tracking-tight sm:text-3xl">What the app does</h2>
+    <p class="rise mt-3 max-w-xl text-sm leading-relaxed text-mut" style="--rd:.06s">
+      Everything below ships in the build you download. Nothing here is a roadmap.
     </p>
 
-    <div class="mt-12 grid gap-x-12 gap-y-9 sm:grid-cols-2">
-      <div class="flex gap-3.5">
-        <i class="bi bi-cast mt-0.5 text-lg text-brand"></i>
-        <div>
-          <h3 class="text-sm font-bold">One page, every screen</h3>
-          <p class="mt-1 text-sm leading-relaxed text-mut">Turn a page, switch to scrolling, zoom into a diagram. Every student's phone moves with you.</p>
-        </div>
+    <div class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <div class="lit rise group rounded-2xl border border-line bg-white p-6 transition hover:border-brand/40">
+        <span class="grid h-10 w-10 place-items-center rounded-xl bg-soft text-brand"><i class="bi bi-cast"></i></span>
+        <h3 class="mt-4 text-sm font-bold">One page, every screen</h3>
+        <p class="mt-1.5 text-sm leading-relaxed text-mut">Turn a page, switch to scrolling, zoom into a diagram. Every student's phone moves with you.</p>
       </div>
 
-      <div class="flex gap-3.5">
-        <i class="bi bi-wifi-off mt-0.5 text-lg text-brand"></i>
-        <div>
-          <h3 class="text-sm font-bold">The phone is the server</h3>
-          <p class="mt-1 text-sm leading-relaxed text-mut">A hotspot or the school's own network is all it needs. No cloud account, no uploads.</p>
-        </div>
+      <div class="lit rise group rounded-2xl border border-line bg-white p-6 transition hover:border-brand/40" style="--rd:.06s">
+        <span class="grid h-10 w-10 place-items-center rounded-xl bg-soft text-brand"><i class="bi bi-wifi-off"></i></span>
+        <h3 class="mt-4 text-sm font-bold">The phone is the server</h3>
+        <p class="mt-1.5 text-sm leading-relaxed text-mut">A hotspot or the school's own network is all it needs. No cloud account, no uploads.</p>
       </div>
 
-      <div class="flex gap-3.5">
-        <i class="bi bi-files mt-0.5 text-lg text-brand"></i>
-        <div>
-          <h3 class="text-sm font-bold">The real file, not a picture</h3>
-          <p class="mt-1 text-sm leading-relaxed text-mut">PDF, PowerPoint, Word, Excel, images and video, rendered in the app with page counts the class can sync on.</p>
-        </div>
+      <div class="lit rise group rounded-2xl border border-line bg-white p-6 transition hover:border-brand/40" style="--rd:.12s">
+        <span class="grid h-10 w-10 place-items-center rounded-xl bg-lavsoft text-lav"><i class="bi bi-play-circle"></i></span>
+        <h3 class="mt-4 text-sm font-bold">Video on one clock</h3>
+        <p class="mt-1.5 text-sm leading-relaxed text-mut">Pause, seek or freeze the room and thirty phones stay on the same second.</p>
       </div>
 
-      <div class="flex gap-3.5">
-        <i class="bi bi-play-circle mt-0.5 text-lg text-brand"></i>
-        <div>
-          <h3 class="text-sm font-bold">Video on one clock</h3>
-          <p class="mt-1 text-sm leading-relaxed text-mut">Play a lesson to the room. Pause, seek or freeze the class and thirty phones stay on the same second.</p>
-        </div>
+      <div class="lit rise group rounded-2xl border border-line bg-white p-6 transition hover:border-brand/40" style="--rd:.18s">
+        <span class="grid h-10 w-10 place-items-center rounded-xl bg-soft text-brand"><i class="bi bi-files"></i></span>
+        <h3 class="mt-4 text-sm font-bold">The real file, not a picture</h3>
+        <p class="mt-1.5 text-sm leading-relaxed text-mut">PDF, PowerPoint, Word, Excel, images and video, rendered in the app with page counts the class can sync on.</p>
       </div>
 
-      <div class="flex gap-3.5">
-        <i class="bi bi-qr-code mt-0.5 text-lg text-brand"></i>
-        <div>
-          <h3 class="text-sm font-bold">One scan and they're in</h3>
-          <p class="mt-1 text-sm leading-relaxed text-mut">The code carries every address the phone answers on. Students type a name no email, no password.</p>
-        </div>
+      <div class="lit rise group rounded-2xl border border-line bg-white p-6 transition hover:border-brand/40" style="--rd:.24s">
+        <span class="grid h-10 w-10 place-items-center rounded-xl bg-soft text-brand"><i class="bi bi-qr-code"></i></span>
+        <h3 class="mt-4 text-sm font-bold">One scan and they're in</h3>
+        <p class="mt-1.5 text-sm leading-relaxed text-mut">The code carries every address the phone answers on. Students type a name — no email, no password.</p>
       </div>
 
-      <div class="flex gap-3.5">
-        <i class="bi bi-moon-stars mt-0.5 text-lg text-brand"></i>
-        <div>
-          <h3 class="text-sm font-bold">Dark mode included</h3>
-          <p class="mt-1 text-sm leading-relaxed text-mut">A night palette that follows the phone, built for the same calm at 8pm as at 8am.</p>
-        </div>
+      <div class="lit rise group rounded-2xl border border-line bg-white p-6 transition hover:border-brand/40" style="--rd:.3s">
+        <span class="grid h-10 w-10 place-items-center rounded-xl bg-lavsoft text-lav"><i class="bi bi-moon-stars"></i></span>
+        <h3 class="mt-4 text-sm font-bold">Dark mode included</h3>
+        <p class="mt-1.5 text-sm leading-relaxed text-mut">A night palette that follows the phone, as calm at 8pm as it is at 8am.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== THE STAGE, WIDE ============================== -->
+<section id="stage" class="overflow-hidden border-y border-line bg-paper px-5 py-20 sm:px-8 sm:py-24">
+  <div class="mx-auto max-w-6xl">
+    <div class="mx-auto max-w-2xl text-center">
+      <h2 class="rise text-2xl font-extrabold tracking-tight sm:text-3xl">One phone leads. The rest follow.</h2>
+      <p class="rise mt-4 text-sm leading-relaxed text-mut sm:text-base" style="--rd:.06s">
+        The teacher's screen is the only one that leads. Pages, scrolls, zooms, pauses
+        and freezes travel out from it to every phone in the room — no internet carrying
+        any of it.
+      </p>
+    </div>
+
+    <div class="mt-14 grid gap-5 sm:grid-cols-3">
+      <div class="rise rounded-2xl border border-line bg-white p-7 text-center">
+        <i class="bi bi-broadcast text-2xl text-brand"></i>
+        <p class="mt-4 text-3xl font-extrabold tracking-tight">30+</p>
+        <p class="mt-1 text-xs font-semibold text-mut">phones on one session</p>
+      </div>
+      <div class="rise rounded-2xl border border-line bg-white p-7 text-center" style="--rd:.08s">
+        <i class="bi bi-wifi-off text-2xl text-brand"></i>
+        <p class="mt-4 text-3xl font-extrabold tracking-tight">0 MB</p>
+        <p class="mt-1 text-xs font-semibold text-mut">sent to any cloud</p>
+      </div>
+      <div class="rise rounded-2xl border border-line bg-white p-7 text-center" style="--rd:.16s">
+        <i class="bi bi-person-plus text-2xl text-brand"></i>
+        <p class="mt-4 text-3xl font-extrabold tracking-tight">0</p>
+        <p class="mt-1 text-xs font-semibold text-mut">accounts to create</p>
       </div>
     </div>
   </div>
 </section>
 
 <!-- ============================== START ============================== -->
-<section id="start" class="border-t border-line px-5 py-20 sm:px-8 sm:py-24">
-  <div class="mx-auto max-w-5xl">
-    <h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">Three taps from download to lesson</h2>
+<section id="start" class="px-5 py-20 sm:px-8 sm:py-24">
+  <div class="mx-auto max-w-6xl">
+    <h2 class="rise text-2xl font-extrabold tracking-tight sm:text-3xl">Three taps from download to lesson</h2>
 
     <div class="mt-12 grid gap-10 sm:grid-cols-3 sm:gap-8">
-      <div class="border-t border-line pt-6">
+      <div class="rise border-t border-line pt-6">
         <p class="text-xs font-bold text-brand">01</p>
         <h3 class="mt-3 text-sm font-bold">Start a session</h3>
         <p class="mt-2 text-sm leading-relaxed text-mut">One tap on the teacher's phone creates the room and shows the QR code.</p>
       </div>
-      <div class="border-t border-line pt-6">
+      <div class="rise border-t border-line pt-6" style="--rd:.08s">
         <p class="text-xs font-bold text-brand">02</p>
         <h3 class="mt-3 text-sm font-bold">Students scan in</h3>
-        <p class="mt-2 text-sm leading-relaxed text-mut">They join with a name. Turn ahead is allowed only when you allow it.</p>
+        <p class="mt-2 text-sm leading-relaxed text-mut">They join with a name. Turning ahead is allowed only when you allow it.</p>
       </div>
-      <div class="border-t border-line pt-6">
+      <div class="rise border-t border-line pt-6" style="--rd:.16s">
         <p class="text-xs font-bold text-brand">03</p>
         <h3 class="mt-3 text-sm font-bold">Teach</h3>
         <p class="mt-2 text-sm leading-relaxed text-mut">Open a file and present. Pages, scrolls, zooms and video follow you.</p>
@@ -220,7 +470,7 @@
 <!-- ============================== FAQ ============================== -->
 <section id="faq" class="border-t border-line px-5 py-20 sm:px-8 sm:py-24">
   <div class="mx-auto max-w-3xl">
-    <h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">Before you download</h2>
+    <h2 class="rise text-2xl font-extrabold tracking-tight sm:text-3xl">Before you download</h2>
 
     <div class="mt-10">
       <details class="group border-b border-line">
@@ -236,7 +486,7 @@
           <span>Which devices run it?</span>
           <i class="chev bi bi-chevron-down text-mut"></i>
         </summary>
-        <p class="pb-6 text-sm leading-relaxed text-mut">Students install the Android app on Android 12 or newer. The teacher's laptop runs the Windows build on Windows 10/11 (64-bit). The iOS build is unsigned and is signed on a Mac see the note below.</p>
+        <p class="pb-6 text-sm leading-relaxed text-mut">Students install the Android app on Android 12 or newer. The teacher's laptop runs the Windows build on Windows 10/11 (64-bit). The iOS build is unsigned and is signed on a Mac — see the note below.</p>
       </details>
 
       <details class="group border-b border-line">
@@ -260,15 +510,14 @@
 
 <!-- ============================== DOWNLOAD ============================== -->
 <section class="border-t border-line px-5 py-20 sm:px-8 sm:py-24">
-  <div class="mx-auto max-w-5xl">
+  <div class="mx-auto max-w-6xl">
     <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-      <h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">Download v1.2.9</h2>
-      <p class="text-sm text-mut">by Merjohn Pagente · free for every classroom</p>
+      <h2 class="rise text-2xl font-extrabold tracking-tight sm:text-3xl">Download v1.2.9</h2>
+      <p class="rise text-sm text-mut" style="--rd:.06s">by Merjohn Pagente · free for every classroom</p>
     </div>
 
     <div class="mt-10 overflow-hidden rounded-2xl border border-line">
-      <!-- Android -->
-      <div class="flex flex-col gap-4 border-b border-line p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+      <div class="flex flex-col gap-4 border-b border-line p-5 transition hover:bg-paper sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div class="flex items-center gap-4">
           <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-soft text-lg text-brand"><i class="bi bi-android2"></i></span>
           <span>
@@ -277,13 +526,12 @@
           </span>
         </div>
         <a href="https://github.com/merjohnpagente/ClassCast/releases/download/v1.2.9/Class-cast.apk"
-           class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-brand px-5 py-3 text-sm font-bold text-white transition hover:bg-branddeep">
-          <i class="bi bi-download"></i> Download APK
+           class="group inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-brand px-5 py-3 text-sm font-bold text-white transition hover:bg-branddeep">
+          <i class="bi bi-download transition-transform group-hover:translate-y-px"></i> Download APK
         </a>
       </div>
 
-      <!-- Windows -->
-      <div class="flex flex-col gap-4 border-b border-line p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+      <div class="flex flex-col gap-4 border-b border-line p-5 transition hover:bg-paper sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div class="flex items-center gap-4">
           <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-soft text-lg text-brand"><i class="bi bi-windows"></i></span>
           <span>
@@ -292,32 +540,31 @@
           </span>
         </div>
         <a href="https://github.com/merjohnpagente/ClassCast/releases/download/v1.2.9/Class-cast-laptop.apk"
-           class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-white px-5 py-3 text-sm font-bold text-ink transition hover:border-brand/50">
-          <i class="bi bi-download"></i> Download
+           class="group inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-white px-5 py-3 text-sm font-bold text-ink transition hover:border-brand/50">
+          <i class="bi bi-download transition-transform group-hover:translate-y-px"></i> Download
         </a>
       </div>
 
-      <!-- iOS -->
-      <div class="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+      <div class="flex flex-col gap-4 p-5 transition hover:bg-paper sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div class="flex items-center gap-4">
           <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-lavsoft text-lg text-lav"><i class="bi bi-apple"></i></span>
           <span>
             <span class="block text-sm font-bold">iPhone / iPad</span>
-            <span class="mt-0.5 block text-xs text-mut">Unsigned build · needs a Mac and your own Apple ID to install</span>
+            <span class="mt-0.5 block text-xs text-mut">Unsigned build · needs a Mac and your own Apple ID</span>
           </span>
         </div>
         <a href="https://github.com/merjohnpagente/ClassCast/releases/download/v1.2.9/ClassCast.app.zip"
-           class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-white px-5 py-3 text-sm font-bold text-ink transition hover:border-brand/50">
-          <i class="bi bi-download"></i> Download .zip
+           class="group inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-white px-5 py-3 text-sm font-bold text-ink transition hover:border-brand/50">
+          <i class="bi bi-download transition-transform group-hover:translate-y-px"></i> Download .zip
         </a>
       </div>
     </div>
 
     <p class="mt-6 text-xs leading-relaxed text-mut">
-      The iOS archive is not signed by us Apple requires your own signature. Unzip it on a
+      The iOS archive is not signed by us — Apple requires your own signature. Unzip it on a
       Mac, choose your Apple ID under <span class="font-semibold text-ink2">Signing &amp; Capabilities</span>,
       and run it on your device; a free Apple ID lasts 7 days, a Developer account a year.
-      Android and Windows installs are signed and ready to run.
+      Android and Windows installs arrive signed and ready to run.
     </p>
 
     <p class="mt-4 text-sm text-mut">
@@ -329,7 +576,7 @@
 
 <!-- ============================== FOOTER ============================== -->
 <footer class="border-t border-line px-5 py-10 sm:px-8">
-  <div class="mx-auto flex max-w-5xl flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+  <div class="mx-auto flex max-w-6xl flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
     <div class="flex items-center gap-2.5">
       <img src="vendor/img/icon_1024.png" alt="" width="32" height="32" class="h-8 w-8 rounded-lg border border-line" />
       <span class="text-sm">
@@ -346,13 +593,64 @@
     </div>
   </div>
 
-  <p class="mx-auto mt-8 max-w-5xl text-xs text-mut">
+  <p class="mx-auto mt-8 max-w-6xl text-xs text-mut">
     v1.2.9 · <span id="year">2026</span> · Free for every classroom, forever.
   </p>
 </footer>
 
 <script>
-  // The whole page is static on purpose: one line of JavaScript, nothing to break.
+  /* ------------------------------------------------------------------
+     Motion. Every loop here is paused for anyone who asked their OS to
+     stop moving things, and the pointer tilt is ignored on touch — the
+     page has to feel the same on a phone in a classroom as on a desk.
+     ------------------------------------------------------------------ */
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // The strip needs a second copy to loop without a seam.
+  var strip = document.querySelector('.strip-track');
+  if (strip) strip.innerHTML += strip.innerHTML;
+
+  // Reveal on scroll. Elements are visible until this runs, so nothing
+  // can hide behind a script that fails.
+  var rises = document.querySelectorAll('.rise');
+  if ('IntersectionObserver' in window && !reduced) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+    rises.forEach(function (el) { io.observe(el); });
+  } else {
+    rises.forEach(function (el) { el.classList.add('in'); });
+  }
+
+  // Pointer tilt, layered on top of the idle wobble rather than replacing it.
+  var stage = document.querySelector('[data-stage]');
+  var tilt = document.querySelector('[data-tilt]');
+  if (stage && tilt && !reduced && window.matchMedia('(hover: hover)').matches) {
+    var calm = null;
+    stage.addEventListener('pointermove', function (e) {
+      var r = stage.getBoundingClientRect();
+      var x = (e.clientX - r.left) / r.width - 0.5;
+      var y = (e.clientY - r.top) / r.height - 0.5;
+      tilt.style.setProperty('--ry', (x * 14).toFixed(2) + 'deg');
+      tilt.style.setProperty('--rx', (-y * 10).toFixed(2) + 'deg');
+    });
+    stage.addEventListener('pointerleave', function () {
+      tilt.style.setProperty('--ry', '0deg');
+      tilt.style.setProperty('--rx', '0deg');
+    });
+    // Long enough to read as a physical object settling, not a twitch.
+    window.addEventListener('scroll', function () {
+      if (calm) return;
+      calm = window.setTimeout(function () { calm = null; }, 900);
+      tilt.style.transition = 'transform .45s cubic-bezier(.2,.7,.2,1)';
+    }, { passive: true });
+    stage.addEventListener('pointerenter', function () {
+      tilt.style.transition = 'transform .08s linear';
+    });
+  }
+
   document.getElementById('year').textContent = new Date().getFullYear();
 </script>
 </body>
