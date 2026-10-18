@@ -52,6 +52,12 @@ class OfficeDocumentScrollView extends StatefulWidget {
 class _OfficeDocumentScrollViewState extends State<OfficeDocumentScrollView> {
   final ScrollController _controller = ScrollController();
 
+  /// The list's own chrome: 12pt above the first page and a 16pt gap under
+  /// every page. Named because the page maths has to know them — one page is
+  /// `height + _gap` of scroll, and page 1 starts at `_topPad`.
+  static const double _topPad = 12;
+  static const double _gap = 16;
+
   /// Used to turn a double tap into a point in this view's own coordinates.
   final GlobalKey _surface = GlobalKey();
 
@@ -126,8 +132,13 @@ class _OfficeDocumentScrollViewState extends State<OfficeDocumentScrollView> {
 
   void _onScroll() {
     if (_pageHeightPt <= 0 || !_controller.hasClients) return;
-    final page =
-        (_controller.offset / _pageHeightPt).floor().clamp(1, widget.document.pageCount);
+    // Dividing the raw offset by the page height alone ignored the top
+    // padding and the gap under every page, so the report sat one page behind
+    // the whole way down — at the bottom, the last page was never reported at
+    // all and the class could not be brought onto it.
+    final stride = _pageHeightPt + _gap;
+    final page = (((_controller.offset - _topPad) / stride).floor() + 1)
+        .clamp(1, widget.document.pageCount);
     if (page == _reported) return;
     _reported = page;
     widget.onPageChanged?.call(page);
@@ -137,7 +148,7 @@ class _OfficeDocumentScrollViewState extends State<OfficeDocumentScrollView> {
     if (_pendingJump == 0 || !_controller.hasClients || _pageHeightPt <= 0) {
       return;
     }
-    final target = (_pendingJump - 1) * _pageHeightPt;
+    final target = _topPad + (_pendingJump - 1) * (_pageHeightPt + _gap);
     _pendingJump = 0;
     _controller.jumpTo(target.clamp(
       _controller.position.minScrollExtent,
@@ -178,10 +189,10 @@ class _OfficeDocumentScrollViewState extends State<OfficeDocumentScrollView> {
           thumbVisibility: true,
           child: ListView.builder(
             controller: _controller,
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: _topPad),
             itemCount: total,
             itemBuilder: (context, index) => Padding(
-              padding: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.only(bottom: _gap),
               child: SizedBox(
                 width: width,
                 height: height,
