@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import '../../models/classroom_session.dart';
 import '../../models/doc_types.dart';
 import '../../models/shared_document.dart';
+import '../../providers/session_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/document_viewer.dart';
@@ -35,9 +37,8 @@ class _StudentPreviewScreenState extends State<StudentPreviewScreen> {
     super.dispose();
   }
 
-  /// The same document the student's viewer would build from this snapshot.
-  SharedDocument? _documentFor() {
-    final session = widget.session;
+  /// The same document the student's viewer would build from this session.
+  SharedDocument? _documentFor(ClassroomSession session) {
     final name = session.documentName;
     if (name == null || name.isEmpty) return null;
     final dot = name.lastIndexOf('.');
@@ -57,8 +58,11 @@ class _StudentPreviewScreenState extends State<StudentPreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final session = widget.session;
-    final doc = _documentFor();
+    // The live session, not the one captured when this route was pushed: the
+    // teacher opens this screen to check the room mid-lesson, and a snapshot
+    // kept showing the page and the video position the class had minutes ago.
+    final session = context.watch<SessionProvider>().active ?? widget.session;
+    final doc = _documentFor(session);
 
     if (doc == null) {
       return const EmptyState(
@@ -76,7 +80,7 @@ class _StudentPreviewScreenState extends State<StudentPreviewScreen> {
       } catch (_) {/* the document is not ready to page yet */}
     });
 
-final viewer = DocumentViewer(
+    final viewer = DocumentViewer(
       doc: doc,
       controller: _pdf,
       remoteUrl: doc.remoteUrl,

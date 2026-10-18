@@ -60,6 +60,11 @@ class DocumentViewer extends StatefulWidget {
   /// driving, where the class is, and whether this phone has been muted.
   final VideoSync? video;
 
+  /// Fill the viewer edge to edge with a shared video instead of
+  /// letterboxing it. Used by the student's full-screen mode, where black
+  /// bars on the sides are pixels taken from the lesson.
+  final bool videoFullBleed;
+
   const DocumentViewer({
     super.key,
     required this.doc,
@@ -71,6 +76,7 @@ class DocumentViewer extends StatefulWidget {
     this.onPageChanged,
     this.showConversionPanel = false,
     this.video,
+    this.videoFullBleed = false,
   });
 
   @override
@@ -156,26 +162,31 @@ class _DocumentViewerState extends State<DocumentViewer>
     if (sync == null) {
       return _MissingFile(box: box, name: doc.name);
     }
+    final player = VideoCastPlayer(
+      localPath: remoteUrl == null || remoteUrl!.isEmpty
+          ? doc.localPath
+          : null,
+      remoteUrl: remoteUrl,
+      isTeacher: sync.isTeacher,
+      positionMs: sync.positionMs,
+      playing: sync.playing,
+      durationMs: sync.durationMs,
+      frozen: sync.frozen,
+      muted: sync.muted,
+      fullBleed: widget.videoFullBleed,
+      onPlayPause: sync.onPlayPause,
+      onSeek: sync.onSeek,
+      onDuration: sync.onDuration,
+      onMutedChanged: sync.onMutedChanged,
+    );
+    // Full bleed wants the pixels: no rounded corners and no box scrim, or
+    // the "full screen" video keeps four black notches and a frame.
+    if (widget.videoFullBleed) return player;
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppRadius.large),
       child: Container(
         decoration: box,
-        child: VideoCastPlayer(
-          localPath: remoteUrl == null || remoteUrl!.isEmpty
-              ? doc.localPath
-              : null,
-          remoteUrl: remoteUrl,
-          isTeacher: sync.isTeacher,
-          positionMs: sync.positionMs,
-          playing: sync.playing,
-          durationMs: sync.durationMs,
-          frozen: sync.frozen,
-          muted: sync.muted,
-          onPlayPause: sync.onPlayPause,
-          onSeek: sync.onSeek,
-          onDuration: sync.onDuration,
-          onMutedChanged: sync.onMutedChanged,
-        ),
+        child: player,
       ),
     );
   }

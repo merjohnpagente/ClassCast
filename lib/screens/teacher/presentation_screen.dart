@@ -356,7 +356,8 @@ class _TeacherPresentationScreenState
       positionMs: active?.videoPositionMs ?? 0,
       playing: active?.videoPlaying ?? false,
       durationMs: active?.videoDurationMs ?? 0,
-      onPlayPause: (playing) => sessions.setVideo(playing: playing),
+      onPlayPause: (playing, positionMs) =>
+          sessions.setVideo(playing: playing, positionMs: positionMs),
       onSeek: (ms) => sessions.setVideo(positionMs: ms),
       onDuration: (ms) => sessions.setVideo(durationMs: ms),
       onMutedChanged: (muted) =>

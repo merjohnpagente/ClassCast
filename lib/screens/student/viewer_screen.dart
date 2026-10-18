@@ -242,7 +242,11 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
   Widget _previewPanel(BuildContext context, int viewPage, VideoSync? video) {
     final scrollView = context.watch<AppState>().scrollView;
     return SyncDocumentPreview(
-      mode: (viewPage, scrollView),
+      // Full screen is part of this screen's own variation on the class
+      // view: the gate hands back the same subtree for the same page, and
+      // without the flag in the key entering full screen changed the
+      // Scaffold but not the player inside it.
+      mode: (viewPage, scrollView, _fullscreen),
       builder: (context, snapshot) => _preview(snapshot, viewPage, video),
     );
   }
@@ -346,6 +350,9 @@ class _StudentViewerScreenState extends State<StudentViewerScreen> {
       remoteUrl: doc.remoteUrl,
       page: viewPage,
       video: video,
+      // Full screen means full screen: a video fills the whole panel edge to
+      // edge instead of sitting in bars on a phone held sideways.
+      videoFullBleed: _fullscreen,
       viewMode: scrollView ? OfficeViewMode.scroll : OfficeViewMode.pages,
       // Scrolling reports the page nearest the top, exactly as the teacher's
       // own scroll does; the student's local page follows it so the counter

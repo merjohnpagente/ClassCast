@@ -32,6 +32,12 @@ class DocumentPreviewKey {
   final int videoPositionMs;
   final bool videoPlaying;
 
+  /// The teacher's freeze. Also has to be in the key: a freeze does not move
+  /// the position or stop the clock, so without it the gate handed back the
+  /// same player and a frozen class kept playing while the screen said
+  /// "Paused".
+  final bool videoFrozen;
+
   /// Anything else the document reads that is not part of the session — the
   /// teacher's view mode today. Kept `Object?` so this file does not have to
   /// know what it might hold later.
@@ -44,6 +50,7 @@ class DocumentPreviewKey {
     this.documentUrl,
     this.videoPositionMs = 0,
     this.videoPlaying = false,
+    this.videoFrozen = false,
     this.mode,
   });
 
@@ -57,11 +64,12 @@ class DocumentPreviewKey {
           other.documentUrl == documentUrl &&
           other.videoPositionMs == videoPositionMs &&
           other.videoPlaying == videoPlaying &&
+          other.videoFrozen == videoFrozen &&
           other.mode == mode;
 
   @override
-  int get hashCode => Object.hash(
-      documentId, page, total, documentUrl, videoPositionMs, videoPlaying, mode);
+  int get hashCode => Object.hash(documentId, page, total, documentUrl,
+      videoPositionMs, videoPlaying, videoFrozen, mode);
 }
 
 /// The teacher's selection: the student's four values plus the view mode.
@@ -73,6 +81,7 @@ DocumentPreviewKey _sessionKey(SessionProvider sessions, OfficeViewMode mode) =>
       documentUrl: sessions.active?.documentUrl,
       videoPositionMs: sessions.active?.videoPositionMs ?? 0,
       videoPlaying: sessions.active?.videoPlaying ?? false,
+      videoFrozen: sessions.active?.syncPaused ?? false,
       mode: mode,
     );
 
@@ -88,6 +97,9 @@ DocumentPreviewKey _syncKey(SyncProvider sync, Object? mode) =>
       documentUrl: sync.snapshot?.documentUrl,
       videoPositionMs: sync.snapshot?.videoPositionMs ?? 0,
       videoPlaying: sync.snapshot?.videoPlaying ?? false,
+      // The same value the player receives as its freeze flag, from the same
+      // provider, so the gate can never disagree with the player's own input.
+      videoFrozen: sync.syncPaused,
       mode: mode,
     );
 

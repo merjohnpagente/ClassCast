@@ -44,11 +44,19 @@ class VideoCastPlayer extends StatefulWidget {
   /// quiet must not silence the rest of the class.
   final bool muted;
 
-  /// Teacher: the class was paused or played.
-  /// Teacher: the class was played ([true]) or paused ([false]). Carries the
-  /// new state rather than being a bare callback, so what is published is what
-  /// the player actually did.
-  final ValueChanged<bool>? onPlayPause;
+  /// Fill the whole space edge to edge, cropping the overflow, instead of
+  /// letterboxing the video inside it.
+  ///
+  /// For a phone held sideways in full screen: bars on the sides of a lecture
+  /// recording are pixels taken from the thing the class is looking at.
+  final bool fullBleed;
+
+  /// Teacher: the class was played ([true]) or paused ([false]), and where
+  /// the player really was at that moment.
+  ///
+  /// Carries the new state rather than being a bare callback, so what is
+  /// published is what the player actually did.
+  final void Function(bool playing, int positionMs)? onPlayPause;
 
   /// Teacher: the class was moved to this position, in milliseconds.
   final ValueChanged<int>? onSeek;
@@ -69,6 +77,7 @@ class VideoCastPlayer extends StatefulWidget {
     this.durationMs = 0,
     this.frozen = false,
     this.muted = false,
+    this.fullBleed = false,
     this.onPlayPause,
     this.onSeek,
     this.onDuration,
@@ -98,6 +107,13 @@ class _VideoCastPlayerState extends State<VideoCastPlayer> {
 
   Timer? _driftCheck;
 
+  /// What the teacher just pressed, until the controller agrees.
+  ///
+  /// Some platforms take a moment to report `isPlaying` after a play or a
+  /// pause, and a button that keeps showing the old glyph for that moment
+  /// reads as a press that did nothing.
+  bool? _intendedPlaying;
+
   @override
   void initState() {
     super.initState();
@@ -115,7 +131,29 @@ class _VideoCastPlayerState extends State<VideoCastPlayer> {
       return;
     }
     _applyMute();
-    if (widget.isTeacher) return;
+    if (widget.isTeacher) {
+      // The teacher's own player follows a freeze too. The class was just
+      // told to hold still; leaving the board playing made "Paused" a caption
+      // on a video that never stopped.
+      if (old.frozen != widget.frozen) {
+        final controller = _controller;
+        if (controller != null && controller.value.isInitialized) {
+          if (widget.frozen) {
+            _intendedPlaying = false;
+            unawaited(controller.pause());
+          } else if (widget.playing) {
+            _intendedPlaying = true;
+            _applyMute();
+            unawaited(controller.play());
+          }
+          // The freeze lifts from here, so the class anchor is re-set to the
+          // real position; without it the next drift check would pull every
+          // student back to the last seek, minutes behind.
+          _publishPosition();
+        }
+      }
+      return;
+    }
     // Only a real change in the class's playback re-anchors this player. It
     // also rebuilds for the roster, the link chip and the mute icon, and
     // re-anchoring on those would put the target back at the last broadcast
@@ -125,8 +163,23 @@ class _VideoCastPlayerState extends State<VideoCastPlayer> {
     if (old.positionMs != widget.positionMs ||
         old.playing != widget.playing ||
         old.frozen != widget.frozen) {
-      _followClass();
+      // A seek only when the class actually moved. Pausing and freezing leave
+      // the position where it was, and re-seeking to a stale anchor on the
+      // way down is what rewound a student's video on every pause.
+      _followClass(seek: old.positionMs != widget.positionMs);
     }
+  }
+
+  /// Tells the session where this player really is. Deferred to after the
+  /// frame when called from [didUpdateWidget], because publishing notifies
+  /// listeners that are being built right now.
+  void _publishPosition() {
+    final controller = _controller;
+    if (controller == null) return;
+    final position = controller.value.position.inMilliseconds;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onSeek?.call(position);
+    });
   }
 
   Future<void> _dropController() async {
@@ -213,6 +266,10 @@ class _VideoCastPlayerState extends State<VideoCastPlayer> {
   /// play button are rebuilt from its updates.
   void _onControllerChanged() {
     if (!mounted) return;
+    final intended = _intendedPlaying;
+    if (intended != null && _controller?.value.isPlaying == intended) {
+      _intendedPlaying = null;
+    }
     setState(() {});
   }
 
@@ -225,7 +282,11 @@ class _VideoCastPlayerState extends State<VideoCastPlayer> {
   }
 
   /// Puts this player where the class is, and starts or stops it.
-  void _followClass() {
+  ///
+  /// [seek] is false when only the running state changed: a pause or a freeze
+  /// leaves the class where it is, and seeking to the last published anchor on
+  /// the way down moved a student back to the teacher's last scrub.
+  void _followClass({bool seek = true}) {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
     final shouldPlay = widget.playing && !widget.frozen;
@@ -234,7 +295,7 @@ class _VideoCastPlayerState extends State<VideoCastPlayer> {
     // A seek is only worth doing when the difference is one a person would
     // notice.
     final drift = (controller.value.position - target).abs();
-    if (drift > _driftTolerance) {
+    if (seek && drift > _driftTolerance) {
       unawaited(controller.seekTo(target));
     }
     if (shouldPlay) {
@@ -296,19 +357,22 @@ class _VideoCastPlayerState extends State<VideoCastPlayer> {
         controller.value.position >=
             duration - const Duration(milliseconds: 400);
     final willPlay = !controller.value.isPlaying;
+    var position = controller.value.position.inMilliseconds;
     if (atEnd && willPlay) {
       unawaited(controller.seekTo(Duration.zero));
+      position = 0;
       // The class has to come back to the start too, or every phone would
       // keep sitting at the end of the recording the teacher just replayed.
       widget.onSeek?.call(0);
     }
+    _intendedPlaying = willPlay;
     if (willPlay) {
       _applyMute();
       unawaited(controller.play());
     } else {
       unawaited(controller.pause());
     }
-    widget.onPlayPause?.call(willPlay);
+    widget.onPlayPause?.call(willPlay, position);
   }
 
   /// [fraction] is where along the bar the teacher dragged to, 0 to 1.
@@ -348,12 +412,45 @@ class _VideoCastPlayerState extends State<VideoCastPlayer> {
           'This video could not be played here.');
     }
 
-    final position = controller.value.position.inMilliseconds;
-    final duration = controller.value.duration.inMilliseconds;
-    final progress = duration <= 0
-        ? 0.0
-        : (position.clamp(0, duration) / duration).toDouble();
     final ratio = controller.value.aspectRatio;
+    final controls = _controls(controller);
+
+    if (widget.fullBleed) {
+      // Full screen on a phone: the video fills the whole panel and the
+      // overflow is cropped. The controls float over a scrim at the bottom
+      // edge, so the picture loses nothing at all.
+      final size = controller.value.size;
+      final width = size.width > 0 ? size.width : 1920.0;
+      final height = size.height > 0 ? size.height : 1080.0;
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          ClipRect(
+            child: FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: width,
+                height: height,
+                child: VideoPlayer(controller),
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black87],
+                ),
+              ),
+              child: controls,
+            ),
+          ),
+        ],
+      );
+    }
 
     return Column(
       children: [
@@ -365,91 +462,106 @@ class _VideoCastPlayerState extends State<VideoCastPlayer> {
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
-          child: Column(
+        controls,
+      ],
+    );
+  }
+
+  /// The transport bar under the picture, shared by the letterboxed layout
+  /// and the full-bleed one so the two can never drift apart.
+  Widget _controls(VideoPlayerController controller) {
+    final position = controller.value.position.inMilliseconds;
+    final duration = controller.value.duration.inMilliseconds;
+    final progress = duration <= 0
+        ? 0.0
+        : (position.clamp(0, duration) / duration).toDouble();
+    // What the button shows is what the player is doing — or, for the moment
+    // between the tap and the platform confirming it, what the tap asked for.
+    final playing = _intendedPlaying ?? controller.value.isPlaying;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  if (widget.isTeacher)
-                    IconButton(
-                      tooltip: controller.value.isPlaying ? 'Pause' : 'Play',
-                      iconSize: 30,
-                      icon: Icon(
-                        controller.value.isPlaying
-                            ? Icons.pause_circle_filled
-                            : Icons.play_circle_fill,
-                        color: AppColors.primary,
-                      ),
-                      onPressed: _togglePlay,
-                    )
-                  else
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: Icon(
-                        widget.playing && !widget.frozen
-                            ? Icons.play_circle_outline
-                            : Icons.pause_circle_outline,
-                        size: 22,
-                        color: AppColors.muted,
-                      ),
-                    ),
-                  // The teacher scrubs the class; a student only sees where it
-                  // is, because anything else would be a second classroom.
-                  if (widget.isTeacher)
-                    Expanded(
-                      child: Slider(
-                        value: progress,
-                        onChanged: _seekToFraction,
-                      ),
-                    )
-                  else
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(3),
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          minHeight: 4,
-                          backgroundColor: AppColors.border,
-                        ),
-                      ),
-                    ),
-                  Text(
-                    '${_format(position)} / ${_format(duration)}',
-                    style:
-                        TextStyle(fontSize: 12, color: AppColors.muted),
+              if (widget.isTeacher)
+                IconButton(
+                  tooltip: playing ? 'Pause' : 'Play',
+                  iconSize: 30,
+                  icon: Icon(
+                    playing
+                        ? Icons.pause_circle_filled
+                        : Icons.play_circle_fill,
+                    color: AppColors.primary,
                   ),
-                  const SizedBox(width: 4),
-                  // One tap, and it stays: thirty phones playing a lecture at
-                  // once is a room nobody can think in, so the way back to
-                  // silence is as easy as the way to it.
-                  IconButton(
-                    tooltip: widget.muted ? 'Unmute' : 'Mute',
-                    iconSize: 20,
-                    icon: Icon(
-                      widget.muted
-                          ? Icons.volume_off_outlined
-                          : Icons.volume_up_outlined,
-                      color: widget.muted ? AppColors.muted : AppColors.ink,
-                    ),
-                    onPressed: _toggleMute,
+                  onPressed: _togglePlay,
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Icon(
+                    // This phone's own truth, not the class's intent: the
+                    // icon says what is on screen, the line under it says why.
+                    controller.value.isPlaying
+                        ? Icons.play_circle_outline
+                        : Icons.pause_circle_outline,
+                    size: 22,
+                    color: AppColors.muted,
                   ),
-                ],
-              ),
-              if (!widget.isTeacher)
-                Text(
-                  widget.frozen
-                      ? 'The teacher has frozen the class'
-                      : widget.playing
-                          ? 'Following the teacher'
-                          : 'Paused by the teacher',
-                  style:
-                      TextStyle(fontSize: 11, color: AppColors.muted),
                 ),
+              // The teacher scrubs the class; a student only sees where it
+              // is, because anything else would be a second classroom.
+              if (widget.isTeacher)
+                Expanded(
+                  child: Slider(
+                    value: progress,
+                    onChanged: _seekToFraction,
+                  ),
+                )
+              else
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 4,
+                      backgroundColor: AppColors.border,
+                    ),
+                  ),
+                ),
+              Text(
+                '${_format(position)} / ${_format(duration)}',
+                style: TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
+              const SizedBox(width: 4),
+              // One tap, and it stays: thirty phones playing a lecture at
+              // once is a room nobody can think in, so the way back to
+              // silence is as easy as the way to it.
+              IconButton(
+                tooltip: widget.muted ? 'Unmute' : 'Mute',
+                iconSize: 20,
+                icon: Icon(
+                  widget.muted
+                      ? Icons.volume_off_outlined
+                      : Icons.volume_up_outlined,
+                  color: widget.muted ? AppColors.muted : AppColors.ink,
+                ),
+                onPressed: _toggleMute,
+              ),
             ],
           ),
-        ),
-      ],
+          if (!widget.isTeacher)
+            Text(
+              widget.frozen
+                  ? 'The teacher has frozen the class'
+                  : widget.playing
+                      ? 'Following the teacher'
+                      : 'Paused by the teacher',
+              style: TextStyle(fontSize: 11, color: AppColors.muted),
+            ),
+        ],
+      ),
     );
   }
 
