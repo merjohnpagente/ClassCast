@@ -32,7 +32,11 @@ class ShareDocumentScreen extends StatelessWidget {
       body: ContentWidth(
         maxWidth: 560,
         child: ListView(
-          padding: const EdgeInsets.only(bottom: 32),
+          // The content used to sit flush against the screen edges — a
+          // preview box and a full-width button with no margin at all, which
+          // read as a page that had failed to load its layout.
+          padding: EdgeInsets.fromLTRB(
+              context.pagePadding, 16, context.pagePadding, 32),
           children: [
             _previewBox(context, theme),
             const SizedBox(height: 16),
@@ -144,7 +148,7 @@ class ShareDocumentScreen extends StatelessWidget {
             ),
             if (active?.documentId == doc.id) ...[
               const SizedBox(height: 12),
-               StatusChip(
+              StatusChip(
                   label: 'Sharing now',
                   icon: Icons.sensors,
                   color: AppColors.success,

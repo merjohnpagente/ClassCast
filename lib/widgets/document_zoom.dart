@@ -181,10 +181,13 @@ class DocumentZoom extends ChangeNotifier {
   }
 }
 
-/// The floating zoom control: −, the current level, +, Fit.
+/// The floating zoom control: −, the current level, +.
 ///
 /// The same widget on the teacher's screen and a student's, because they should
-/// feel like one app rather than two.
+/// feel like one app rather than two. Kept deliberately small: it sits over
+/// the page, and every pixel it takes is a pixel of the document it exists to
+/// show. Fit moved into a long-press on the readout, which also resets to
+/// exactly 100% on a tap.
 class DocumentZoomBar extends StatelessWidget {
   final ZoomTarget target;
   final VoidCallback? onFit;
@@ -203,10 +206,10 @@ class DocumentZoomBar extends StatelessWidget {
         final scale = target.scale.clamp(kZoomMin, kZoomMax);
         final zoomed = scale > 1.01;
         return Material(
-          color: Colors.black.withAlpha(150),
-          borderRadius: BorderRadius.circular(24),
+          color: Colors.black.withAlpha(130),
+          borderRadius: BorderRadius.circular(14),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -217,11 +220,12 @@ class DocumentZoomBar extends StatelessWidget {
                       zoomed ? () => target.scale = _nextStep(scale, -1) : null,
                 ),
                 // The readout doubles as the "exactly 100%" reset, so the
-                // level is never something the user has to guess at.
+                // level is never something the user has to guess at. Hold it
+                // to fit the whole page.
                 Tooltip(
                   message: 'Tap for exactly 100% · hold to fit the page',
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                     onTap: () => target.scale = 1,
                     onLongPress: () {
                       target.fit();
@@ -229,13 +233,13 @@ class DocumentZoomBar extends StatelessWidget {
                     },
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 10),
+                          horizontal: 8, vertical: 6),
                       child: Text(
                         '${(scale * 100).round()}%',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -248,15 +252,6 @@ class DocumentZoomBar extends StatelessWidget {
                       ? () => target.scale = _nextStep(scale, 1)
                       : null,
                 ),
-                if (zoomed)
-                  _button(
-                    icon: Icons.zoom_out_map,
-                    tooltip: 'Fit page',
-                    onPressed: () {
-                      target.fit();
-                      onFit?.call();
-                    },
-                  ),
               ],
             ),
           ),
@@ -277,7 +272,9 @@ class DocumentZoomBar extends StatelessWidget {
       tooltip: tooltip,
       onPressed: onPressed,
       visualDensity: VisualDensity.compact,
-      iconSize: 18,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+      iconSize: 16,
       color: Colors.white,
       disabledColor: Colors.white24,
       icon: Icon(icon),
@@ -302,8 +299,8 @@ class DocumentZoomOverlay extends StatelessWidget {
       children: [
         child,
         Positioned(
-          right: 10,
-          bottom: 10,
+          right: 8,
+          bottom: 8,
           child: DocumentZoomBar(target: target),
         ),
       ],
