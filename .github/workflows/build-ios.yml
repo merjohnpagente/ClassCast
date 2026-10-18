@@ -114,6 +114,13 @@ jobs:
           path: classcast-ios/
           retention-days: 14
 
+      - name: Attach the archive to the release (tags only)
+        # On a tag the zip lands next to the APKs, so the landing page can offer
+        # one honest download row per platform. GitHub Actions cannot sign for
+        # anyone — the archive stays unsigned and the page says so.
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: gh release upload "$GITHUB_REF_NAME" classcast-ios/ClassCast.app.zip --clobber
+
       - name: Summary
         run: |
           {
