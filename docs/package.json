@@ -1,0 +1,13 @@
+{
+  "name": "classcast-landing",
+  "version": "1.2.9",
+  "private": true,
+  "description": "ClassCast landing page.",
+  "scripts": {
+    "build": "tailwindcss -i ./src/input.css -o ./vendor/tailwind.css --minify",
+    "watch": "tailwindcss -i ./src/input.css -o ./vendor/tailwind.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}

@@ -1,0 +1,229 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  ::selection {
+    background: theme('colors.brand');
+    color: #fff;
+  }
+
+  :focus-visible {
+    outline: 2px solid theme('colors.brand');
+    outline-offset: 3px;
+  }
+
+  /* The header is sticky; keep anchor targets clear of it. */
+  section[id],
+  main[id] {
+    scroll-margin-top: 5.5rem;
+  }
+
+  details > summary {
+    list-style: none;
+    cursor: pointer;
+  }
+  details > summary::-webkit-details-marker {
+    display: none;
+  }
+}
+
+@layer components {
+  /* A faint plan grid behind the hero; fades out so it never fights the copy. */
+  .hero-grid {
+    background-image:
+      linear-gradient(to right, rgba(20, 33, 61, .055) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(20, 33, 61, .055) 1px, transparent 1px);
+    background-size: 56px 56px;
+    -webkit-mask-image: radial-gradient(ellipse 75% 65% at 50% 28%, #000 25%, transparent 76%);
+    mask-image: radial-gradient(ellipse 75% 65% at 50% 28%, #000 25%, transparent 76%);
+  }
+
+  /* A hairline that draws itself under a link. */
+  .sweep {
+    background-image: linear-gradient(currentColor, currentColor);
+    background-size: 0 1px;
+    background-repeat: no-repeat;
+    background-position: 0 100%;
+    transition: background-size .3s cubic-bezier(.2, .7, .2, 1);
+  }
+  .sweep:hover {
+    background-size: 100% 1px;
+  }
+
+  .chev {
+    transition: transform .25s ease;
+  }
+  details[open] .chev {
+    transform: rotate(180deg);
+  }
+
+  /* ===================================================================
+     The 3D stage.
+
+     This is the web translation of the app's Wobble3D
+     (lib/widgets/ambient.dart:68): one continuous sine/cosine tilt on an
+     outer element, so the motion never stops and never fights the pointer,
+     with the pointer's tilt applied to an inner element that inherits it.
+     Two stacked transforms compose; one would have to choose.
+     =================================================================== */
+  .stage {
+    perspective: 1100px;
+    perspective-origin: 50% 45%;
+  }
+  .tilt {
+    transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+  .layer {
+    transform-style: preserve-3d;
+  }
+
+  .wobble {
+    animation: wobble 9s ease-in-out infinite;
+  }
+  .drift {
+    animation: drift 7s ease-in-out infinite;
+  }
+  .drift-b {
+    animation: drift 8.5s ease-in-out infinite reverse;
+  }
+
+  /* Depth: a real translateZ, so the parallax is geometric and not faked
+     with shadows. */
+  .z-back  { transform: translateZ(-70px); }
+  .z-mid   { transform: translateZ(0px); }
+  .z-front { transform: translateZ(55px); }
+  .z-top   { transform: translateZ(95px); }
+
+  /* The cast pulse — the app's "Live" dot, given a room to travel through. */
+  .pulse span {
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    border: 1.5px solid rgba(53, 104, 245, .45);
+    animation: ripple 3.6s cubic-bezier(.2, .6, .3, 1) infinite;
+  }
+  .pulse span:nth-child(2) { animation-delay: 1.2s; }
+  .pulse span:nth-child(3) { animation-delay: 2.4s; }
+
+  .beat {
+    animation: beat 2.4s ease-in-out infinite;
+  }
+
+  /* The student's screen, flipping on the same clock as the teacher's. */
+  .page {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    animation: turn 9s ease-in-out infinite;
+  }
+  .page:nth-child(2) { animation-delay: 3s; }
+  .page:nth-child(3) { animation-delay: 6s; }
+
+  .counter {
+    animation: count 3s ease-in-out infinite;
+  }
+
+  /* Scroll reveal. Off until JS adds .js, so a failed script leaves the
+     page fully readable rather than invisible. */
+  .js .rise {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+  .js .rise.in {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity .8s cubic-bezier(.2, .7, .2, 1),
+      transform .8s cubic-bezier(.2, .7, .2, 1);
+    transition-delay: var(--rd, 0s);
+  }
+
+  /* A spotlight that follows the pointer across a card. */
+  .lit {
+    position: relative;
+  }
+  .lit::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(340px circle at var(--mx, 50%) var(--my, 50%),
+                rgba(53, 104, 245, .07), transparent 62%);
+    opacity: 0;
+    transition: opacity .35s ease;
+    pointer-events: none;
+  }
+  .lit:hover::before {
+    opacity: 1;
+  }
+
+  .strip-track {
+    animation: slide 34s linear infinite;
+  }
+}
+
+@keyframes wobble {
+  0%   { transform: rotateX(-2.6deg) rotateY(-3.4deg); }
+  50%  { transform: rotateX(2.6deg)  rotateY(3.4deg); }
+  100% { transform: rotateX(-2.6deg) rotateY(-3.4deg); }
+}
+
+@keyframes drift {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50%      { transform: translate3d(0, -10px, 0); }
+}
+
+@keyframes ripple {
+  0%   { transform: scale(.55); opacity: .85; }
+  70%  { opacity: .12; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+
+@keyframes beat {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .3; }
+}
+
+@keyframes turn {
+  0%   { opacity: 0; transform: translateY(8px) scale(.99); }
+  5%   { opacity: 1; transform: none; }
+  28%  { opacity: 1; transform: none; }
+  33%  { opacity: 0; transform: translateY(-8px) scale(.99); }
+  100% { opacity: 0; transform: translateY(-8px) scale(.99); }
+}
+
+@keyframes count {
+  0%       { width: 8%; }
+  40%, 100% { width: 100%; }
+}
+
+@keyframes slide {
+  to { transform: translateX(-50%); }
+}
+
+/* Only move when the reader has not asked us not to. */
+@media (prefers-reduced-motion: reduce) {
+  .wobble,
+  .drift,
+  .drift-b,
+  .pulse span,
+  .beat,
+  .page,
+  .counter,
+  .strip-track {
+    animation: none !important;
+  }
+  .js .rise {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .page:nth-child(1) {
+    opacity: 1;
+  }
+  * {
+    transition-duration: .01ms !important;
+  }
+}
